@@ -1,0 +1,10 @@
+black
+flake8
+pre-commit
+coverage
+coverage-badge
+pytest
+requests
+fiona
+pandas
+geopandas
