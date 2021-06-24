@@ -14,7 +14,7 @@ keyword arguments to ```restgdf.getgdf``` are passed on to ```requests.Session.p
 this enables enhanced control over queries and allow use of any valid authentication scheme with use of ```requests.Session.auth``` or ```data={"token": str}```
 
 * ```conda create -n restgdf requests geopandas```
-* ```git clone https://github.com/joshuasundance-swca/restgdf```
+* ```git clone https://github.com/joshuasundance/restgdf```
 * ```pip install .```
 
 ```

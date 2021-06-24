@@ -11,7 +11,7 @@ setup(
     version="0.2",
     description="improved esri rest io for geopandas",
     long_description="provides getgdf function and Rest class for gdf from rest io",
-    url="https://github.com/joshuasundance-swca/restgdf",
+    url="https://github.com/joshuasundance/restgdf",
     author="Joshua Sundance Bailey",
     author_email="36394687+joshuasundance@users.noreply.github.com",
     license="BSD",
