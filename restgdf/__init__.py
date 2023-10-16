@@ -5,7 +5,7 @@ from collections.abc import Iterable
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame
 from pandas import DataFrame
-from restgdf._getgdf import concat_gdfs, gdf_gen
+from restgdf._getgdf import get_gdf_newfunc
 from restgdf._getinfo import (
     default_data,
     get_feature_count,
@@ -38,7 +38,7 @@ async def get_gdf(
         datadict["where"] = where
     if token is not None:
         datadict["token"] = token
-    return concat_gdfs(gdf_gen(url, session, data=datadict, **kwargs))
+    return await get_gdf_newfunc(url, session, data=datadict, **kwargs)
 
 
 class Rest:
@@ -104,8 +104,8 @@ class Rest:
             self.uniquevalues[fields] = await getuniquevalues(
                 self.url,
                 fields,
-                sortby,
                 self.session,
+                sortby,
                 **self.kwargs,
             )
         return self.uniquevalues[fields]

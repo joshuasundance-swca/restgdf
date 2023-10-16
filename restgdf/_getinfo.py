@@ -1,5 +1,4 @@
 import re
-from contextlib import asynccontextmanager
 from typing import Union, Optional
 
 from aiohttp import ClientSession
@@ -24,34 +23,26 @@ def default_data(
     return {**default_dict, **(data or {})}
 
 
-@asynccontextmanager
-async def get_session():
-    async with ClientSession() as session:
-        yield session
-
-
 async def get_feature_count(
     url: str,
-    session: Optional[ClientSession] = None,
+    session: ClientSession,
     **kwargs,
 ) -> int:
-    async with get_session() as s:
-        data = kwargs.pop("data", {})
-        data = {"where": "1=1", "returnCountOnly": True, "f": "json", **data}
-        response = await s.post(f"{url}/query", data=data, **kwargs)
-        response_json = await response.json()
+    data = kwargs.pop("data", {})
+    data = {"where": "1=1", "returnCountOnly": True, "f": "json", **data}
+    response = await session.post(f"{url}/query", data=data, **kwargs)
+    response_json = await response.json()
     return response_json["count"]
 
 
 async def get_jsondict(
     url: str,
-    session: Optional[ClientSession] = None,
+    session: ClientSession,
     **kwargs,
 ) -> dict:
-    async with get_session() as s:
-        data = kwargs.pop("data", {})
-        response = await s.post(url, data=default_data(data), **kwargs)
-        response_json = await response.json()
+    data = kwargs.pop("data", {})
+    response = await session.post(url, data=default_data(data), **kwargs)
+    response_json = await response.json()
     return response_json
 
 
@@ -68,7 +59,7 @@ def get_max_record_count(jsondict: dict) -> int:
 
 async def get_offset_range(
     url: str,
-    session: Optional[ClientSession] = None,
+    session: ClientSession,
     **kwargs,
 ) -> range:
     feature_count = await get_feature_count(url, session, **kwargs)
@@ -107,21 +98,20 @@ def getfields_df(jsondict: dict) -> DataFrame:
 async def getuniquevalues(
     url: str,
     fields: Union[tuple, str],
+    session: ClientSession,
     sortby: Optional[str] = None,
-    session: Optional[ClientSession] = None,
     **kwargs,
 ) -> Union[list, DataFrame]:
-    async with get_session() as s:
-        data = kwargs.pop("data", {})
-        data = {
-            "where": "1=1",
-            "f": "json",
-            "returnGeometry": False,
-            "returnDistinctValues": True,
-            "outFields": fields if isinstance(fields, str) else ",".join(fields),
-            **data,
-        }
-        response = await s.post(f"{url}/query", data=data, **kwargs)
+    data = kwargs.pop("data", {})
+    data = {
+        "where": "1=1",
+        "f": "json",
+        "returnGeometry": False,
+        "returnDistinctValues": True,
+        "outFields": fields if isinstance(fields, str) else ",".join(fields),
+        **data,
+    }
+    response = await session.post(f"{url}/query", data=data, **kwargs)
     jsondict = await response.json()
 
     if isinstance(fields, str) or len(fields) == 1:
@@ -138,22 +128,21 @@ async def getuniquevalues(
 async def getvaluecounts(
     url: str,
     field: str,
-    session: Optional[ClientSession] = None,
+    session: ClientSession,
     **kwargs,
 ) -> DataFrame:
-    async with get_session() as s:
-        statstr = f'[{{"statisticType":"count","onStatisticField":"{field}","outStatisticFieldName":"{field}_count"}}]'
-        data = kwargs.pop("data", {})
-        data = {
-            "where": "1=1",
-            "f": "json",
-            "returnGeometry": False,
-            "outFields": field,
-            "outStatistics": statstr,
-            "groupByFieldsForStatistics": field,
-            **data,
-        }
-        response = await s.post(f"{url}/query", data=data, **kwargs)
+    statstr = f'[{{"statisticType":"count","onStatisticField":"{field}","outStatisticFieldName":"{field}_count"}}]'
+    data = kwargs.pop("data", {})
+    data = {
+        "where": "1=1",
+        "f": "json",
+        "returnGeometry": False,
+        "outFields": field,
+        "outStatistics": statstr,
+        "groupByFieldsForStatistics": field,
+        **data,
+    }
+    response = await session.post(f"{url}/query", data=data, **kwargs)
 
     jsondict = await response.json()
     features = jsondict["features"]
@@ -167,31 +156,30 @@ async def getvaluecounts(
 async def nestedcount(
     url: str,
     fields,
-    session: Optional[ClientSession] = None,
+    session: ClientSession,
     **kwargs,
 ) -> DataFrame:
-    async with get_session() as s:
-        statstr = "".join(
-            (
-                "[",
-                ",".join(
-                    f'{{"statisticType":"count","onStatisticField":"{f}","outStatisticFieldName":"{f}_count"}}'
-                    for f in fields
-                ),
-                "]",
+    statstr = "".join(
+        (
+            "[",
+            ",".join(
+                f'{{"statisticType":"count","onStatisticField":"{f}","outStatisticFieldName":"{f}_count"}}'
+                for f in fields
             ),
-        )
-        data = kwargs.pop("data", {})
-        data = {
-            "where": "1=1",
-            "f": "json",
-            "returnGeometry": False,
-            "outFields": ",".join(fields),
-            "outStatistics": statstr,
-            "groupByFieldsForStatistics": ",".join(fields),
-            **data,
-        }
-        response = await s.post(f"{url}/query", data=data, **kwargs)
+            "]",
+        ),
+    )
+    data = kwargs.pop("data", {})
+    data = {
+        "where": "1=1",
+        "f": "json",
+        "returnGeometry": False,
+        "outFields": ",".join(fields),
+        "outStatistics": statstr,
+        "groupByFieldsForStatistics": ",".join(fields),
+        **data,
+    }
+    response = await session.post(f"{url}/query", data=data, **kwargs)
 
     jsondict = await response.json()
     features = jsondict["features"]

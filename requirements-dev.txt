@@ -1,3 +1,4 @@
+aiohttp
 black
 coverage
 coverage-badge
@@ -6,5 +7,6 @@ flake8
 geopandas
 pandas
 pre-commit
+pyogrio
 pytest
 requests

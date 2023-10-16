@@ -1,4 +1,6 @@
+aiohttp
 fiona
 geopandas
 pandas
+pyogrio
 requests
