@@ -4,9 +4,6 @@
 
 # ripped apart by jb starting 05/19/2021
 
-from requests import get
-
-from pandas import DataFrame, concat
 
 # from importlib.util import find_spec
 

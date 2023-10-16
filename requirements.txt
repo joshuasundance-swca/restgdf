@@ -1,4 +1,4 @@
-requests
-pandas
-geopandas
 fiona
+geopandas
+pandas
+requests

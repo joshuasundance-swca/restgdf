@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from restgdf import wherevarinlist
+from restgdf import _wherevarinlist
 
 from restgdf._getinfo import (
     DEFAULTDICT,
@@ -15,7 +15,7 @@ TESTJSON = {"count": 500, "maxRecordCount": 100}
 
 
 def test_wherevarinlist():
-    assert wherevarinlist("STATE", ["FL", "GA"]) == "STATE In ('FL', 'GA')"
+    assert _wherevarinlist("STATE", ["FL", "GA"]) == "STATE In ('FL', 'GA')"
 
 
 def mock_session_post(*args, **kwargs):
@@ -49,7 +49,9 @@ def test_get_max_record_count(mock_response):
 @patch("restgdf._getinfo.Session.post", side_effect=mock_session_post)
 def test_get_offset_range(mock_response):
     assert get_offset_range("test") == range(
-        0, TESTJSON["count"], TESTJSON["maxRecordCount"]
+        0,
+        TESTJSON["count"],
+        TESTJSON["maxRecordCount"],
     )
 
 
