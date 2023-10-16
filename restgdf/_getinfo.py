@@ -1,9 +1,9 @@
 import re
-from contextlib import closing
+from contextlib import asynccontextmanager
 from typing import Union, Optional
 
+from aiohttp import ClientSession
 from pandas import DataFrame, concat
-from requests import Session
 
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
 
@@ -20,49 +20,42 @@ def default_data(
     data: Optional[dict] = None,
     default_dict: Optional[dict] = None,
 ) -> dict:
-    """
-    Return data dict after adding default values
-    Will not replace existing values
-    """
-    default_dict = default_dict or {
-        "where": "1=1",
-        "outFields": "*",
-        "returnGeometry": True,
-        "returnCountOnly": False,
-        "f": "json",
-    }
-
+    default_dict = default_dict or DEFAULTDICT
     return {**default_dict, **(data or {})}
 
 
-def get_feature_count(url: str, session: Optional[Session] = None, **kwargs) -> int:
-    """
-    Return int number of features for a service
-    Keyword arguments are passed on to post request
-    """
-    with closing(session or Session()) as s:
+@asynccontextmanager
+async def get_session():
+    async with ClientSession() as session:
+        yield session
+
+
+async def get_feature_count(
+    url: str,
+    session: Optional[ClientSession] = None,
+    **kwargs,
+) -> int:
+    async with get_session() as s:
         data = kwargs.pop("data", {})
         data = {"where": "1=1", "returnCountOnly": True, "f": "json", **data}
-        response = s.post(f"{url}/query", data=data, **kwargs)
-    return response.json()["count"]
+        response = await s.post(f"{url}/query", data=data, **kwargs)
+        response_json = await response.json()
+    return response_json["count"]
 
 
-def get_jsondict(url: str, session: Optional[Session] = None, **kwargs) -> dict:
-    """
-    Return dict from a service's json
-    Keyword arguments are passed on to post request
-    """
-    with closing(session or Session()) as s:
+async def get_jsondict(
+    url: str,
+    session: Optional[ClientSession] = None,
+    **kwargs,
+) -> dict:
+    async with get_session() as s:
         data = kwargs.pop("data", {})
-        response = s.post(url, data=default_data(data), **kwargs)
-    return response.json()
+        response = await s.post(url, data=default_data(data), **kwargs)
+        response_json = await response.json()
+    return response_json
 
 
 def get_max_record_count(jsondict: dict) -> int:
-    """
-    Return int max record count for a service
-    Keyword arguments are passed on to post request
-    """
     key_pattern = re.compile(
         r"max(imum)?(\s|_)?record(\s|_)?count$",
         flags=re.IGNORECASE,
@@ -73,21 +66,18 @@ def get_max_record_count(jsondict: dict) -> int:
     return jsondict[key_list[0]]
 
 
-def get_offset_range(url: str, session: Optional[Session] = None, **kwargs) -> range:
-    """
-    Return offset range object using feature count and max record count
-    Keyword arguments are passed on to post request
-    """
-    feature_count = get_feature_count(url, session, **kwargs)
-    jsondict = get_jsondict(url, session, **kwargs)
+async def get_offset_range(
+    url: str,
+    session: Optional[ClientSession] = None,
+    **kwargs,
+) -> range:
+    feature_count = await get_feature_count(url, session, **kwargs)
+    jsondict = await get_jsondict(url, session, **kwargs)
     max_record_count = get_max_record_count(jsondict)
     return range(0, feature_count, max_record_count)
 
 
 def get_name(jsondict: dict) -> str:
-    """
-    Return str name for a service
-    """
     key_pattern = re.compile("name", flags=re.IGNORECASE)
     key_list = [key for key in jsondict.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
@@ -96,9 +86,6 @@ def get_name(jsondict: dict) -> str:
 
 
 def getfields(jsondict: dict, types: bool = False):
-    """
-    Return list of field names or a name:type dict if types=True
-    """
     if types:
         return {
             f["name"]: f["type"].replace("esriFieldType", "") for f in jsondict["fields"]
@@ -117,18 +104,14 @@ def getfields_df(jsondict: dict) -> DataFrame:
     )
 
 
-def getuniquevalues(
+async def getuniquevalues(
     url: str,
     fields: Union[tuple, str],
     sortby: Optional[str] = None,
-    session: Optional[Session] = None,
+    session: Optional[ClientSession] = None,
     **kwargs,
 ) -> Union[list, DataFrame]:
-    """
-    Return list of unique values if fields is str or list of len 1
-    Otherwise return pandas DataFrame of unique combinations, optionally sorted by field sortby
-    """
-    with closing(session or Session()) as s:
+    async with get_session() as s:
         data = kwargs.pop("data", {})
         data = {
             "where": "1=1",
@@ -138,8 +121,8 @@ def getuniquevalues(
             "outFields": fields if isinstance(fields, str) else ",".join(fields),
             **data,
         }
-        response = s.post(f"{url}/query", data=data, **kwargs)
-    jsondict = response.json()
+        response = await s.post(f"{url}/query", data=data, **kwargs)
+    jsondict = await response.json()
 
     if isinstance(fields, str) or len(fields) == 1:
         field = fields if isinstance(fields, str) else fields[0]
@@ -152,16 +135,13 @@ def getuniquevalues(
         return res_df.sort_values(sortby).reset_index(drop=True) if sortby else res_df
 
 
-def getvaluecounts(
+async def getvaluecounts(
     url: str,
     field: str,
-    session: Optional[Session] = None,
+    session: Optional[ClientSession] = None,
     **kwargs,
 ) -> DataFrame:
-    """
-    Return DataFrame containing value counts (or dict if retdict=True)
-    """
-    with closing(session or Session()) as s:
+    async with get_session() as s:
         statstr = f'[{{"statisticType":"count","onStatisticField":"{field}","outStatisticFieldName":"{field}_count"}}]'
         data = kwargs.pop("data", {})
         data = {
@@ -173,9 +153,9 @@ def getvaluecounts(
             "groupByFieldsForStatistics": field,
             **data,
         }
-        response = s.post(f"{url}/query", data=data, **kwargs)
+        response = await s.post(f"{url}/query", data=data, **kwargs)
 
-    jsondict = response.json()
+    jsondict = await response.json()
     features = jsondict["features"]
     cc = concat(
         [DataFrame(x["attributes"], index=[0]) for x in features],
@@ -184,16 +164,13 @@ def getvaluecounts(
     return cc.sort_values(f"{field}_count", ascending=False).reset_index(drop=True)
 
 
-def nestedcount(
+async def nestedcount(
     url: str,
     fields,
-    session: Optional[Session] = None,
+    session: Optional[ClientSession] = None,
     **kwargs,
 ) -> DataFrame:
-    """
-    Return DataFrame containing count values for 2-field combinations
-    """
-    with closing(session or Session()) as s:
+    async with get_session() as s:
         statstr = "".join(
             (
                 "[",
@@ -214,9 +191,9 @@ def nestedcount(
             "groupByFieldsForStatistics": ",".join(fields),
             **data,
         }
-        response = s.post(f"{url}/query", data=data, **kwargs)
+        response = await s.post(f"{url}/query", data=data, **kwargs)
 
-    jsondict = response.json()
+    jsondict = await response.json()
     features = jsondict["features"]
     cc = concat(
         [DataFrame(x).T.reset_index(drop=True) for x in features],
