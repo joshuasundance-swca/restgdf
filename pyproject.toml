@@ -45,6 +45,7 @@ dev = [
 current_version = "0.0.7"
 version_pattern = "MAJOR.MINOR.PATCH"
 pre_commit_hook = "pre_update.bat"
+post_commit_hook = "post_update.bat"
 commit_message = "Bump version {old_version} -> {new_version}"
 commit = true
 tag_message = "{new_version}"
