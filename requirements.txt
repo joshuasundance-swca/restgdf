@@ -1,5 +1,4 @@
 aiohttp
-fiona
 geopandas
 pandas
 pyogrio

@@ -14,7 +14,9 @@ async def test_rest():
         assert all(
             "fgsfds" in s for s in (beaches.wherestr, beaches.kwargs["data"]["where"])
         )
-        assert len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 10
+        assert (
+            len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 10
+        )
         daytona = await beaches.where("City LIKE 'DAYTONA%'")
         assert "Status" in daytona.fields
         assert str(beaches) == f"Beach Access Points ({beachurl})"
@@ -23,7 +25,9 @@ async def test_rest():
         ziprest = await Rest.from_url(zipurl, where="STATE = 'OH'", session=s)
         testkwargs = {k: v for k, v in ziprest.kwargs.items()}
         assert "Cincinnati" in await ziprest.getuniquevalues("PO_NAME")
-        assert await ziprest.getuniquevalues("PO_NAME") == await ziprest.getuniquevalues(
+        assert await ziprest.getuniquevalues(
+            "PO_NAME",
+        ) == await ziprest.getuniquevalues(
             "PO_NAME",
         )
         assert (await ziprest.getvaluecounts("PO_NAME")).set_index("PO_NAME").to_dict()[

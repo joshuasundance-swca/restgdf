@@ -36,13 +36,17 @@ async def get_sub_gdf(
     response = await session.post(f"{url}/query", data=data, **kwargs)
     sub_gdf = read_file(
         await response.text(),
-        # driver=gdfdriver,
+        # driver=gdfdriver,  # this line raises a warning when using pyogrio w/ ESRIJSON
         engine="pyogrio",
     )
     return sub_gdf
 
 
-async def get_gdf_list(url: str, session: ClientSession, **kwargs) -> list[GeoDataFrame]:
+async def get_gdf_list(
+    url: str,
+    session: ClientSession,
+    **kwargs,
+) -> list[GeoDataFrame]:
     offset_list = await get_offset_range(url, session, **kwargs)
     tasks = [get_sub_gdf(url, session, offset, **kwargs) for offset in offset_list]
     gdf_list = await gather(*tasks)

@@ -1,13 +1,4 @@
-aiohttp
-black
 coverage
 coverage-badge
-fiona
-flake8
-geopandas
-pandas
-pre-commit
-pyogrio
 pytest
 pytest-asyncio
-requests

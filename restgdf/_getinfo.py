@@ -42,9 +42,9 @@ async def get_feature_count(
     try:
         return response_json["count"]
     except KeyError as e:
-        print(response)
-        print(url, datadict, kwargs, xkwargs, sep="\n")
-        print(response_json)
+        # print(response)
+        # print(url, datadict, kwargs, xkwargs, sep="\n")
+        # print(response_json)
         raise e
 
 
@@ -92,7 +92,8 @@ def get_name(jsondict: dict) -> str:
 def getfields(jsondict: dict, types: bool = False):
     if types:
         return {
-            f["name"]: f["type"].replace("esriFieldType", "") for f in jsondict["fields"]
+            f["name"]: f["type"].replace("esriFieldType", "")
+            for f in jsondict["fields"]
         }
     else:
         return [f["name"] for f in jsondict["fields"]]
