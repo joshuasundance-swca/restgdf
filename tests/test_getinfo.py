@@ -1,8 +1,10 @@
-from aiohttp import ClientSession
+import asyncio
 from unittest.mock import patch
 
-from restgdf import _wherevarinlist
+import pytest
+from aiohttp import ClientSession
 
+from restgdf import _wherevarinlist
 from restgdf._getinfo import (
     DEFAULTDICT,
     default_data,
@@ -19,40 +21,56 @@ def test_wherevarinlist():
     assert _wherevarinlist("STATE", ["FL", "GA"]) == "STATE In ('FL', 'GA')"
 
 
+# def mock_session_post(*args, **kwargs):
+#     class MockResponse:
+#         def __init__(self, json_data):
+#             self.json_data = json_data
+#
+#         def json(self):
+#             return self.json_data
+#
+#     return MockResponse(TESTJSON)
+
+
 def mock_session_post(*args, **kwargs):
     class MockResponse:
         def __init__(self, json_data):
             self.json_data = json_data
 
-        def json(self):
+        async def json(self):  # make this method async
             return self.json_data
 
-    return MockResponse(TESTJSON)
+    future = asyncio.Future()  # create a Future object
+    future.set_result(MockResponse(TESTJSON))  # set the result of the future
+    return future  # return the future
 
 
-@patch("restgdf._getinfo.Session.post", side_effect=mock_session_post)
+@pytest.mark.asyncio
+@patch("restgdf._getinfo.ClientSession.post", side_effect=mock_session_post)
 async def test_get_json_dict(mock_response):
     async with ClientSession() as s:
-        assert get_jsondict("test", session=s) == TESTJSON
+        assert await get_jsondict("test", session=s) == TESTJSON
 
 
-@patch("restgdf._getinfo.Session.post", side_effect=mock_session_post)
+@pytest.mark.asyncio
+@patch("restgdf._getinfo.ClientSession.post", side_effect=mock_session_post)
 async def test_get_feature_count(mock_response):
     async with ClientSession() as s:
-        assert get_feature_count("test", session=s) == TESTJSON["count"]
-        assert get_feature_count("test", session=s, data={"where": "test"})
-        assert get_feature_count("test", session=s, data={"token": "test"})
+        assert await get_feature_count("test", session=s) == TESTJSON["count"]
+        assert await get_feature_count("test", session=s, data={"where": "test"})
+        assert await get_feature_count("test", session=s, data={"token": "test"})
 
 
-@patch("restgdf._getinfo.Session.post", side_effect=mock_session_post)
+@patch("restgdf._getinfo.ClientSession.post", side_effect=mock_session_post)
 def test_get_max_record_count(mock_response):
     assert get_max_record_count(TESTJSON) == TESTJSON["maxRecordCount"]
 
 
-@patch("restgdf._getinfo.Session.post", side_effect=mock_session_post)
+@pytest.mark.asyncio
+@patch("restgdf._getinfo.ClientSession.post", side_effect=mock_session_post)
 async def test_get_offset_range(mock_response):
     async with ClientSession() as s:
-        assert get_offset_range("test", session=s) == range(
+        assert await get_offset_range("test", session=s) == range(
             0,
             TESTJSON["count"],
             TESTJSON["maxRecordCount"],

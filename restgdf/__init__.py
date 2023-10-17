@@ -144,12 +144,12 @@ class Rest:
         wherestr_plus = (
             wherestr if self.wherestr == "1=1" else f"{self.wherestr} AND {wherestr}"
         )
-        return Rest(
+        return await Rest.from_url(
             self.url,
-            self.session,
-            self.auth,
-            wherestr_plus,
-            self.token,
+            session=self.session,
+            auth=self.auth,
+            where=wherestr_plus,
+            token=self.token,
             **self.kwargs,
         )
 

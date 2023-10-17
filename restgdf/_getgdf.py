@@ -34,7 +34,11 @@ async def get_sub_gdf(
 
     data["resultOffset"] = offset
     response = await session.post(f"{url}/query", data=data, **kwargs)
-    sub_gdf = read_file(await response.text(), driver=gdfdriver, engine="pyogrio")
+    sub_gdf = read_file(
+        await response.text(),
+        # driver=gdfdriver,
+        engine="pyogrio",
+    )
     return sub_gdf
 
 

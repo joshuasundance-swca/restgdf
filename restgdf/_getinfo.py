@@ -115,27 +115,38 @@ async def getuniquevalues(
     sortby: Optional[str] = None,
     **kwargs,
 ) -> Union[list, DataFrame]:
-    data = kwargs.pop("data", {})
-    data = {
+    datadict: dict = {
         "where": "1=1",
         "f": "json",
         "returnGeometry": False,
         "returnDistinctValues": True,
         "outFields": fields if isinstance(fields, str) else ",".join(fields),
-        **data,
     }
-    response = await session.post(f"{url}/query", data=data, **kwargs)
+    if "data" in kwargs:
+        datadict["where"] = kwargs["data"].get("where", "1=1")
+        if "token" in kwargs["data"]:
+            datadict["token"] = kwargs["data"]["token"]
+
+    xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
+
+    response = await session.post(f"{url}/query", data=datadict, **xkwargs)
     jsondict = await response.json()
 
-    if isinstance(fields, str) or len(fields) == 1:
-        field = fields if isinstance(fields, str) else fields[0]
-        return [x["attributes"][field] for x in jsondict["features"]]
+    res_l: Union[list, None] = None
+    res_df: Union[DataFrame, None] = None
+
+    if isinstance(fields, str):
+        res_l = [x["attributes"][fields] for x in jsondict["features"]]
+    elif len(fields) == 1:
+        res_l = [x["attributes"][fields[0]] for x in jsondict["features"]]
     else:
         res_df = concat(
             [DataFrame(x).T.reset_index(drop=True) for x in jsondict["features"]],
             ignore_index=True,
         )
-        return res_df.sort_values(sortby).reset_index(drop=True) if sortby else res_df
+        if sortby:
+            res_df = res_df.sort_values(sortby).reset_index(drop=True)
+    return res_l or res_df
 
 
 async def getvaluecounts(
