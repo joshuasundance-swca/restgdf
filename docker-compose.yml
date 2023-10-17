@@ -10,5 +10,3 @@ services:
       - .:/home/appuser/restgdf
     working_dir: /home/appuser/restgdf
     entrypoint: ["/bin/bash", "-l", "-c"]
-    stdin_open: true
-    tty: true
