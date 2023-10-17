@@ -7,7 +7,7 @@ packages = ["restgdf"]
 
 [project]
 name = "restgdf"
-version = "0.0.11"
+version = "0.0.12"
 description = "improved esri rest io for geopandas"
 authors = [{ name = "Joshua Sundance Bailey" }]
 readme = "README.md"
@@ -45,7 +45,7 @@ dev = [
 ]
 
 [tool.bumpver]
-current_version = "0.0.11"
+current_version = "0.0.12"
 version_pattern = "MAJOR.MINOR.PATCH"
 pre_commit_hook = "pre_update.bat"
 post_commit_hook = "post_update.bat"
