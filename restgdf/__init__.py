@@ -20,6 +20,9 @@ from restgdf._getinfo import (
 )
 
 
+__version__ = "0.0.1"
+
+
 def _wherevarinlist(var: str, vals: Iterable[str]) -> str:
     vals_str = ", ".join(f"'{val}'" for val in vals)
     return f"{var} In ({vals_str})"
