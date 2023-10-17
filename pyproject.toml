@@ -44,7 +44,7 @@ dev = [
 [tool.bumpver]
 current_version = "0.0.1"
 version_pattern = "MAJOR.MINOR.PATCH"
-pre_commit_hook = "docker compose run restgdf update_in_docker.sh"
+pre_commit_hook = "update.bat"
 commit_message = "Bump version {old_version} -> {new_version}"
 commit = true
 tag_message = "{new_version}"
