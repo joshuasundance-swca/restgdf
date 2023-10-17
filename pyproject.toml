@@ -22,16 +22,19 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
 ]
-keywords = ["geopandas", "esri rest", "rest io"]
+keywords = ["geopandas", "esri", "arcgis"]
 requires-python = ">=3.9"
 [project.urls]
 Homepage = "https://github.com/joshuasundance-swca/restgdf"
 
-[project.scripts]
-restgdf = "restgdf.__main__:main"
 
 [project.optional-dependencies]
-dev = ["pre-commit"]
+dev = [
+    "coverage",
+    "coverage-badge",
+    "pytest",
+    "pytest-asyncio",
+]
 
 [tool.bumpver]
 current_version = "0.0.1"
