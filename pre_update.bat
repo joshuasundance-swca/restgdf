@@ -1,1 +1,1 @@
-docker compose run restgdf /home/appuser/restgdf/update_in_docker.sh
+docker compose run restgdf /home/appuser/restgdf/update_in_docker.sh && git add -u
