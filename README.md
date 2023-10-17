@@ -1,4 +1,7 @@
-# restgdf: improved esri rest io for geopandas
+# restgdf
+
+improved esri rest io for geopandas
+
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD3-yellow.svg)](https://opensource.org/license/bsd-3-clause/)
 [![python](https://img.shields.io/badge/Python-3.9+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
@@ -7,7 +10,7 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
-![](coverage.svg)
+[![coverage](coverage.svg)](./COVERAGE.md)
 
 `gpd.read_file(url, driver="ESRIJSON")` does not account for max record count limitations
 
@@ -19,9 +22,11 @@ keyword arguments to `Rest.getgdf` are passed on to `requests.Session.post`; inc
 
 this enables enhanced control over queries and allow use of any valid authentication scheme (eg `requests_ntlm.HttpNtlmAuth`) with use of `requests.Session.auth` or `data={"token": str}`
 
-* ```conda create -n restgdf requests geopandas```
-* ```git clone https://github.com/joshuasundance-swca/restgdf```
-* ```pip install .```
+# Usage
+
+```bash
+pip install restgdf
+```
 
 ```python
 import asyncio
@@ -64,3 +69,22 @@ print(oh_zipcodes_gdf.shape)
 ```
 
 [ArcGIS REST API reference](https://developers.arcgis.com/rest/)
+
+
+# Contributing
+
+```bash
+pre-commit install
+pre-commit autoupdate
+
+git add -u
+
+pre-commit run --all-files
+
+coverage run
+coverage report -m --format=markdown > COVERAGE.md
+coverage html
+coverage-badge -fo coverage.svg
+
+cd docs && make clean html && cd ..
+```

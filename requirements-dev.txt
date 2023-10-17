@@ -2,3 +2,5 @@ coverage
 coverage-badge
 pytest
 pytest-asyncio
+sphinx
+sphinx-rtd-theme
