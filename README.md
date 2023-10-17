@@ -69,22 +69,3 @@ print(oh_zipcodes_gdf.shape)
 ```
 
 [ArcGIS REST API reference](https://developers.arcgis.com/rest/)
-
-
-# Contributing
-
-```bash
-pre-commit install
-pre-commit autoupdate
-
-git add -u
-
-pre-commit run --all-files
-
-coverage run
-coverage report -m --format=markdown > COVERAGE.md
-coverage html
-coverage-badge -fo coverage.svg
-
-cd docs && make clean html && cd ..
-```
