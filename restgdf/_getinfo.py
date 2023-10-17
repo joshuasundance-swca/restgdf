@@ -28,11 +28,24 @@ async def get_feature_count(
     session: ClientSession,
     **kwargs,
 ) -> int:
-    data = kwargs.pop("data", {})
-    data = {"where": "1=1", "returnCountOnly": True, "f": "json", **data}
-    response = await session.post(f"{url}/query", data=data, **kwargs)
+    datadict: dict = {"where": "1=1", "returnCountOnly": True, "f": "json"}
+    if "data" in kwargs:
+        datadict["where"] = kwargs["data"].get("where", "1=1")
+        if "token" in kwargs["data"]:
+            datadict["token"] = kwargs["data"]["token"]
+    xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
+    response = await session.post(f"{url}/query", data=datadict, **xkwargs)
+    # the line above provides keyword arguments other than data dict
+    # because data dict is manipulated for this function
+    # (this allows the use of token authentication, for example)
     response_json = await response.json()
-    return response_json["count"]
+    try:
+        return response_json["count"]
+    except KeyError as e:
+        print(response)
+        print(url, datadict, kwargs, xkwargs, sep="\n")
+        print(response_json)
+        raise e
 
 
 async def get_jsondict(

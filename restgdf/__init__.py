@@ -72,17 +72,23 @@ class Rest:
 
         self.gdf: GeoDataFrame | None = None
 
-    async def prep_from_url(self):
+        self.jsondict: dict
+        self.name: str
+        self.fields: tuple[str, ...]
+        self.fieldtypes: DataFrame
+        self.count: int
+
+    async def prep(self):
         self.jsondict = await get_jsondict(self.url, self.session, **self.kwargs)
         self.name = get_name(self.jsondict)
-        self.fields = await getfields(self.jsondict)
-        self.fieldtypes = await getfields_df(self.jsondict)
+        self.fields = getfields(self.jsondict)
+        self.fieldtypes = getfields_df(self.jsondict)
         self.count = await get_feature_count(self.url, self.session, **self.kwargs)
 
     @classmethod
     async def from_url(cls, url: str, **kwargs) -> Rest:
         self = cls(url, **kwargs)
-        await self.prep_from_url()
+        await self.prep()
         return self
 
     async def getgdf(self) -> GeoDataFrame:
