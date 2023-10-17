@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "restgdf"
-version = "0.0.1"
+version = "0.0.7"
 description = "improved esri rest io for geopandas"
 authors = [{ name = "Joshua Sundance Bailey" }]
 readme = "README.md"
@@ -31,8 +31,10 @@ Homepage = "https://github.com/joshuasundance-swca/restgdf"
 
 [project.optional-dependencies]
 dev = [
+    "bumpver",
     "coverage",
     "coverage-badge",
+    "pre-commit",
     "pytest",
     "pytest-asyncio",
     "sphinx",
@@ -40,12 +42,13 @@ dev = [
 ]
 
 [tool.bumpver]
-current_version = "0.0.1"
+current_version = "0.0.7"
 version_pattern = "MAJOR.MINOR.PATCH"
+pre_commit_hook = "pre_update.bat"
 commit_message = "Bump version {old_version} -> {new_version}"
+commit = true
 tag_message = "{new_version}"
 tag_scope = "default"
-commit = true
 tag = true
 push = true
 

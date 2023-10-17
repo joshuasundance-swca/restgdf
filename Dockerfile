@@ -1,7 +1,7 @@
 FROM python:3.11-slim-bookworm
 
 RUN apt-get update && \
-    apt-get install make && \
+    apt-get install -y make && \
     rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -g 1001 appgroup && \
@@ -20,6 +20,4 @@ RUN pip install --user --no-cache-dir -r /home/appuser/requirements-dev.txt
 COPY ./requirements.txt /home/appuser/requirements.txt
 RUN pip install --user --no-cache-dir -r /home/appuser/requirements.txt
 
-COPY restgdf /home/appuser/restgdf
-WORKDIR /home/appuser/restgdf/
-CMD ["/bin/bash"]
+ENTRYPOINT ["/bin/bash", "-l", "-c"]

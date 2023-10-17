@@ -1,5 +1,7 @@
+bumpver
 coverage
 coverage-badge
+pre-commit
 pytest
 pytest-asyncio
 sphinx

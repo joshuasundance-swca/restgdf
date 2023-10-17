@@ -1,0 +1,12 @@
+version: '3.8'
+
+services:
+  restgdf:
+    image: restgdf
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/home/appuser/restgdf
+    working_dir: /home/appuser/restgdf
+    entrypoint: ["/bin/bash", "-l", "-c"]
