@@ -1,3 +1,5 @@
+"""A package for getting GeoDataFrames from ArcGIS FeatureLayers."""
+
 from __future__ import annotations
 from typing import Any
 from collections.abc import Iterable
@@ -24,6 +26,7 @@ __version__ = "0.0.1"
 
 
 def _wherevarinlist(var: str, vals: Iterable[str]) -> str:
+    """Return a where clause for a variable in a list of values."""
     vals_str = ", ".join(f"'{val}'" for val in vals)
     return f"{var} In ({vals_str})"
 
@@ -35,6 +38,7 @@ async def get_gdf(
     token: str | None = None,
     **kwargs,
 ) -> GeoDataFrame:
+    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
     session = session or ClientSession()
     datadict = default_data(kwargs.pop("data", {}))
     if where is not None:
@@ -45,6 +49,8 @@ async def get_gdf(
 
 
 class Rest:
+    """A class for interacting with ArcGIS FeatureLayers."""
+
     def __init__(
         self,
         url: str,
@@ -54,6 +60,7 @@ class Rest:
         token: str | None = None,
         **kwargs,
     ):
+        """A class for interacting with ArcGIS FeatureLayers."""
         self.url = url
         self.session = session or ClientSession()
         self.auth = auth
@@ -82,6 +89,7 @@ class Rest:
         self.count: int
 
     async def prep(self):
+        """Prepare the Rest object."""
         self.jsondict = await get_jsondict(self.url, self.session, **self.kwargs)
         self.name = get_name(self.jsondict)
         self.fields = getfields(self.jsondict)
@@ -90,11 +98,13 @@ class Rest:
 
     @classmethod
     async def from_url(cls, url: str, **kwargs) -> Rest:
+        """Create a Rest object from a url."""
         self = cls(url, **kwargs)
         await self.prep()
         return self
 
     async def getgdf(self) -> GeoDataFrame:
+        """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
         if self.gdf is None:
             self.gdf = await get_gdf(self.url, self.session, **self.kwargs)
         return self.gdf
@@ -104,6 +114,7 @@ class Rest:
         fields: tuple | str,
         sortby: str | None = None,
     ) -> list | DataFrame:
+        """Get the unique values for a field."""
         if fields not in self.uniquevalues:
             if (isinstance(fields, str) and fields not in self.fields) or (
                 not isinstance(fields, str)
@@ -120,6 +131,7 @@ class Rest:
         return self.uniquevalues[fields]
 
     async def getvaluecounts(self, field: str) -> DataFrame:
+        """Get the value counts for a field."""
         if field not in self.valuecounts:
             if field not in self.fields:
                 raise FIELDDOESNOTEXIST
@@ -132,6 +144,7 @@ class Rest:
         return self.valuecounts[field]
 
     async def getnestedcount(self, fields: tuple) -> DataFrame:
+        """Get the nested value counts for a field."""
         if fields not in self.nestedcount:
             if any(field not in self.fields for field in fields):
                 raise FIELDDOESNOTEXIST
@@ -144,6 +157,7 @@ class Rest:
         return self.nestedcount[fields]
 
     async def where(self, wherestr: str) -> Rest:
+        """Create a new Rest object with a where clause."""
         wherestr_plus = (
             wherestr if self.wherestr == "1=1" else f"{self.wherestr} AND {wherestr}"
         )
@@ -157,8 +171,10 @@ class Rest:
         )
 
     def __repr__(self) -> str:
+        """Return a string representation of the Rest object."""
         kwargstr = ", ".join(f"{k}={v}" for k, v in self.kwargs.items())
         return f"Rest({self.url}, {self.session}, {self.auth}, {self.wherestr}, {self.token}, {kwargstr})"
 
     def __str__(self) -> str:
+        """Return a string representation of the Rest object."""
         return f"{self.name} ({self.url})"

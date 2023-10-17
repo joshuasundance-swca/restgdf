@@ -18,6 +18,7 @@ dependencies = [
 license = { file = "LICENSE" }
 classifiers = [
     "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.9",
@@ -34,6 +35,8 @@ dev = [
     "coverage-badge",
     "pytest",
     "pytest-asyncio",
+    "sphinx",
+    "sphinx-rtd-theme",
 ]
 
 [tool.bumpver]
@@ -49,3 +52,39 @@ push = true
 [tool.bumpver.file_patterns]
 "pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
 "restgdf/__init__.py" = ['__version__ = "{version}"']
+"docs/conf.py" = ["release = '{version}'"]
+
+
+[tool.coverage.run]
+branch = true
+omit = ["*tests/*.py"]
+command_line = "-m pytest"
+source = ["restgdf"]
+
+[tool.coverage.report]
+show_missing = true
+# Regexes for lines to exclude from consideration
+exclude_also = [
+    # Don't complain about missing debug-only code:
+    "def __repr__",
+    "if self\\.debug",
+
+    # Don't complain if tests don't hit defensive assertion code:
+    "raise AssertionError",
+    "raise NotImplementedError",
+
+    # Don't complain if non-runnable code isn't run:
+    "if 0:",
+    "if __name__ == .__main__.:",
+
+    # Don't complain about abstract methods, they aren't run:
+    "@(abc\\.)?abstractmethod",
+    ]
+
+ignore_errors = true
+
+[tool.coverage.html]
+directory = "coverage_html_report"
+skip_covered = false
+skip_empty = true
+title = "restgdf coverage report"

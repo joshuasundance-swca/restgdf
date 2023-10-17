@@ -1,3 +1,5 @@
+"""A package for getting GeoDataFrames from ArcGIS FeatureLayers."""
+
 from re import compile, IGNORECASE
 from typing import Union, Optional
 
@@ -19,6 +21,7 @@ def default_data(
     data: Optional[dict] = None,
     default_dict: Optional[dict] = None,
 ) -> dict:
+    """Return a dict with default values for ArcGIS REST API requests."""
     default_dict = default_dict or DEFAULTDICT
     return {**default_dict, **(data or {})}
 
@@ -28,6 +31,7 @@ async def get_feature_count(
     session: ClientSession,
     **kwargs,
 ) -> int:
+    """Get the feature count for a layer."""
     datadict: dict = {"where": "1=1", "returnCountOnly": True, "f": "json"}
     if "data" in kwargs:
         datadict["where"] = kwargs["data"].get("where", "1=1")
@@ -53,6 +57,7 @@ async def get_jsondict(
     session: ClientSession,
     **kwargs,
 ) -> dict:
+    """Get the JSON dict for a layer."""
     data = kwargs.pop("data", {})
     response = await session.post(url, data=default_data(data), **kwargs)
     response_json = await response.json()
@@ -60,6 +65,7 @@ async def get_jsondict(
 
 
 def get_max_record_count(jsondict: dict) -> int:
+    """Get the maximum record count for a layer."""
     key_pattern = compile(
         r"max(imum)?(\s|_)?record(\s|_)?count$",
         flags=IGNORECASE,
@@ -75,6 +81,7 @@ async def get_offset_range(
     session: ClientSession,
     **kwargs,
 ) -> range:
+    """Get the offset range for a layer."""
     feature_count = await get_feature_count(url, session, **kwargs)
     jsondict = await get_jsondict(url, session, **kwargs)
     max_record_count = get_max_record_count(jsondict)
@@ -82,6 +89,7 @@ async def get_offset_range(
 
 
 def get_name(jsondict: dict) -> str:
+    """Get the name of a layer."""
     key_pattern = compile("name", flags=IGNORECASE)
     key_list = [key for key in jsondict.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
@@ -90,6 +98,7 @@ def get_name(jsondict: dict) -> str:
 
 
 def getfields(jsondict: dict, types: bool = False):
+    """Get the fields of a layer."""
     if types:
         return {
             f["name"]: f["type"].replace("esriFieldType", "")
@@ -100,6 +109,7 @@ def getfields(jsondict: dict, types: bool = False):
 
 
 def getfields_df(jsondict: dict) -> DataFrame:
+    """Get the fields of a layer as a DataFrame."""
     return DataFrame(
         [
             (f["name"], f["type"].replace("esriFieldType", ""))
@@ -116,6 +126,7 @@ async def getuniquevalues(
     sortby: Optional[str] = None,
     **kwargs,
 ) -> Union[list, DataFrame]:
+    """Get the unique values for a field."""
     datadict: dict = {
         "where": "1=1",
         "f": "json",
@@ -156,6 +167,7 @@ async def getvaluecounts(
     session: ClientSession,
     **kwargs,
 ) -> DataFrame:
+    """Get the value counts for a field."""
     statstr = f'[{{"statisticType":"count","onStatisticField":"{field}","outStatisticFieldName":"{field}_count"}}]'
     data = kwargs.pop("data", {})
     data = {
@@ -184,6 +196,7 @@ async def nestedcount(
     session: ClientSession,
     **kwargs,
 ) -> DataFrame:
+    """Get the nested value counts for a field."""
     statstr = "".join(
         (
             "[",
