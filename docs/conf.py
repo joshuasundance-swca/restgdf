@@ -27,7 +27,7 @@ napoleon_use_ivar = True
 project = 'restgdf'
 copyright = '2023, Joshua Sundance Bailey'
 author = 'Joshua Sundance Bailey'
-release = '0.0.4'
+release = '0.0.5'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
