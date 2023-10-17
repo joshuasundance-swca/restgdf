@@ -12,3 +12,5 @@ coverage-badge -fo coverage.svg
 cd /home/appuser/restgdf/docs
 
 make clean html
+
+exit 0
