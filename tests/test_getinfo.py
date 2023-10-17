@@ -1,3 +1,4 @@
+from aiohttp import ClientSession
 from unittest.mock import patch
 
 from restgdf import _wherevarinlist
@@ -30,15 +31,17 @@ def mock_session_post(*args, **kwargs):
 
 
 @patch("restgdf._getinfo.Session.post", side_effect=mock_session_post)
-def test_get_json_dict(mock_response):
-    assert get_jsondict("test") == TESTJSON
+async def test_get_json_dict(mock_response):
+    async with ClientSession() as s:
+        assert get_jsondict("test", session=s) == TESTJSON
 
 
 @patch("restgdf._getinfo.Session.post", side_effect=mock_session_post)
-def test_get_feature_count(mock_response):
-    assert get_feature_count("test") == TESTJSON["count"]
-    assert get_feature_count("test", data={"where": "test"})
-    assert get_feature_count("test", data={"token": "test"})
+async def test_get_feature_count(mock_response):
+    async with ClientSession() as s:
+        assert get_feature_count("test", session=s) == TESTJSON["count"]
+        assert get_feature_count("test", session=s, data={"where": "test"})
+        assert get_feature_count("test", session=s, data={"token": "test"})
 
 
 @patch("restgdf._getinfo.Session.post", side_effect=mock_session_post)
@@ -47,12 +50,13 @@ def test_get_max_record_count(mock_response):
 
 
 @patch("restgdf._getinfo.Session.post", side_effect=mock_session_post)
-def test_get_offset_range(mock_response):
-    assert get_offset_range("test") == range(
-        0,
-        TESTJSON["count"],
-        TESTJSON["maxRecordCount"],
-    )
+async def test_get_offset_range(mock_response):
+    async with ClientSession() as s:
+        assert get_offset_range("test", session=s) == range(
+            0,
+            TESTJSON["count"],
+            TESTJSON["maxRecordCount"],
+        )
 
 
 def test_default_data():

@@ -1,4 +1,4 @@
-import re
+from re import compile, IGNORECASE
 from typing import Union, Optional
 
 from aiohttp import ClientSession
@@ -60,9 +60,9 @@ async def get_jsondict(
 
 
 def get_max_record_count(jsondict: dict) -> int:
-    key_pattern = re.compile(
+    key_pattern = compile(
         r"max(imum)?(\s|_)?record(\s|_)?count$",
-        flags=re.IGNORECASE,
+        flags=IGNORECASE,
     )
     key_list = [key for key in jsondict.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
@@ -82,7 +82,7 @@ async def get_offset_range(
 
 
 def get_name(jsondict: dict) -> str:
-    key_pattern = re.compile("name", flags=re.IGNORECASE)
+    key_pattern = compile("name", flags=IGNORECASE)
     key_list = [key for key in jsondict.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
         raise FIELDDOESNOTEXIST
