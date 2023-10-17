@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "restgdf"
-version = "0.0.3"
+version = "0.0.4"
 description = "improved esri rest io for geopandas"
 authors = [{ name = "Joshua Sundance Bailey" }]
 readme = "README.md"
@@ -42,7 +42,7 @@ dev = [
 ]
 
 [tool.bumpver]
-current_version = "0.0.3"
+current_version = "0.0.4"
 version_pattern = "MAJOR.MINOR.PATCH"
 pre_commit_hook = "update.bat"
 commit_message = "Bump version {old_version} -> {new_version}"
