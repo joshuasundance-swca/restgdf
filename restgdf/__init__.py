@@ -22,7 +22,7 @@ from restgdf._getinfo import (
 )
 
 
-__version__ = "0.0.9"
+__version__ = "0.0.10"
 
 
 def _wherevarinlist(var: str, vals: Iterable[str]) -> str:
