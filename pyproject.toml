@@ -40,6 +40,9 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-asyncio",
+]
+
+doc = [
     "sphinx",
     "sphinx-rtd-theme",
 ]

@@ -14,9 +14,6 @@ ENV PATH="/home/appuser/.local/bin:${PATH}" \
 
 RUN pip install --user --no-cache-dir --upgrade pip
 
-COPY ./requirements-dev.txt /home/appuser/requirements-dev.txt
-RUN pip install --user --no-cache-dir -r /home/appuser/requirements-dev.txt
-
 COPY ./requirements.txt /home/appuser/requirements.txt
 RUN pip install --user --no-cache-dir -r /home/appuser/requirements.txt
 
