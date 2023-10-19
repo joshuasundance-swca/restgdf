@@ -7,6 +7,9 @@ on:
       - opened
       - synchronize
       - reopened
+    paths:
+      - "restgdf/**"
+      - "tests/**"
 
 jobs:
   CI:
