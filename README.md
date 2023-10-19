@@ -8,7 +8,7 @@ improved esri rest io for geopandas
 
 [![Publish to PyPI](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml/badge.svg)](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml)
 ![GitHub tag (with filter)](https://img.shields.io/github/v/tag/joshuasundance-swca/restgdf)
-![Read the Docs](https://img.shields.io/readthedocs/restgdf)
+[![Read the Docs](https://img.shields.io/readthedocs/restgdf)](https://restgdf.readthedocs.io/en/latest/)
 
 ![Code Climate maintainability](https://img.shields.io/codeclimate/maintainability/joshuasundance-swca/restgdf)
 ![Code Climate issues](https://img.shields.io/codeclimate/issues/joshuasundance-swca/restgdf)
