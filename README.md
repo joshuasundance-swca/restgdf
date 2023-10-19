@@ -5,6 +5,8 @@ improved esri rest io for geopandas
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/License-BSD3-yellow.svg)](https://opensource.org/license/bsd-3-clause/)
 [![python](https://img.shields.io/badge/Python-3.9+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+
+[![Publish to PyPI](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml/badge.svg)](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml)
 ![GitHub tag (with filter)](https://img.shields.io/github/v/tag/joshuasundance-swca/restgdf)
 ![Read the Docs](https://img.shields.io/readthedocs/restgdf)
 
@@ -20,8 +22,6 @@ improved esri rest io for geopandas
 
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 ![Known Vulnerabilities](https://snyk.io/test/github/joshuasundance-swca/restgdf/badge.svg)
-
-[![Publish to PyPI](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml/badge.svg)](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml)
 
 `gpd.read_file(url, driver="ESRIJSON")` does not account for max record count limitations
 
