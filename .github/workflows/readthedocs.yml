@@ -1,0 +1,39 @@
+name: readthedocs
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "restgdf/**"
+      - "tests/**"
+      - "docs/**"
+
+jobs:
+  readthedocs:
+    if: "!contains(github.event.head_commit.message, 'Bump version')"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.WORKFLOW_GIT_ACCESS_TOKEN }}
+        fetch-depth: 0
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.11
+        cache: pip
+    - name: Install Python libraries
+      run: |
+        pip install --user -r requirements.txt
+    - name: "Update docs"
+      working-directory: docs
+      run: |
+        make clean html
+    - name: Commit changes
+      with:
+        COMMIT_MESSAGE: "Update doc files"
+      uses: stefanzweifel/git-auto-commit-action@v4
