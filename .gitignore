@@ -760,3 +760,5 @@ pyvenv.cfg
 ~$*.doc*
 ~$*.ppt*
 ~$*.xls*
+docs/_build/
+coverage_html_report/
