@@ -7,7 +7,7 @@ from restgdf import Rest
 @pytest.mark.asyncio
 async def test_rest():
     async with ClientSession() as s:
-        # print("testing")
+        raise RuntimeError("test")
         beachurl = r"https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer/6"
         beaches = await Rest.from_url(beachurl, session=s, where="City <> 'fgsfds'")
         beaches_gdf = await beaches.getgdf()
