@@ -21,6 +21,8 @@ improved esri rest io for geopandas
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 ![Known Vulnerabilities](https://snyk.io/test/github/joshuasundance-swca/restgdf/badge.svg)
 
+[![Publish to PyPI](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml/badge.svg)](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml)
+
 `gpd.read_file(url, driver="ESRIJSON")` does not account for max record count limitations
 
 so if you read a service with 100000 features but there's a limit of 1000 records per query, then your gdf will only have 1000 features
