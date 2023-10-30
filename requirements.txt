@@ -16,7 +16,7 @@ attrs==23.1.0
     # via
     #   aiohttp
     #   fiona
-babel==2.13.0
+babel==2.13.1
     # via sphinx
 bumpver==2023.1129
     # via restgdf (pyproject.toml)
