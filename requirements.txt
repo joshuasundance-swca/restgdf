@@ -16,7 +16,7 @@ attrs==23.1.0
     # via
     #   aiohttp
     #   fiona
-babel==2.13.0
+babel==2.13.1
     # via sphinx
 bumpver==2023.1129
     # via restgdf (pyproject.toml)
@@ -28,7 +28,7 @@ certifi==2023.7.22
     #   requests
 cfgv==3.4.0
     # via pre-commit
-charset-normalizer==3.3.0
+charset-normalizer==3.3.1
     # via
     #   aiohttp
     #   requests
@@ -66,7 +66,7 @@ frozenlist==1.4.0
     #   aiosignal
 geopandas==0.14.0
     # via restgdf (pyproject.toml)
-identify==2.5.30
+identify==2.5.31
     # via pre-commit
 idna==3.4
     # via
@@ -116,7 +116,7 @@ pyogrio==0.6.0
     # via restgdf (pyproject.toml)
 pyproj==3.6.1
     # via geopandas
-pytest==7.4.2
+pytest==7.4.3
     # via
     #   pytest-asyncio
     #   restgdf (pyproject.toml)
