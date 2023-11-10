@@ -11,6 +11,8 @@ async def test_rest():
         beachurl = r"https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer/6"
         beaches = await Rest.from_url(beachurl, session=s, where="City <> 'fgsfds'")
         beaches_gdf = await beaches.getgdf()
+        assert len(await beaches.samplegdf(2)) == 2
+        assert len(await beaches.headgdf(2)) == 2
         assert len(beaches_gdf) > 0
         assert all(
             "fgsfds" in s for s in (beaches.wherestr, beaches.kwargs["data"]["where"])
