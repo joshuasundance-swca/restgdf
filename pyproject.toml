@@ -67,7 +67,7 @@ push = true
 
 [tool.coverage.run]
 branch = true
-omit = ["*tests/*.py"]
+omit = ["*tests/*.py", "restgdf/app.py"]
 command_line = "-m pytest"
 source = ["restgdf"]
 

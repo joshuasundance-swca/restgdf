@@ -1,12 +1,15 @@
 """A package for getting GeoDataFrames from ArcGIS FeatureLayers."""
 
 from __future__ import annotations
-from typing import Any
+
+import random
 from collections.abc import Iterable
+from typing import Any
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame
 from pandas import DataFrame
+
 from restgdf._getgdf import get_gdf_newfunc
 from restgdf._getinfo import (
     default_data,
@@ -20,7 +23,6 @@ from restgdf._getinfo import (
     nestedcount,
     FIELDDOESNOTEXIST,
 )
-
 
 __version__ = "0.0.13"
 
@@ -102,6 +104,26 @@ class Rest:
         self = cls(url, **kwargs)
         await self.prep()
         return self
+
+    async def getoids(self) -> list[int]:
+        """Get the object ids for the Rest object."""
+        return await self.getuniquevalues(self.url, "OBJECTID")
+
+    async def samplegdf(self, n: int = 10) -> GeoDataFrame:
+        """Get n random features as a GeoDataFrame."""
+        oids = await getuniquevalues(self.url, "OBJECTID", self.session, **self.kwargs)
+        sample_oids = random.sample(oids, min(n, len(oids)))
+        wherestr = _wherevarinlist("OBJECTID", sample_oids)
+        new_rest = await self.where(wherestr)
+        return await new_rest.getgdf()
+
+    async def headgdf(self, n: int = 10) -> GeoDataFrame:
+        """Get the n first features as a GeoDataFrame."""
+        oids = await getuniquevalues(self.url, "OBJECTID", self.session, **self.kwargs)
+        head_oids = oids[:n]
+        wherestr = _wherevarinlist("OBJECTID", head_oids)
+        new_rest = await self.where(wherestr)
+        return await new_rest.getgdf()
 
     async def getgdf(self) -> GeoDataFrame:
         """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
