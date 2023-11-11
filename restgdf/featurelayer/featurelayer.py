@@ -22,7 +22,7 @@ from restgdf.featurelayer._getinfo import (
     nestedcount,
     FIELDDOESNOTEXIST,
 )
-from restgdf.utils import where_var_in_list, ends_with_num_pat
+from restgdf.utils import where_var_in_list, ends_with_num
 
 
 class FeatureLayer:
@@ -37,7 +37,7 @@ class FeatureLayer:
         **kwargs,
     ):
         """A class for interacting with ArcGIS FeatureLayers."""
-        if not ends_with_num_pat.search(url):
+        if not ends_with_num(url):
             raise ValueError(
                 "The url must end with a number, which is the layer id of the FeatureLayer.",
             )
