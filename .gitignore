@@ -755,7 +755,6 @@ Thumbs.db:encryptable
 [Ss]cripts
 ehthumbs.db
 ehthumbs_vista.db
-.coverage
 pip-selfcheck.json
 pyvenv.cfg
 ~$*.doc*
