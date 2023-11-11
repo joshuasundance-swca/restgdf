@@ -6,6 +6,7 @@ from typing import Union, Optional
 from aiohttp import ClientSession
 from pandas import DataFrame, concat
 
+
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
 
 DEFAULTDICT: dict = {
@@ -180,7 +181,6 @@ async def getvaluecounts(
         **data,
     }
     response = await session.post(f"{url}/query", data=data, **kwargs)
-
     jsondict = await response.json()
     features = jsondict["features"]
     cc = concat(
@@ -218,7 +218,6 @@ async def nestedcount(
         **data,
     }
     response = await session.post(f"{url}/query", data=data, **kwargs)
-
     jsondict = await response.json()
     features = jsondict["features"]
     cc = concat(

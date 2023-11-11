@@ -2,25 +2,17 @@
 
 from asyncio import gather
 from functools import reduce
+from typing import Union
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame, read_file
 from pandas import concat
 from pyogrio import list_drivers
 
-from restgdf._getinfo import get_offset_range
+from restgdf.featurelayer._getinfo import default_data, get_offset_range
+
 
 supported_drivers = list_drivers()
-
-
-async def get_gdf_newfunc(
-    url: str,
-    session: ClientSession,
-    **kwargs,
-) -> GeoDataFrame:
-    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
-    gdfs = await get_gdf_list(url, session, **kwargs)
-    return await concat_gdfs(gdfs)
 
 
 async def get_sub_gdf(
@@ -72,3 +64,30 @@ async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
         ),
         gdfs,
     )
+
+
+async def gdf_by_concat(
+    url: str,
+    session: ClientSession,
+    **kwargs,
+) -> GeoDataFrame:
+    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
+    gdfs = await get_gdf_list(url, session, **kwargs)
+    return await concat_gdfs(gdfs)
+
+
+async def get_gdf(
+    url: str,
+    session: Union[ClientSession, None] = None,
+    where: Union[str, None] = None,
+    token: Union[str, None] = None,
+    **kwargs,
+) -> GeoDataFrame:
+    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
+    session = session or ClientSession()
+    datadict = default_data(kwargs.pop("data", {}))
+    if where is not None:
+        datadict["where"] = where
+    if token is not None:
+        datadict["token"] = token
+    return await gdf_by_concat(url, session, data=datadict, **kwargs)

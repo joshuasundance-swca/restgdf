@@ -1,25 +1,29 @@
 import pytest
 from aiohttp import ClientSession
 from pytest import raises
-from restgdf import Rest
+from restgdf.featurelayer.featurelayer import FeatureLayer
 
 
 @pytest.mark.asyncio
-async def test_rest():
+async def test_featurelayer():
     async with ClientSession() as s:
         # print("testing workflow")
         with pytest.raises(ValueError):
-            await Rest.from_url(
+            await FeatureLayer.from_url(
                 "https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer",
                 session=s,
             )
         with pytest.raises(ValueError):
-            await Rest.from_url(
+            await FeatureLayer.from_url(
                 "https://maps1.vcgov.org/arcgis/rest/services/Aerials/MapServer/4",
                 session=s,
             )
         beachurl = r"https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer/6"
-        beaches = await Rest.from_url(beachurl, session=s, where="City <> 'fgsfds'")
+        beaches = await FeatureLayer.from_url(
+            beachurl,
+            session=s,
+            where="City <> 'fgsfds'",
+        )
         beaches_gdf = await beaches.getgdf()
         assert len(await beaches.samplegdf(2)) == 2
         assert len(await beaches.headgdf(2)) == 2
@@ -35,7 +39,7 @@ async def test_rest():
         assert str(beaches) == f"Beach Access Points ({beachurl})"
 
         zipurl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_ZIP_Codes_2016/FeatureServer/0"
-        ziprest = await Rest.from_url(zipurl, where="STATE = 'OH'", session=s)
+        ziprest = await FeatureLayer.from_url(zipurl, where="STATE = 'OH'", session=s)
         testkwargs = {k: v for k, v in ziprest.kwargs.items()}
         assert "Cincinnati" in await ziprest.getuniquevalues("PO_NAME")
         assert await ziprest.getuniquevalues(
