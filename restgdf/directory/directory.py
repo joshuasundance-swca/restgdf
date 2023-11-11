@@ -19,7 +19,7 @@ class Directory:
         self.services: list[str]
 
     async def prep(self):
-        self.services = get_all_services_and_folders(self.session, self.url)
+        self.services = await get_all_services_and_folders(self.session, self.url)
 
     @classmethod
     async def from_url(cls, url: str, **kwargs) -> Directory:

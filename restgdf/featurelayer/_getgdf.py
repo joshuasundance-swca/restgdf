@@ -29,13 +29,13 @@ async def get_sub_gdf(
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
 
     data["resultOffset"] = offset
-    with await session.post(f"{url}/query", data=data, **kwargs) as response:
-        sub_gdf = read_file(
-            await response.text(),
-            # driver=gdfdriver,  # this line raises a warning when using pyogrio w/ ESRIJSON
-            engine="pyogrio",
-        )
-        return sub_gdf
+    response = await session.post(f"{url}/query", data=data, **kwargs)
+    sub_gdf = read_file(
+        await response.text(),
+        # driver=gdfdriver,  # this line raises a warning when using pyogrio w/ ESRIJSON
+        engine="pyogrio",
+    )
+    return sub_gdf
 
 
 async def get_gdf_list(

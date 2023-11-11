@@ -1,7 +1,7 @@
 import pytest
 from aiohttp import ClientSession
 from pytest import raises
-from restgdf import FeatureLayer
+from restgdf.featurelayer.featurelayer import FeatureLayer
 
 
 @pytest.mark.asyncio

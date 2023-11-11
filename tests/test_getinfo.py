@@ -4,8 +4,8 @@ from unittest.mock import patch
 import pytest
 from aiohttp import ClientSession
 
-from restgdf import _wherevarinlist
-from restgdf._getinfo import (
+from restgdf.utils import where_var_in_list
+from restgdf.featurelayer._getinfo import (
     DEFAULTDICT,
     default_data,
     get_feature_count,
@@ -18,7 +18,7 @@ TESTJSON = {"count": 500, "maxRecordCount": 100}
 
 
 def test_wherevarinlist():
-    assert _wherevarinlist("STATE", ["FL", "GA"]) == "STATE In ('FL', 'GA')"
+    assert where_var_in_list("STATE", ["FL", "GA"]) == "STATE In ('FL', 'GA')"
 
 
 # def mock_session_post(*args, **kwargs):
@@ -46,14 +46,20 @@ def mock_session_post(*args, **kwargs):
 
 
 @pytest.mark.asyncio
-@patch("restgdf._getinfo.ClientSession.post", side_effect=mock_session_post)
+@patch(
+    "restgdf.featurelayer._getinfo.ClientSession.post",
+    side_effect=mock_session_post,
+)
 async def test_get_json_dict(mock_response):
     async with ClientSession() as s:
         assert await get_jsondict("test", session=s) == TESTJSON
 
 
 @pytest.mark.asyncio
-@patch("restgdf._getinfo.ClientSession.post", side_effect=mock_session_post)
+@patch(
+    "restgdf.featurelayer._getinfo.ClientSession.post",
+    side_effect=mock_session_post,
+)
 async def test_get_feature_count(mock_response):
     async with ClientSession() as s:
         assert await get_feature_count("test", session=s) == TESTJSON["count"]
@@ -61,13 +67,19 @@ async def test_get_feature_count(mock_response):
         assert await get_feature_count("test", session=s, data={"token": "test"})
 
 
-@patch("restgdf._getinfo.ClientSession.post", side_effect=mock_session_post)
+@patch(
+    "restgdf.featurelayer._getinfo.ClientSession.post",
+    side_effect=mock_session_post,
+)
 def test_get_max_record_count(mock_response):
     assert get_max_record_count(TESTJSON) == TESTJSON["maxRecordCount"]
 
 
 @pytest.mark.asyncio
-@patch("restgdf._getinfo.ClientSession.post", side_effect=mock_session_post)
+@patch(
+    "restgdf.featurelayer._getinfo.ClientSession.post",
+    side_effect=mock_session_post,
+)
 async def test_get_offset_range(mock_response):
     async with ClientSession() as s:
         assert await get_offset_range("test", session=s) == range(
