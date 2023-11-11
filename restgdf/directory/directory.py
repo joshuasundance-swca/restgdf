@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import aiohttp
 
-from restgdf.utils import get_all_services_and_folders
+from restgdf.utils import fetch_all_data
 
 
 class Directory:
@@ -16,10 +16,10 @@ class Directory:
         """A class for interacting with ArcGIS Server directories."""
         self.url = url
         self.session = session
-        self.services: list[str]
+        self.data: dict
 
     async def prep(self):
-        self.services = await get_all_services_and_folders(self.session, self.url)
+        self.data = await fetch_all_data(self.session, self.url)
 
     @classmethod
     async def from_url(cls, url: str, **kwargs) -> Directory:

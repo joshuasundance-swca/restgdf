@@ -11,5 +11,4 @@ async def test_directory():
             "https://maps1.vcgov.org/arcgis/rest/services",
             session=s,
         )
-
-        assert len(directory.services) > 0
+        assert len(directory.data) > 0

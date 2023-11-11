@@ -1,6 +1,7 @@
 import asyncio
 import re
 from collections.abc import Iterable
+from typing import Any
 
 import aiohttp
 
@@ -30,24 +31,53 @@ async def get_services_and_folders(
         return folders, services
 
 
-async def get_all_services_and_folders(
+async def get_layers_for_service(
+    session: aiohttp.ClientSession,
+    service_url: str,
+) -> dict[str, Any]:
+    """Asynchronously retrieve layers for a single service."""
+    async with session.get(service_url, params={"f": "json"}) as response:
+        service_data = await response.json()
+        return {
+            layer["name"]: layer | {"url": f"{service_url}/{layer['id']}"}
+            for layer in service_data.get("layers", [])
+        }
+
+
+async def fetch_all_data(
     session: aiohttp.ClientSession,
     base_url: str,
-    current_folder: str = "",
-) -> list[str]:
-    """Recursively (asynchronously) find all folders and services starting from the base_url."""
-    full_url = f"{base_url}/{current_folder}" if current_folder else base_url
-    folders, services = await get_services_and_folders(session, full_url)
-    # Store services with their full URLs
-    all_services = [
+) -> dict[str, Any]:
+    """Fetch all services and their layers in a highly concurrent manner."""
+    # Retrieve the initial list of folders and services
+    folders, services = await get_services_and_folders(session, base_url)
+    # Prepare list of URLs to fetch layers from each service
+    service_urls = [
         f"{base_url}/{service['name']}/{service['type']}" for service in services
     ]
-    # Tasks for recursively exploring each sub-folder
-    tasks = [
-        get_all_services_and_folders(session, base_url, folder) for folder in folders
-    ]
-    subfolder_services = await asyncio.gather(*tasks)
-    # Flatten the list of lists
-    for sublist in subfolder_services:
-        all_services.extend(sublist)
-    return all_services
+    # Add nested folders' service URLs
+    for folder in folders:
+        nested_folders, nested_services = await get_services_and_folders(
+            session,
+            f"{base_url}/{folder}",
+        )
+        service_urls += [
+            f"{base_url}/{folder}/{service['name']}/{service['type']}"
+            for service in nested_services
+        ]
+    # Fetch all layers concurrently
+    layer_tasks = [get_layers_for_service(session, url) for url in service_urls]
+    results = await asyncio.gather(*layer_tasks)
+    # Combine results into a single dictionary
+    all_layers = {k: v for d in results for k, v in d.items()}
+    return all_layers
+
+
+async def main() -> dict[str, Any]:
+    base_url = "https://maps1.vcgov.org/arcgis/rest/services"
+    async with aiohttp.ClientSession() as session:
+        all_layers = await fetch_all_data(session, base_url)
+        # Printing the results
+        for service_url, layer_info in all_layers.items():
+            print(f"Service URL: {service_url}, Layer Info: {layer_info}")
+        return all_layers
