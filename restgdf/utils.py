@@ -38,8 +38,9 @@ async def get_services_and_folders(
 async def get_layers_for_service(
     session: aiohttp.ClientSession,
     service_url: str,
+    service_name: str,
     token: Optional[str] = None,
-) -> dict[str, Any]:
+) -> dict[str, dict[str, Any]]:
     """Asynchronously retrieve layers for a single service."""
     params = {"f": "json"}
     if token:
@@ -47,8 +48,10 @@ async def get_layers_for_service(
     async with session.get(service_url, params=params) as response:
         service_data = await response.json()
         return {
-            layer["name"]: layer | {"url": f"{service_url}/{layer['id']}"}
-            for layer in service_data.get("layers", [])
+            service_name: {
+                layer["name"]: layer | {"url": f"{service_url}/{layer['id']}"}
+                for layer in service_data.get("layers", [])
+            },
         }
 
 
@@ -61,9 +64,10 @@ async def fetch_all_data(
     # Retrieve the initial list of folders and services
     folders, services = await get_services_and_folders(session, base_url, token)
     # Prepare list of URLs to fetch layers from each service
-    service_urls = [
-        f"{base_url}/{service['name']}/{service['type']}" for service in services
-    ]
+    accumulated_services = {
+        service["name"]: f"{base_url}/{service['name']}/{service['type']}"
+        for service in services
+    }
     # Add nested folders' service URLs
     for folder in folders:
         nested_folders, nested_services = await get_services_and_folders(
@@ -71,12 +75,19 @@ async def fetch_all_data(
             f"{base_url}/{folder}",
             token,
         )
-        service_urls += [
-            f"{base_url}/{folder}/{service['name']}/{service['type']}"
-            for service in nested_services
-        ]
+        accumulated_services.update(
+            {
+                service[
+                    "name"
+                ]: f"{base_url}/{folder}/{service['name']}/{service['type']}"
+                for service in nested_services
+            },
+        )
     # Fetch all layers concurrently
-    layer_tasks = [get_layers_for_service(session, url, token) for url in service_urls]
+    layer_tasks = [
+        get_layers_for_service(session, url, name, token)
+        for name, url in accumulated_services.items()
+    ]
     results = await asyncio.gather(*layer_tasks)
     # Combine results into a single dictionary
     all_layers = {k: v for d in results for k, v in d.items()}
