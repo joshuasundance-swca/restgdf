@@ -71,13 +71,3 @@ async def fetch_all_data(
     # Combine results into a single dictionary
     all_layers = {k: v for d in results for k, v in d.items()}
     return all_layers
-
-
-async def main() -> dict[str, Any]:
-    base_url = "https://maps1.vcgov.org/arcgis/rest/services"
-    async with aiohttp.ClientSession() as session:
-        all_layers = await fetch_all_data(session, base_url)
-        # Printing the results
-        for service_url, layer_info in all_layers.items():
-            print(f"Service URL: {service_url}, Layer Info: {layer_info}")
-        return all_layers
