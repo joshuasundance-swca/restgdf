@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import re
 from collections.abc import Iterable
 from typing import Any
 
@@ -25,6 +26,8 @@ from restgdf._getinfo import (
 )
 
 __version__ = "0.1.0"
+
+ends_with_num_pat = re.compile(r"\d+$")
 
 
 def _wherevarinlist(var: str, vals: Iterable[str]) -> str:
@@ -63,6 +66,10 @@ class Rest:
         **kwargs,
     ):
         """A class for interacting with ArcGIS FeatureLayers."""
+        if not ends_with_num_pat.search(url):
+            raise ValueError(
+                "The url must end with a number, which is the layer id of the FeatureLayer.",
+            )
         self.url = url
         self.session = session or ClientSession()
         self.auth = auth
@@ -93,6 +100,11 @@ class Rest:
     async def prep(self):
         """Prepare the Rest object."""
         self.jsondict = await get_jsondict(self.url, self.session, **self.kwargs)
+        try:
+            if not self.jsondict["type"] == "Feature Layer":
+                raise ValueError("The url must point to a FeatureLayer.")
+        except KeyError:
+            raise ValueError("The url must point to a FeatureLayer.")
         self.name = get_name(self.jsondict)
         self.fields = getfields(self.jsondict)
         self.fieldtypes = getfields_df(self.jsondict)
