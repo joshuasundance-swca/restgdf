@@ -25,7 +25,7 @@ from restgdf._getinfo import (
     FIELDDOESNOTEXIST,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 ends_with_num_pat = re.compile(r"\d+$")
 
