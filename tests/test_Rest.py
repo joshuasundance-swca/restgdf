@@ -8,6 +8,16 @@ from restgdf import Rest
 async def test_rest():
     async with ClientSession() as s:
         # print("testing workflow")
+        with pytest.raises(ValueError):
+            await Rest.from_url(
+                "https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer",
+                session=s,
+            )
+        with pytest.raises(ValueError):
+            await Rest.from_url(
+                "https://maps1.vcgov.org/arcgis/rest/services/Aerials/MapServer/4",
+                session=s,
+            )
         beachurl = r"https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer/6"
         beaches = await Rest.from_url(beachurl, session=s, where="City <> 'fgsfds'")
         beaches_gdf = await beaches.getgdf()
