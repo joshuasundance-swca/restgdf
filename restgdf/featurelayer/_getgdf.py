@@ -2,25 +2,17 @@
 
 from asyncio import gather
 from functools import reduce
+from typing import Union
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame, read_file
 from pandas import concat
 from pyogrio import list_drivers
 
-from restgdf._getinfo import get_offset_range
+from restgdf.featurelayer._getinfo import default_data, get_offset_range
+
 
 supported_drivers = list_drivers()
-
-
-async def get_gdf_newfunc(
-    url: str,
-    session: ClientSession,
-    **kwargs,
-) -> GeoDataFrame:
-    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
-    gdfs = await get_gdf_list(url, session, **kwargs)
-    return await concat_gdfs(gdfs)
 
 
 async def get_sub_gdf(
@@ -37,13 +29,13 @@ async def get_sub_gdf(
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
 
     data["resultOffset"] = offset
-    response = await session.post(f"{url}/query", data=data, **kwargs)
-    sub_gdf = read_file(
-        await response.text(),
-        # driver=gdfdriver,  # this line raises a warning when using pyogrio w/ ESRIJSON
-        engine="pyogrio",
-    )
-    return sub_gdf
+    with await session.post(f"{url}/query", data=data, **kwargs) as response:
+        sub_gdf = read_file(
+            await response.text(),
+            # driver=gdfdriver,  # this line raises a warning when using pyogrio w/ ESRIJSON
+            engine="pyogrio",
+        )
+        return sub_gdf
 
 
 async def get_gdf_list(
@@ -72,3 +64,30 @@ async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
         ),
         gdfs,
     )
+
+
+async def gdf_by_concat(
+    url: str,
+    session: ClientSession,
+    **kwargs,
+) -> GeoDataFrame:
+    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
+    gdfs = await get_gdf_list(url, session, **kwargs)
+    return await concat_gdfs(gdfs)
+
+
+async def get_gdf(
+    url: str,
+    session: Union[ClientSession, None] = None,
+    where: Union[str, None] = None,
+    token: Union[str, None] = None,
+    **kwargs,
+) -> GeoDataFrame:
+    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
+    session = session or ClientSession()
+    datadict = default_data(kwargs.pop("data", {}))
+    if where is not None:
+        datadict["where"] = where
+    if token is not None:
+        datadict["token"] = token
+    return await gdf_by_concat(url, session, data=datadict, **kwargs)

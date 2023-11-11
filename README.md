@@ -29,7 +29,7 @@ so if you read a service with 100000 features but there's a limit of 1000 record
 
 these functions use asyncio to read all features from a service, not limited by max record count
 
-keyword arguments to `Rest.getgdf` are passed on to `requests.Session.post`; include query parameters like where str and token str in data dict
+keyword arguments to `FeatureLayer.getgdf` are passed on to `requests.Session.post`; include query parameters like where str and token str in data dict
 
 this enables enhanced control over queries and allow use of any valid authentication scheme (eg `requests_ntlm.HttpNtlmAuth`) with use of `requests.Session.auth` or `data={"token": str}`
 
@@ -44,7 +44,7 @@ import asyncio
 
 from aiohttp import ClientSession
 
-from restgdf import Rest
+from restgdf import FeatureLayer
 
 
 beaches_url = r"https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer/6"
@@ -53,13 +53,13 @@ zipcodes_url = "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/service
 
 async def main():
     async with ClientSession() as session:
-        beaches = await Rest.from_url(beaches_url, session=session)
+        beaches = await FeatureLayer.from_url(beaches_url, session=session)
         beaches_gdf = await beaches.getgdf()
 
         daytona = await beaches.where("LOWER(City) LIKE 'daytona%'")
         daytona_gdf = await daytona.getgdf()
 
-        oh_zipcodes = await Rest.from_url(zipcodes_url, where="STATE = 'OH'", session=session)
+        oh_zipcodes = await FeatureLayer.from_url(zipcodes_url, where="STATE = 'OH'", session=session)
         oh_zipcodes_gdf = await oh_zipcodes.getgdf()
 
     return beaches_gdf, daytona_gdf, oh_zipcodes_gdf
