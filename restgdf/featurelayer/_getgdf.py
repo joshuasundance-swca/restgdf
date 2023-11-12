@@ -4,6 +4,8 @@ from asyncio import gather
 from functools import reduce
 from typing import Union
 
+from collections.abc import AsyncGenerator
+
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame, read_file
 from pandas import concat
@@ -21,7 +23,6 @@ async def get_sub_gdf(
     offset: int,
     **kwargs,
 ) -> GeoDataFrame:
-    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
     data = kwargs.pop("data", {})
     gdfdriver = "ESRIJSON" if "ESRIJSON" in supported_drivers else "GeoJSON"
     if gdfdriver == "GeoJSON":
@@ -43,15 +44,23 @@ async def get_gdf_list(
     session: ClientSession,
     **kwargs,
 ) -> list[GeoDataFrame]:
-    """Get a list of GeoDataFrames from an ArcGIS FeatureLayer."""
     offset_list = await get_offset_range(url, session, **kwargs)
     tasks = [get_sub_gdf(url, session, offset, **kwargs) for offset in offset_list]
     gdf_list = await gather(*tasks)
     return gdf_list  # type: ignore
 
 
+async def chunk_generator(
+    url: str,
+    session: ClientSession,
+    **kwargs,
+) -> AsyncGenerator[GeoDataFrame, None]:
+    offset_list = await get_offset_range(url, session, **kwargs)
+    for offset in offset_list:
+        yield await get_sub_gdf(url, session, offset, **kwargs)
+
+
 async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
-    """Concatenate a list of GeoDataFrames."""
     crs = gdfs[0].crs
 
     if not all(gdf.crs == crs for gdf in gdfs):
@@ -71,7 +80,6 @@ async def gdf_by_concat(
     session: ClientSession,
     **kwargs,
 ) -> GeoDataFrame:
-    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
     gdfs = await get_gdf_list(url, session, **kwargs)
     return await concat_gdfs(gdfs)
 
@@ -83,7 +91,6 @@ async def get_gdf(
     token: Union[str, None] = None,
     **kwargs,
 ) -> GeoDataFrame:
-    """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
     session = session or ClientSession()
     datadict = default_data(kwargs.pop("data", {}))
     if where is not None:
