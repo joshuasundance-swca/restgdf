@@ -56,7 +56,7 @@ async def fetch_all_data(
     session: aiohttp.ClientSession,
     base_url: str,
     token: Optional[str] = None,
-) -> dict[str, list[dict[str, Any]]]:
+) -> dict[str, dict[str, list[dict[str, Any]]]]:
     """Fetch all services and their layers in a highly concurrent manner."""
     # Retrieve the initial list of folders and services
     folders, services = await get_services_and_folders(session, base_url, token)
