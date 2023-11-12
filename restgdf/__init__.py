@@ -6,4 +6,4 @@ from restgdf.directory.directory import Directory
 __all__ = ["Directory", "FeatureLayer"]
 
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
