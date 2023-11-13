@@ -32,7 +32,7 @@ async def fetch_all_data(
             [
                 {
                     "name": service["name"],
-                    "url": f"{base_url}/{folder}/{service['name']}/{service['type']}",
+                    "url": f"{base_url}/{service['name']}/{service['type']}",
                 }
                 for service in folder_metadata.get("services", [])
             ],
