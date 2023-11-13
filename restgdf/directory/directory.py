@@ -14,10 +14,12 @@ class Directory:
         self,
         url: str,
         session: aiohttp.ClientSession,
+        token: str | None = None,
     ):
         """A class for interacting with ArcGIS Server directories."""
         self.url = url
         self.session = session
+        self.token = token
         self.services: dict | None = None
         self.metadata: dict | None = None
 
