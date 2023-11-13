@@ -1,8 +1,5 @@
-restgdf package
-====================
-
-Module contents
----------------
+restgdf
+-------
 
 .. automodule:: restgdf
    :members:

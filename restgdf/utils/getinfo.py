@@ -56,10 +56,13 @@ async def get_feature_count(
 async def get_metadata(
     url: str,
     session: ClientSession,
+    token: str | None = None,
     **kwargs,
 ) -> dict:
     """Get the JSON dict for a layer."""
     data = kwargs.pop("data", {})
+    if token:
+        data["token"] = token
     response = await session.post(url, data=default_data(data), **kwargs)
     response_json = await response.json()
     return response_json
@@ -240,8 +243,7 @@ async def service_metadata(
     token: str | None = None,
 ) -> dict:
     """Asynchronously retrieve layers for a single service."""
-    _sm_kwargs = {"data": dict(token=token)} if token else {}
-    _service_metadata = await get_metadata(service_url, session, **_sm_kwargs)
+    _service_metadata = await get_metadata(service_url, session, token=token)
 
     async def _comprehensive_metadata(layer_url: str) -> dict:
         metadata = await get_metadata(layer_url, session)

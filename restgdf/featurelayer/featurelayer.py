@@ -66,7 +66,12 @@ class FeatureLayer:
 
     async def prep(self):
         """Prepare the Rest object."""
-        self.metadata = await get_metadata(self.url, self.session, **self.kwargs)
+        self.metadata = await get_metadata(
+            self.url,
+            self.session,
+            token=self.token,
+            **self.kwargs,
+        )
         try:
             if not self.metadata["type"] == "Feature Layer":
                 raise ValueError("The url must point to a FeatureLayer.")

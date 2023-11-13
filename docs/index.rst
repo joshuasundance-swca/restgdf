@@ -10,7 +10,8 @@ Welcome to restgdf's documentation!
    :maxdepth: 2
    :caption: Contents:
 
-   modules
+   restgdf
+   utils
 
 Indices and tables
 ==================
