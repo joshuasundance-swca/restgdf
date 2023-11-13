@@ -28,7 +28,7 @@ class Directory:
 
     async def crawl(self):
         if self.services is None:
-            all_data = await fetch_all_data(self.session, self.url)
+            all_data = await fetch_all_data(self.session, self.url, self.token)
             self.services = all_data["services"]
         return self.services
 
