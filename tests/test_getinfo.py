@@ -4,8 +4,8 @@ from unittest.mock import patch
 import pytest
 from aiohttp import ClientSession
 
-from restgdf.utils import where_var_in_list
-from restgdf.featurelayer._getinfo import (
+from restgdf.utils.utils import where_var_in_list
+from restgdf.utils.getinfo import (
     DEFAULTDICT,
     default_data,
     get_feature_count,
@@ -47,7 +47,7 @@ def mock_session_post(*args, **kwargs):
 
 @pytest.mark.asyncio
 @patch(
-    "restgdf.featurelayer._getinfo.ClientSession.post",
+    "restgdf.utils.getinfo.ClientSession.post",
     side_effect=mock_session_post,
 )
 async def test_get_json_dict(mock_response):
@@ -57,7 +57,7 @@ async def test_get_json_dict(mock_response):
 
 @pytest.mark.asyncio
 @patch(
-    "restgdf.featurelayer._getinfo.ClientSession.post",
+    "restgdf.utils.getinfo.ClientSession.post",
     side_effect=mock_session_post,
 )
 async def test_get_feature_count(mock_response):
@@ -68,7 +68,7 @@ async def test_get_feature_count(mock_response):
 
 
 @patch(
-    "restgdf.featurelayer._getinfo.ClientSession.post",
+    "restgdf.utils.getinfo.ClientSession.post",
     side_effect=mock_session_post,
 )
 def test_get_max_record_count(mock_response):
@@ -77,7 +77,7 @@ def test_get_max_record_count(mock_response):
 
 @pytest.mark.asyncio
 @patch(
-    "restgdf.featurelayer._getinfo.ClientSession.post",
+    "restgdf.utils.getinfo.ClientSession.post",
     side_effect=mock_session_post,
 )
 async def test_get_offset_range(mock_response):

@@ -11,7 +11,7 @@ from geopandas import GeoDataFrame, read_file
 from pandas import concat
 from pyogrio import list_drivers
 
-from restgdf.featurelayer._getinfo import default_data, get_offset_range
+from restgdf.utils.getinfo import default_data, get_offset_range
 
 
 supported_drivers = list_drivers()

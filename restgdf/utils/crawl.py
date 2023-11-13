@@ -3,7 +3,7 @@ from typing import Optional
 
 import aiohttp
 
-from restgdf.featurelayer._getinfo import service_metadata
+from restgdf.utils.getinfo import service_metadata
 
 
 async def fetch_all_data(

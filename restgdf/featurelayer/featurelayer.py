@@ -8,8 +8,8 @@ from aiohttp import ClientSession
 from geopandas import GeoDataFrame
 from pandas import DataFrame
 
-from restgdf.featurelayer._getgdf import get_gdf
-from restgdf.featurelayer._getinfo import (
+from restgdf.utils.getgdf import get_gdf
+from restgdf.utils.getinfo import (
     default_data,
     get_feature_count,
     get_metadata,
@@ -21,7 +21,7 @@ from restgdf.featurelayer._getinfo import (
     nestedcount,
     FIELDDOESNOTEXIST,
 )
-from restgdf.utils import where_var_in_list, ends_with_num
+from restgdf.utils.utils import where_var_in_list, ends_with_num
 
 
 class FeatureLayer:
