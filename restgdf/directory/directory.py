@@ -26,15 +26,31 @@ class Directory:
     async def prep(self):
         self.metadata = await get_metadata(self.url, self.session, self.token)
 
-    async def crawl(self):
-        if self.services is None:
-            all_data = await fetch_all_data(self.session, self.url, self.token)
-            self.services = all_data["services"]
-        return self.services
-
     @classmethod
     async def from_url(cls, url: str, **kwargs) -> Directory:
         """Create a Directory object from a url."""
         self = cls(url, **kwargs)
         await self.prep()
         return self
+
+    async def crawl(self):
+        if self.services is None:
+            all_data = await fetch_all_data(self.session, self.url, self.token)
+            self.services = all_data["services"]
+        return self.services
+
+    def filter_directory_layers(self, layer_type: str) -> list[dict]:
+        if self.services is None:
+            raise ValueError("You must call .crawl() before filtering layers.")
+        return [
+            layer
+            for service in self.services
+            for layer in service["metadata"]["layers"]
+            if layer["metadata"]["type"] == layer_type
+        ]
+
+    def feature_layers(self) -> list[dict]:
+        return self.filter_directory_layers("Feature Layer")
+
+    def rasters(self) -> list[dict]:
+        return self.filter_directory_layers("Raster Layer")

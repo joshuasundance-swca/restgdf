@@ -13,7 +13,9 @@ async def test_directory():
         )
         services = await directory.crawl()
     assert directory.services == services
-    first_key_layers = services[0]["metadata"]["layers"]
-    assert len(first_key_layers) > 0
-    assert isinstance(first_key_layers[0], dict)
+    first_service_layers = services[0]["metadata"]["layers"]
+    assert len(first_service_layers) > 0
+    assert isinstance(first_service_layers[0], dict)
     assert len(directory.metadata) > 0
+    assert len(directory.rasters()) > 0
+    assert len(directory.feature_layers()) > 0
