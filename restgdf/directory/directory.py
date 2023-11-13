@@ -22,7 +22,7 @@ class Directory:
         self.metadata: dict | None = None
 
     async def prep(self):
-        self.metadata = await get_metadata(self.url, self.session)
+        self.metadata = await get_metadata(self.url, self.session, self.token)
 
     async def crawl(self):
         if self.services is None:
