@@ -1,11 +1,11 @@
 """A package for getting GeoDataFrames from ArcGIS FeatureLayers."""
+from __future__ import annotations
 
+import asyncio
 from re import compile, IGNORECASE
-from typing import Union, Optional
 
 from aiohttp import ClientSession
 from pandas import DataFrame, concat
-
 
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
 
@@ -19,8 +19,8 @@ DEFAULTDICT: dict = {
 
 
 def default_data(
-    data: Optional[dict] = None,
-    default_dict: Optional[dict] = None,
+    data: dict | None = None,
+    default_dict: dict | None = None,
 ) -> dict:
     """Return a dict with default values for ArcGIS REST API requests."""
     default_dict = default_dict or DEFAULTDICT
@@ -53,7 +53,7 @@ async def get_feature_count(
         raise e
 
 
-async def get_jsondict(
+async def get_metadata(
     url: str,
     session: ClientSession,
     **kwargs,
@@ -65,16 +65,16 @@ async def get_jsondict(
     return response_json
 
 
-def get_max_record_count(jsondict: dict) -> int:
+def get_max_record_count(metadata: dict) -> int:
     """Get the maximum record count for a layer."""
     key_pattern = compile(
         r"max(imum)?(\s|_)?record(\s|_)?count$",
         flags=IGNORECASE,
     )
-    key_list = [key for key in jsondict.keys() if key_pattern.match(key)]
+    key_list = [key for key in metadata.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
         raise FIELDDOESNOTEXIST
-    return jsondict[key_list[0]]
+    return metadata[key_list[0]]
 
 
 async def get_offset_range(
@@ -84,37 +84,37 @@ async def get_offset_range(
 ) -> range:
     """Get the offset range for a layer."""
     feature_count = await get_feature_count(url, session, **kwargs)
-    jsondict = await get_jsondict(url, session, **kwargs)
-    max_record_count = get_max_record_count(jsondict)
+    metadata = await get_metadata(url, session, **kwargs)
+    max_record_count = get_max_record_count(metadata)
     return range(0, feature_count, max_record_count)
 
 
-def get_name(jsondict: dict) -> str:
+def get_name(metadata: dict) -> str:
     """Get the name of a layer."""
     key_pattern = compile("name", flags=IGNORECASE)
-    key_list = [key for key in jsondict.keys() if key_pattern.match(key)]
+    key_list = [key for key in metadata.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
         raise FIELDDOESNOTEXIST
-    return jsondict[key_list[0]]
+    return metadata[key_list[0]]
 
 
-def getfields(jsondict: dict, types: bool = False):
+def getfields(layer_metadata: dict, types: bool = False):
     """Get the fields of a layer."""
     if types:
         return {
             f["name"]: f["type"].replace("esriFieldType", "")
-            for f in jsondict["fields"]
+            for f in layer_metadata["fields"]
         }
     else:
-        return [f["name"] for f in jsondict["fields"]]
+        return [f["name"] for f in layer_metadata["fields"]]
 
 
-def getfields_df(jsondict: dict) -> DataFrame:
+def getfields_df(layer_metadata: dict) -> DataFrame:
     """Get the fields of a layer as a DataFrame."""
     return DataFrame(
         [
             (f["name"], f["type"].replace("esriFieldType", ""))
-            for f in jsondict["fields"]
+            for f in layer_metadata["fields"]
         ],
         columns=["name", "type"],
     )
@@ -122,11 +122,11 @@ def getfields_df(jsondict: dict) -> DataFrame:
 
 async def getuniquevalues(
     url: str,
-    fields: Union[tuple, str],
+    fields: tuple | str,
     session: ClientSession,
-    sortby: Optional[str] = None,
+    sortby: str | None = None,
     **kwargs,
-) -> Union[list, DataFrame]:
+) -> list | DataFrame:
     """Get the unique values for a field."""
     datadict: dict = {
         "where": "1=1",
@@ -143,18 +143,18 @@ async def getuniquevalues(
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
 
     response = await session.post(f"{url}/query", data=datadict, **xkwargs)
-    jsondict = await response.json()
+    metadata = await response.json()
 
-    res_l: Union[list, None] = None
-    res_df: Union[DataFrame, None] = None
+    res_l: list | None = None
+    res_df: DataFrame | None = None
 
     if isinstance(fields, str):
-        res_l = [x["attributes"][fields] for x in jsondict["features"]]
+        res_l = [x["attributes"][fields] for x in metadata["features"]]
     elif len(fields) == 1:
-        res_l = [x["attributes"][fields[0]] for x in jsondict["features"]]
+        res_l = [x["attributes"][fields[0]] for x in metadata["features"]]
     else:
         res_df = concat(
-            [DataFrame(x).T.reset_index(drop=True) for x in jsondict["features"]],
+            [DataFrame(x).T.reset_index(drop=True) for x in metadata["features"]],
             ignore_index=True,
         )
         if sortby:
@@ -181,8 +181,8 @@ async def getvaluecounts(
         **data,
     }
     response = await session.post(f"{url}/query", data=data, **kwargs)
-    jsondict = await response.json()
-    features = jsondict["features"]
+    metadata = await response.json()
+    features = metadata["features"]
     cc = concat(
         [DataFrame(x["attributes"], index=[0]) for x in features],
         ignore_index=True,
@@ -218,8 +218,8 @@ async def nestedcount(
         **data,
     }
     response = await session.post(f"{url}/query", data=data, **kwargs)
-    jsondict = await response.json()
-    features = jsondict["features"]
+    metadata = await response.json()
+    features = metadata["features"]
     cc = concat(
         [DataFrame(x).T.reset_index(drop=True) for x in features],
         ignore_index=True,
@@ -232,3 +232,32 @@ async def nestedcount(
         .sort_values([fields[0], "Count"], ascending=[True, False])
         .reset_index(drop=True)
     )
+
+
+async def service_metadata(
+    session: ClientSession,
+    service_url: str,
+    token: str | None = None,
+) -> dict:
+    """Asynchronously retrieve layers for a single service."""
+    _sm_kwargs = {"data": dict(token=token)} if token else {}
+    _service_metadata = await get_metadata(service_url, session, **_sm_kwargs)
+
+    async def _comprehensive_metadata(layer_url: str) -> dict:
+        metadata = await get_metadata(layer_url, session)
+        _data = {
+            "metadata": metadata,
+            "url": layer_url,
+        }
+        if metadata["type"] == "Feature Layer":
+            feature_count = await get_feature_count(layer_url, session)
+            _data["feature_count"] = feature_count  # type: ignore
+        return _data
+
+    tasks = [
+        _comprehensive_metadata(f"{service_url}/{layer['id']}")
+        for layer in _service_metadata.get("layers", [])
+    ]
+    results = await asyncio.gather(*tasks)
+    _service_metadata["layers"] = results
+    return _service_metadata

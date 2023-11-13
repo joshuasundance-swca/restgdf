@@ -11,7 +11,7 @@ from geopandas import GeoDataFrame, read_file
 from pandas import concat
 from pyogrio import list_drivers
 
-from restgdf.featurelayer._getinfo import default_data, get_offset_range
+from restgdf.utils.getinfo import default_data, get_offset_range
 
 
 supported_drivers = list_drivers()
@@ -47,7 +47,7 @@ async def get_gdf_list(
     offset_list = await get_offset_range(url, session, **kwargs)
     tasks = [get_sub_gdf(url, session, offset, **kwargs) for offset in offset_list]
     gdf_list = await gather(*tasks)
-    return gdf_list  # type: ignore
+    return gdf_list
 
 
 async def chunk_generator(

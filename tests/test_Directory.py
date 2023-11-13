@@ -11,4 +11,10 @@ async def test_directory():
             "https://maps1.vcgov.org/arcgis/rest/services",
             session=s,
         )
-        assert len(directory.data) > 0
+        services = await directory.crawl()
+    assert directory.services == services
+    first_key = list(services.keys())[0]
+    first_key_layers = services[first_key]["layers"]
+    assert len(first_key_layers) > 0
+    assert isinstance(first_key_layers[0], dict)
+    assert len(directory.metadata) > 0
