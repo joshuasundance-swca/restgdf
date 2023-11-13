@@ -9,7 +9,7 @@ from restgdf.featurelayer._getinfo import (
     DEFAULTDICT,
     default_data,
     get_feature_count,
-    get_jsondict,
+    get_metadata,
     get_max_record_count,
     get_offset_range,
 )
@@ -52,7 +52,7 @@ def mock_session_post(*args, **kwargs):
 )
 async def test_get_json_dict(mock_response):
     async with ClientSession() as s:
-        assert await get_jsondict("test", session=s) == TESTJSON
+        assert await get_metadata("test", session=s) == TESTJSON
 
 
 @pytest.mark.asyncio

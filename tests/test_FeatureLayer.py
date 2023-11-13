@@ -55,6 +55,6 @@ async def test_featurelayer():
         with raises(IndexError):
             assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP"))) > 900
         assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP_CODE"))) > 900
-        assert ziprest.count > ziprest.jsondict["maxRecordCount"]
-        assert len(await ziprest.getgdf()) > ziprest.jsondict["maxRecordCount"]
+        assert ziprest.count > ziprest.metadata["maxRecordCount"]
+        assert len(await ziprest.getgdf()) > ziprest.metadata["maxRecordCount"]
         assert ziprest.kwargs == testkwargs  # make sure nothing is altering kwargs

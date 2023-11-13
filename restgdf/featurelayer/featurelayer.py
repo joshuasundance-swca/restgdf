@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import random
-from typing import Any
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame
@@ -13,7 +12,7 @@ from restgdf.featurelayer._getgdf import get_gdf
 from restgdf.featurelayer._getinfo import (
     default_data,
     get_feature_count,
-    get_jsondict,
+    get_metadata,
     get_name,
     getfields,
     getfields_df,
@@ -53,13 +52,13 @@ class FeatureLayer:
             self.datadict["token"] = self.token
         self.kwargs["data"] = self.datadict
 
-        self.uniquevalues: dict[Any, Any] = {}
-        self.valuecounts: dict[Any, Any] = {}
-        self.nestedcount: dict[Any, Any] = {}
+        self.uniquevalues: dict = {}
+        self.valuecounts: dict = {}
+        self.nestedcount: dict = {}
 
         self.gdf: GeoDataFrame | None = None
 
-        self.jsondict: dict
+        self.metadata: dict
         self.name: str
         self.fields: tuple[str, ...]
         self.fieldtypes: DataFrame
@@ -67,15 +66,15 @@ class FeatureLayer:
 
     async def prep(self):
         """Prepare the Rest object."""
-        self.jsondict = await get_jsondict(self.url, self.session, **self.kwargs)
+        self.metadata = await get_metadata(self.url, self.session, **self.kwargs)
         try:
-            if not self.jsondict["type"] == "Feature Layer":
+            if not self.metadata["type"] == "Feature Layer":
                 raise ValueError("The url must point to a FeatureLayer.")
         except KeyError:
             raise ValueError("The url must point to a FeatureLayer.")
-        self.name = get_name(self.jsondict)
-        self.fields = getfields(self.jsondict)
-        self.fieldtypes = getfields_df(self.jsondict)
+        self.name = get_name(self.metadata)
+        self.fields = getfields(self.metadata)
+        self.fieldtypes = getfields_df(self.metadata)
         self.count = await get_feature_count(self.url, self.session, **self.kwargs)
 
     @classmethod

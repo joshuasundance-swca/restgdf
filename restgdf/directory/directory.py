@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import aiohttp
 
-from restgdf.utils import fetch_all_data
+from restgdf.directory._crawl import fetch_all_data
 
 
 class Directory:
@@ -13,20 +13,21 @@ class Directory:
         self,
         url: str,
         session: aiohttp.ClientSession,
-        token: str | None = None,
     ):
         """A class for interacting with ArcGIS Server directories."""
         self.url = url
         self.session = session
         self.data: dict
-        self.token = token
+        self.metadata: dict
 
     async def prep(self):
-        self.data = await fetch_all_data(self.session, self.url, self.token)
+        all_data = await fetch_all_data(self.session, self.url)
+        self.data = all_data["services"]
+        self.metadata = all_data["metadata"]
 
     @classmethod
-    async def from_url(cls, url: str, token: str | None = None, **kwargs) -> Directory:
+    async def from_url(cls, url: str, **kwargs) -> Directory:
         """Create a Directory object from a url."""
-        self = cls(url, token=token, **kwargs)
+        self = cls(url, **kwargs)
         await self.prep()
         return self
