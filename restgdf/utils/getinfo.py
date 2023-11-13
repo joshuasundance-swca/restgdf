@@ -252,7 +252,10 @@ async def service_metadata(
             "url": layer_url,
         }
         if metadata["type"] == "Feature Layer":
-            feature_count = await get_feature_count(layer_url, session)
+            try:
+                feature_count = await get_feature_count(layer_url, session)
+            except KeyError:
+                feature_count = None
             _data["feature_count"] = feature_count  # type: ignore
         return _data
 
