@@ -7,4 +7,4 @@ from restgdf import utils
 __all__ = ["Directory", "FeatureLayer", "utils"]
 
 
-__version__ = "0.8.2"
+__version__ = "0.9.0"
