@@ -43,7 +43,7 @@ async def get_feature_count(
     # the line above provides keyword arguments other than data dict
     # because data dict is manipulated for this function
     # (this allows the use of token authentication, for example)
-    response_json = await response.json()
+    response_json = await response.json(content_type=None)
     try:
         return response_json["count"]
     except KeyError as e:
@@ -63,12 +63,7 @@ async def get_metadata(
     if token:
         data["token"] = token
     response = await session.post(url, data=data)
-    content_type = response.content_type
-    if content_type not in ["application/json", "text/plain"]:
-        raise TypeError(
-            f"content-type should be 'application/json' or 'text/plain'. actual: '{content_type}'",
-        )
-    return await response.json(content_type=content_type)
+    return await response.json(content_type=None)
 
 
 def get_max_record_count(metadata: dict) -> int:
@@ -149,7 +144,7 @@ async def getuniquevalues(
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
 
     response = await session.post(f"{url}/query", data=datadict, **xkwargs)
-    metadata = await response.json()
+    metadata = await response.json(content_type=None)
 
     res_l: list | None = None
     res_df: DataFrame | None = None
@@ -187,7 +182,7 @@ async def getvaluecounts(
         **data,
     }
     response = await session.post(f"{url}/query", data=data, **kwargs)
-    metadata = await response.json()
+    metadata = await response.json(content_type=None)
     features = metadata["features"]
     cc = concat(
         [DataFrame(x["attributes"], index=[0]) for x in features],
@@ -224,7 +219,7 @@ async def nestedcount(
         **data,
     }
     response = await session.post(f"{url}/query", data=data, **kwargs)
-    metadata = await response.json()
+    metadata = await response.json(content_type=None)
     features = metadata["features"]
     cc = concat(
         [DataFrame(x).T.reset_index(drop=True) for x in features],
@@ -251,21 +246,18 @@ async def service_metadata(
 
     async def _comprehensive_metadata(layer_url: str) -> dict:
         metadata = await get_metadata(layer_url, session)
-        _data = {
-            "metadata": metadata,
-            "url": layer_url,
-        }
+        metadata["url"] = layer_url
         if return_feature_count and metadata["type"] == "Feature Layer":
             try:
                 feature_count = await get_feature_count(layer_url, session)
             except KeyError:
                 feature_count = None
-            _data["feature_count"] = feature_count  # type: ignore
-        return _data
+            metadata["feature_count"] = feature_count  # type: ignore
+        return metadata
 
     tasks = [
         _comprehensive_metadata(f"{service_url}/{layer['id']}")
-        for layer in _service_metadata.get("layers", [])
+        for layer in _service_metadata.get("layers") or []
     ]
     results = await asyncio.gather(*tasks)
     _service_metadata["layers"] = results

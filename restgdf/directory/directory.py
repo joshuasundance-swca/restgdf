@@ -33,9 +33,14 @@ class Directory:
         await self.prep()
         return self
 
-    async def crawl(self):
+    async def crawl(self, return_feature_count: bool = False) -> dict:
         if self.services is None:
-            all_data = await fetch_all_data(self.session, self.url, self.token)
+            all_data = await fetch_all_data(
+                self.session,
+                self.url,
+                self.token,
+                return_feature_count,
+            )
             self.services = all_data["services"]
         return self.services
 
@@ -46,7 +51,7 @@ class Directory:
             layer
             for service in self.services
             for layer in service["metadata"]["layers"]
-            if layer["metadata"]["type"] == layer_type
+            if layer["type"] == layer_type
         ]
 
     def feature_layers(self) -> list[dict]:
