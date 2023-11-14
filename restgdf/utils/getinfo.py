@@ -57,15 +57,18 @@ async def get_metadata(
     url: str,
     session: ClientSession,
     token: str | None = None,
-    **kwargs,
 ) -> dict:
     """Get the JSON dict for a layer."""
-    data = kwargs.pop("data", {})
+    data = {"f": "json"}
     if token:
         data["token"] = token
-    response = await session.post(url, data=default_data(data), **kwargs)
-    response_json = await response.json()
-    return response_json
+    response = await session.post(url, data=data)
+    content_type = response.content_type
+    if content_type not in ["application/json", "text/plain"]:
+        raise TypeError(
+            f"content-type should be 'application/json' or 'text/plain'. actual: '{content_type}'",
+        )
+    return await response.json(content_type=content_type)
 
 
 def get_max_record_count(metadata: dict) -> int:
@@ -87,7 +90,7 @@ async def get_offset_range(
 ) -> range:
     """Get the offset range for a layer."""
     feature_count = await get_feature_count(url, session, **kwargs)
-    metadata = await get_metadata(url, session, **kwargs)
+    metadata = await get_metadata(url, session)
     max_record_count = get_max_record_count(metadata)
     return range(0, feature_count, max_record_count)
 

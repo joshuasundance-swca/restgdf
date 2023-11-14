@@ -36,8 +36,12 @@ def mock_session_post(*args, **kwargs):
     class MockResponse:
         def __init__(self, json_data):
             self.json_data = json_data
+            self.content_type = "application/json"
 
-        async def json(self):  # make this method async
+        async def json(
+            self,
+            content_type: str = "application/json",
+        ):  # make this method async
             return self.json_data
 
     future = asyncio.Future()  # create a Future object
