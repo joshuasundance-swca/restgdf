@@ -21,11 +21,11 @@ async def fetch_all_data(
             "name": service["name"],
             "url": f"{base_url}/{service['name']}/{service['type']}",
         }
-        for service in base_metadata.get("services", [])
+        for service in base_metadata.get("services") or []
     ]
 
     # Add nested folders' service information
-    for folder in base_metadata.get("folders", []):
+    for folder in base_metadata.get("folders") or []:
         folder_metadata = await get_metadata(f"{base_url}/{folder}", session, token)
 
         services_list.extend(
@@ -34,7 +34,7 @@ async def fetch_all_data(
                     "name": service["name"],
                     "url": f"{base_url}/{service['name']}/{service['type']}",
                 }
-                for service in folder_metadata.get("services", [])
+                for service in folder_metadata.get("services") or []
             ],
         )
 
