@@ -36,6 +36,7 @@ def mock_session_post(*args, **kwargs):
     class MockResponse:
         def __init__(self, json_data):
             self.json_data = json_data
+            self.content_type = "application/json"
 
         async def json(self):  # make this method async
             return self.json_data

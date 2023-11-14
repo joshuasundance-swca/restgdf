@@ -70,7 +70,6 @@ class FeatureLayer:
             self.url,
             self.session,
             token=self.token,
-            **self.kwargs,
         )
         try:
             if not self.metadata["type"] == "Feature Layer":
