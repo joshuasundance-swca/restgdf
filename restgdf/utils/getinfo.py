@@ -2,10 +2,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from re import compile, IGNORECASE
 
-from aiohttp import ClientSession, ContentTypeError
+from aiohttp import ClientSession
 from pandas import DataFrame, concat
 
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
@@ -64,15 +63,12 @@ async def get_metadata(
     if token:
         data["token"] = token
     response = await session.post(url, data=data)
-    try:
-        response_json = await response.json()
-    except ContentTypeError:
-        try:
-            json_txt = await response.text()
-            response_json = json.loads(json_txt)
-        except Exception as e:
-            return {"error": str(e)}
-    return response_json
+    content_type = response.headers.get("content-type")
+    if content_type not in ("application/json", "text/plain"):
+        raise TypeError(
+            f"content-type should be 'application/json' or 'text/plain'. actual: '{content_type}'",
+        )
+    return await response.json(content_type=content_type)
 
 
 def get_max_record_count(metadata: dict) -> int:
