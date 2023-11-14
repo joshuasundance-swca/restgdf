@@ -90,7 +90,7 @@ async def get_offset_range(
 ) -> range:
     """Get the offset range for a layer."""
     feature_count = await get_feature_count(url, session, **kwargs)
-    metadata = await get_metadata(url, session, **kwargs)
+    metadata = await get_metadata(url, session)
     max_record_count = get_max_record_count(metadata)
     return range(0, feature_count, max_record_count)
 
