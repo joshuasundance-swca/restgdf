@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from re import compile, IGNORECASE
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ContentTypeError
 from pandas import DataFrame, concat
 
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
@@ -57,14 +58,20 @@ async def get_metadata(
     url: str,
     session: ClientSession,
     token: str | None = None,
-    **kwargs,
 ) -> dict:
     """Get the JSON dict for a layer."""
-    data = kwargs.pop("data", {})
+    data = {"f": "json"}
     if token:
         data["token"] = token
-    response = await session.post(url, data=default_data(data), **kwargs)
-    response_json = await response.json()
+    response = await session.post(url, data=data)
+    try:
+        response_json = await response.json()
+    except ContentTypeError:
+        try:
+            json_txt = await response.text()
+            response_json = json.loads(json_txt)
+        except Exception as e:
+            return {"error": str(e)}
     return response_json
 
 
