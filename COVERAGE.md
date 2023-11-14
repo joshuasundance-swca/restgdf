@@ -4,10 +4,10 @@
 | restgdf/directory/\_\_init\_\_.py    |        2 |        0 |        0 |        0 |    100% |           |
 | restgdf/directory/directory.py       |       31 |        1 |        8 |        2 |     92% |37->40, 44 |
 | restgdf/featurelayer/\_\_init\_\_.py |        2 |        0 |        0 |        0 |    100% |           |
-| restgdf/featurelayer/featurelayer.py |       88 |        4 |       24 |        5 |     92% |52, 79, 94, 114->116, 141->150, 143, 154->163 |
+| restgdf/featurelayer/featurelayer.py |       88 |        4 |       24 |        5 |     92% |52, 78, 93, 113->115, 140->149, 142, 153->162 |
 | restgdf/utils/\_\_init\_\_.py        |        2 |        0 |        0 |        0 |    100% |           |
 | restgdf/utils/crawl.py               |       15 |        0 |       10 |        0 |    100% |           |
 | restgdf/utils/getgdf.py              |       45 |        7 |       17 |        4 |     79% |29, 58-60, 67, 97, 99 |
-| restgdf/utils/getinfo.py             |      108 |       13 |       56 |        9 |     84% |49-53, 65, 79, 100, 107, 141->146, 144, 157, 163->165, 256-260 |
+| restgdf/utils/getinfo.py             |      110 |       14 |       58 |       10 |     83% |49-53, 64, 68, 82, 103, 110, 144->149, 147, 160, 166->168, 259-263 |
 | restgdf/utils/utils.py               |        8 |        0 |        2 |        0 |    100% |           |
-|                            **TOTAL** |  **306** |   **25** |  **117** |   **20** | **88%** |           |
+|                            **TOTAL** |  **308** |   **26** |  **119** |   **21** | **88%** |           |
