@@ -10,10 +10,16 @@ async def fetch_all_data(
     session: aiohttp.ClientSession,
     base_url: str,
     token: Optional[str] = None,
+    return_feature_count: bool = False,
 ) -> dict:
     """Fetch all services and their layers in a highly concurrent manner."""
     # Retrieve the initial list of folders and services
-    base_metadata = await get_metadata(base_url, session, token)
+    try:
+        base_metadata = await get_metadata(base_url, session, token)
+    except Exception as e:
+        return {"error": e}
+
+    base_metadata["url"] = base_url
 
     # Prepare list of service information to fetch layers
     services_list = [
@@ -26,7 +32,12 @@ async def fetch_all_data(
 
     # Add nested folders' service information
     for folder in base_metadata.get("folders") or []:
-        folder_metadata = await get_metadata(f"{base_url}/{folder}", session, token)
+        folder_url = f"{base_url}/{folder}"
+        try:
+            folder_metadata = await get_metadata(folder_url, session, token)
+        except Exception as e:
+            return {"error": e}
+        folder_metadata["url"] = folder_url
 
         services_list.extend(
             [
@@ -38,9 +49,20 @@ async def fetch_all_data(
             ],
         )
 
+    async def _service_metadata(*args, **kwargs):
+        try:
+            return await service_metadata(*args, **kwargs)
+        except Exception as e:
+            return {"error": e}
+
     # Fetch all layers concurrently
     service_metadata_tasks = [
-        service_metadata(session, service["url"], token, return_feature_count=False)
+        _service_metadata(
+            session,
+            service["url"],
+            token,
+            return_feature_count=return_feature_count,
+        )
         for service in services_list
     ]
     service_metadata_results = await asyncio.gather(*service_metadata_tasks)
