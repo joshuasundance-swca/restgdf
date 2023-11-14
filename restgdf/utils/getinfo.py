@@ -63,8 +63,8 @@ async def get_metadata(
     if token:
         data["token"] = token
     response = await session.post(url, data=data)
-    content_type = response.headers.get("content-type")
-    if content_type not in ("application/json", "text/plain"):
+    content_type = response.content_type
+    if content_type not in ["application/json", "text/plain"]:
         raise TypeError(
             f"content-type should be 'application/json' or 'text/plain'. actual: '{content_type}'",
         )
