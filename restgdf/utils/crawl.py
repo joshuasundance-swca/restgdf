@@ -40,7 +40,8 @@ async def fetch_all_data(
 
     # Fetch all layers concurrently
     service_metadata_tasks = [
-        service_metadata(session, service["url"], token) for service in services_list
+        service_metadata(session, service["url"], token, return_feature_count=False)
+        for service in services_list
     ]
     service_metadata_results = await asyncio.gather(*service_metadata_tasks)
 

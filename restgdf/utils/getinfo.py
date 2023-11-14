@@ -241,6 +241,7 @@ async def service_metadata(
     session: ClientSession,
     service_url: str,
     token: str | None = None,
+    return_feature_count: bool = False,
 ) -> dict:
     """Asynchronously retrieve layers for a single service."""
     _service_metadata = await get_metadata(service_url, session, token=token)
@@ -251,7 +252,7 @@ async def service_metadata(
             "metadata": metadata,
             "url": layer_url,
         }
-        if metadata["type"] == "Feature Layer":
+        if return_feature_count and metadata["type"] == "Feature Layer":
             try:
                 feature_count = await get_feature_count(layer_url, session)
             except KeyError:
