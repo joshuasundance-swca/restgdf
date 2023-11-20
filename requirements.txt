@@ -110,7 +110,7 @@ pluggy==1.3.0
     # via pytest
 pre-commit==3.5.0
     # via restgdf (pyproject.toml)
-pygments==2.16.1
+pygments==2.17.1
     # via sphinx
 pyogrio==0.7.2
     # via restgdf (pyproject.toml)
