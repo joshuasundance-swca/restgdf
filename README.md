@@ -75,8 +75,13 @@ print(daytona_gdf.shape)
 
 print(oh_zipcodes_gdf.shape)
 # (1026, 8)
-
-# more documentation to come...
 ```
 
-[ArcGIS REST API reference](https://developers.arcgis.com/rest/)
+# Documentation
+
+https://restgdf.readthedocs.io/
+
+# Uses
+
+- [restgdf_api](https://github.com/joshuasundance-swca/restgdf_api)
+- [govgis_nov2023](https://huggingface.co/datasets/joshuasundance/govgis_nov2023)
