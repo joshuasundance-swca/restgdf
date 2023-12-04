@@ -172,7 +172,7 @@ tzdata==2023.3
     # via pandas
 urllib3==2.1.0
     # via requests
-virtualenv==20.24.7
+virtualenv==20.25.0
     # via pre-commit
 yarl==1.9.2
     # via aiohttp
