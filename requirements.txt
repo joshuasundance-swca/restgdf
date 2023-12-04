@@ -68,7 +68,7 @@ geopandas==0.14.1
     # via restgdf (pyproject.toml)
 identify==2.5.31
     # via pre-commit
-idna==3.4
+idna==3.6
     # via
     #   requests
     #   yarl
