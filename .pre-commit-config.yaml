@@ -10,7 +10,7 @@
 exclude: "(.idea)|(docs)|(coverage_html_report)|(.*.md)"
 repos:
 -   repo: https://github.com/charliermarsh/ruff-pre-commit
-    rev: "v0.1.0"
+    rev: "v0.1.7"
     hooks:
     -   id: ruff
         args: [--fix, --exit-non-zero-on-fix, --ignore, E501]
@@ -42,7 +42,7 @@ repos:
     -   id: mixed-line-ending
     -   id: requirements-txt-fixer
 -   repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.6.0
+    rev: v1.7.1
     hooks:
     -   id: mypy
         additional_dependencies:
@@ -58,7 +58,7 @@ repos:
     hooks:
     -   id: rm-unneeded-f-str
 -   repo: https://github.com/psf/black
-    rev: 23.9.1
+    rev: 23.11.0
     hooks:
     -   id: black
 -   repo: https://github.com/asottile/add-trailing-comma
