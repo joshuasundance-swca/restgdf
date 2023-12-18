@@ -60,7 +60,7 @@ filelock==3.13.1
     # via virtualenv
 fiona==1.9.5
     # via geopandas
-frozenlist==1.4.0
+frozenlist==1.4.1
     # via
     #   aiohttp
     #   aiosignal
