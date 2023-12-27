@@ -44,7 +44,7 @@ cligj==0.7.2
     # via fiona
 colorama==0.4.6
     # via bumpver
-coverage==7.3.3
+coverage==7.3.4
     # via
     #   coverage-badge
     #   restgdf (pyproject.toml)
@@ -52,7 +52,7 @@ coverage-badge==1.1.0
     # via restgdf (pyproject.toml)
 distlib==0.3.8
     # via virtualenv
-docutils==0.18.1
+docutils==0.20.1
     # via
     #   sphinx
     #   sphinx-rtd-theme
