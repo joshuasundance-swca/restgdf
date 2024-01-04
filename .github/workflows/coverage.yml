@@ -6,6 +6,7 @@ on:
     paths:
       - "restgdf/**"
       - "tests/**"
+      - "requirements.txt"
 
 jobs:
   coverage:
