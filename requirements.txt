@@ -8,7 +8,7 @@ aiohttp==3.9.1
     # via restgdf (pyproject.toml)
 aiosignal==1.3.1
     # via aiohttp
-alabaster==0.7.13
+alabaster==0.7.15
     # via sphinx
 async-timeout==4.0.3
     # via aiohttp
@@ -64,7 +64,7 @@ frozenlist==1.4.1
     # via
     #   aiohttp
     #   aiosignal
-geopandas==0.14.1
+geopandas==0.14.2
     # via restgdf (pyproject.toml)
 identify==2.5.33
     # via pre-commit
@@ -90,7 +90,7 @@ multidict==6.0.4
     #   yarl
 nodeenv==1.8.0
     # via pre-commit
-numpy==1.26.2
+numpy==1.26.3
     # via
     #   pandas
     #   pyogrio
@@ -120,7 +120,7 @@ pytest==7.4.4
     # via
     #   pytest-asyncio
     #   restgdf (pyproject.toml)
-pytest-asyncio==0.23.2
+pytest-asyncio==0.23.3
     # via restgdf (pyproject.toml)
 python-dateutil==2.8.2
     # via pandas
