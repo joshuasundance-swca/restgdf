@@ -96,3 +96,7 @@ directory = "coverage_html_report"
 skip_covered = false
 skip_empty = true
 title = "restgdf coverage report"
+
+[tool.pytest.ini_options]
+pythonpath = "."
+testpaths = "tests"
