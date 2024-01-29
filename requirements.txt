@@ -116,7 +116,7 @@ pyogrio==0.7.2
     # via restgdf (pyproject.toml)
 pyproj==3.6.1
     # via geopandas
-pytest==8.0.0
+pytest<8,>=7
     # via
     #   pytest-asyncio
     #   restgdf (pyproject.toml)
