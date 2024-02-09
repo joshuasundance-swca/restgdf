@@ -4,7 +4,7 @@
 #
 #    pip-compile --extra=dev --extra=doc --output-file=requirements.txt pyproject.toml
 #
-aiohttp==3.9.2
+aiohttp==3.9.3
     # via restgdf (pyproject.toml)
 aiosignal==1.3.1
     # via aiohttp
@@ -20,7 +20,7 @@ babel==2.14.0
     # via sphinx
 bumpver==2023.1129
     # via restgdf (pyproject.toml)
-certifi==2023.11.17
+certifi==2024.2.2
     # via
     #   fiona
     #   pyogrio
@@ -64,7 +64,7 @@ frozenlist==1.4.1
     # via
     #   aiohttp
     #   aiosignal
-geopandas==0.14.2
+geopandas==0.14.3
     # via restgdf (pyproject.toml)
 identify==2.5.33
     # via pre-commit
@@ -82,9 +82,9 @@ lexid==2021.1006
     # via bumpver
 looseversion==1.3.0
     # via bumpver
-markupsafe==2.1.4
+markupsafe==2.1.5
     # via jinja2
-multidict==6.0.4
+multidict==6.0.5
     # via
     #   aiohttp
     #   yarl
@@ -104,7 +104,7 @@ pandas==2.2.0
     # via
     #   geopandas
     #   restgdf (pyproject.toml)
-platformdirs==4.1.0
+platformdirs==4.2.0
     # via virtualenv
 pluggy==1.4.0
     # via pytest
@@ -116,7 +116,7 @@ pyogrio==0.7.2
     # via restgdf (pyproject.toml)
 pyproj==3.6.1
     # via geopandas
-pytest<8,>=7
+pytest>=7,<9
     # via
     #   pytest-asyncio
     #   restgdf (pyproject.toml)
@@ -124,7 +124,7 @@ pytest-asyncio==0.23.4
     # via restgdf (pyproject.toml)
 python-dateutil==2.8.2
     # via pandas
-pytz==2023.4
+pytz==2024.1
     # via pandas
 pyyaml==6.0.1
     # via pre-commit
@@ -170,7 +170,7 @@ toml==0.10.2
     # via bumpver
 tzdata==2023.4
     # via pandas
-urllib3==2.1.0
+urllib3==2.2.0
     # via requests
 virtualenv==20.25.0
     # via pre-commit
