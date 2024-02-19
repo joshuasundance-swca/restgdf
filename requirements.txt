@@ -66,7 +66,7 @@ frozenlist==1.4.1
     #   aiosignal
 geopandas==0.14.3
     # via restgdf (pyproject.toml)
-identify==2.5.34
+identify==2.5.35
     # via pre-commit
 idna==3.6
     # via
@@ -108,7 +108,7 @@ platformdirs==4.2.0
     # via virtualenv
 pluggy==1.4.0
     # via pytest
-pre-commit==3.6.1
+pre-commit==3.6.2
     # via restgdf (pyproject.toml)
 pygments==2.17.2
     # via sphinx
@@ -132,7 +132,7 @@ requests==2.31.0
     # via
     #   restgdf (pyproject.toml)
     #   sphinx
-shapely==2.0.2
+shapely==2.0.3
     # via geopandas
 six==1.16.0
     # via
@@ -170,7 +170,7 @@ toml==0.10.2
     # via bumpver
 tzdata==2024.1
     # via pandas
-urllib3==2.2.0
+urllib3==2.2.1
     # via requests
 virtualenv==20.25.0
     # via pre-commit
