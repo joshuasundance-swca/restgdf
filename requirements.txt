@@ -44,7 +44,7 @@ cligj==0.7.2
     # via fiona
 colorama==0.4.6
     # via bumpver
-coverage==7.4.1
+coverage==7.4.3
     # via
     #   coverage-badge
     #   restgdf (pyproject.toml)
@@ -66,7 +66,7 @@ frozenlist==1.4.1
     #   aiosignal
 geopandas==0.14.3
     # via restgdf (pyproject.toml)
-identify==2.5.34
+identify==2.5.35
     # via pre-commit
 idna==3.6
     # via
@@ -100,7 +100,7 @@ packaging==23.2
     #   geopandas
     #   pytest
     #   sphinx
-pandas==2.2.0
+pandas==2.2.1
     # via
     #   geopandas
     #   restgdf (pyproject.toml)
@@ -108,7 +108,7 @@ platformdirs==4.2.0
     # via virtualenv
 pluggy==1.4.0
     # via pytest
-pre-commit==3.6.1
+pre-commit==3.6.2
     # via restgdf (pyproject.toml)
 pygments==2.17.2
     # via sphinx
@@ -122,7 +122,7 @@ pytest>=7,<9
     #   restgdf (pyproject.toml)
 pytest-asyncio==0.23.5
     # via restgdf (pyproject.toml)
-python-dateutil==2.8.2
+python-dateutil==2.9.0.post0
     # via pandas
 pytz==2024.1
     # via pandas
@@ -132,7 +132,7 @@ requests==2.31.0
     # via
     #   restgdf (pyproject.toml)
     #   sphinx
-shapely==2.0.2
+shapely==2.0.3
     # via geopandas
 six==1.16.0
     # via
@@ -170,9 +170,9 @@ toml==0.10.2
     # via bumpver
 tzdata==2024.1
     # via pandas
-urllib3==2.2.0
+urllib3==2.2.1
     # via requests
-virtualenv==20.25.0
+virtualenv==20.25.1
     # via pre-commit
 yarl==1.9.4
     # via aiohttp
