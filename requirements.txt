@@ -52,7 +52,7 @@ coverage-badge==1.1.0
     # via restgdf (pyproject.toml)
 distlib==0.3.8
     # via virtualenv
-docutils==0.21.1
+docutils>=0.18.1
     # via
     #   sphinx
     #   sphinx-rtd-theme
@@ -129,6 +129,11 @@ pytz==2024.1
 pyyaml==6.0.1
     # via pre-commit
 requests==2.31.0
+    # via aiohttp
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools
+setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
     # via
     #   restgdf (pyproject.toml)
     #   sphinx
@@ -175,8 +180,3 @@ urllib3==2.2.1
 virtualenv==20.25.1
     # via pre-commit
 yarl==1.9.4
-    # via aiohttp
-
-# The following packages are considered to be unsafe in a requirements file:
-# setuptools
-setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
