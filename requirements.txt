@@ -4,7 +4,7 @@
 #
 #    pip-compile --extra=dev --extra=doc --output-file=requirements.txt pyproject.toml
 #
-aiohttp==3.9.4
+aiohttp==3.9.5
     # via restgdf (pyproject.toml)
 aiosignal==1.3.1
     # via aiohttp
@@ -16,7 +16,7 @@ attrs==23.2.0
     # via
     #   aiohttp
     #   fiona
-babel==2.14.0
+babel==2.15.0
     # via sphinx
 bumpver==2023.1129
     # via restgdf (pyproject.toml)
@@ -44,11 +44,11 @@ cligj==0.7.2
     # via fiona
 colorama==0.4.6
     # via bumpver
-coverage==7.4.4
+coverage==7.5.1
     # via
     #   coverage-badge
     #   restgdf (pyproject.toml)
-coverage-badge==1.1.0
+coverage-badge==1.1.1
     # via restgdf (pyproject.toml)
 distlib==0.3.8
     # via virtualenv
@@ -56,7 +56,7 @@ docutils>=0.18.1
     # via
     #   sphinx
     #   sphinx-rtd-theme
-filelock==3.13.4
+filelock==3.14.0
     # via virtualenv
 fiona==1.9.6
     # via geopandas
@@ -64,9 +64,9 @@ frozenlist==1.4.1
     # via
     #   aiohttp
     #   aiosignal
-geopandas==0.14.3
+geopandas==0.14.4
     # via restgdf (pyproject.toml)
-identify==2.5.35
+identify==2.5.36
     # via pre-commit
 idna==3.7
     # via
@@ -76,7 +76,7 @@ imagesize==1.4.1
     # via sphinx
 iniconfig==2.0.0
     # via pytest
-jinja2==3.1.3
+jinja2==3.1.4
     # via sphinx
 lexid==2021.1006
     # via bumpver
@@ -104,15 +104,15 @@ pandas==2.2.2
     # via
     #   geopandas
     #   restgdf (pyproject.toml)
-platformdirs==4.2.0
+platformdirs==4.2.1
     # via virtualenv
-pluggy==1.4.0
+pluggy==1.5.0
     # via pytest
-pre-commit==3.7.0
+pre-commit==3.7.1
     # via restgdf (pyproject.toml)
-pygments==2.17.2
+pygments==2.18.0
     # via sphinx
-pyogrio==0.7.2
+pyogrio==0.8.0
     # via restgdf (pyproject.toml)
 pyproj==3.6.1
     # via geopandas
@@ -137,7 +137,7 @@ setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerabil
     # via
     #   restgdf (pyproject.toml)
     #   sphinx
-shapely==2.0.3
+shapely==2.0.4
     # via geopandas
 six==1.16.0
     # via
@@ -145,7 +145,7 @@ six==1.16.0
     #   python-dateutil
 snowballstemmer==2.2.0
     # via sphinx
-sphinx==7.2.6
+sphinx==7.3.7
     # via
     #   restgdf (pyproject.toml)
     #   sphinx-rtd-theme
@@ -177,6 +177,6 @@ tzdata==2024.1
     # via pandas
 urllib3==2.2.1
     # via requests
-virtualenv==20.25.1
+virtualenv==20.26.1
     # via pre-commit
 yarl==1.9.4
