@@ -58,7 +58,7 @@ docutils>=0.18.1
     #   sphinx-rtd-theme
 filelock==3.13.4
     # via virtualenv
-fiona==1.9.6
+fiona==1.10b2
     # via geopandas
 frozenlist==1.4.1
     # via
