@@ -180,3 +180,4 @@ urllib3==2.2.2
 virtualenv==20.26.3
     # via pre-commit
 yarl==1.9.4
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
