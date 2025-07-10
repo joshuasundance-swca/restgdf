@@ -1,10 +1,10 @@
 """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
 
+import asyncio
 from asyncio import gather
+from collections.abc import AsyncGenerator
 from functools import reduce
 from typing import Union
-import asyncio
-from collections.abc import AsyncGenerator
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame, read_file
@@ -12,7 +12,6 @@ from pandas import concat
 from pyogrio import list_drivers
 
 from restgdf.utils.getinfo import default_data, get_offset_range
-
 
 supported_drivers = list_drivers()
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+from typing import AsyncIterable
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame
@@ -22,7 +23,6 @@ from restgdf.utils.getinfo import (
     FIELDDOESNOTEXIST,
 )
 from restgdf.utils.utils import where_var_in_list, ends_with_num
-from typing import AsyncIterable
 
 
 class FeatureLayer:

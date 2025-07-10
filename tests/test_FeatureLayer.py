@@ -1,6 +1,7 @@
 import pytest
 from aiohttp import ClientSession
 from pytest import raises
+
 from restgdf.featurelayer.featurelayer import FeatureLayer
 
 
