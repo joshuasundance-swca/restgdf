@@ -3,7 +3,7 @@
 from asyncio import gather
 from functools import reduce
 from typing import Union
-
+import asyncio
 from collections.abc import AsyncGenerator
 
 from aiohttp import ClientSession
@@ -55,9 +55,30 @@ async def chunk_generator(
     session: ClientSession,
     **kwargs,
 ) -> AsyncGenerator[GeoDataFrame, None]:
+    """
+    Asynchronously yield GeoDataFrames from a FeatureLayer in chunks.
+    This function retrieves GeoDataFrames in chunks based on the offset range
+    and yields each GeoDataFrame as it is retrieved.
+    """
     offset_list = await get_offset_range(url, session, **kwargs)
-    for offset in offset_list:
-        yield await get_sub_gdf(url, session, offset, **kwargs)
+    tasks = {
+        asyncio.create_task(
+            get_sub_gdf(url, session, offset, **kwargs)
+        )
+        for offset in offset_list
+    }
+    for sub_gdf in asyncio.as_completed(tasks):
+        yield await sub_gdf
+
+
+async def row_dict_generator(
+    url: str,
+    session: ClientSession,
+    **kwargs,
+) -> AsyncGenerator[dict, None]:
+    async for sub_gdf in chunk_generator(url, session, **kwargs):
+        for _, row in sub_gdf.iterrows():
+            yield row.to_dict()
 
 
 async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:

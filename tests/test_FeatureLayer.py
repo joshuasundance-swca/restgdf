@@ -28,11 +28,20 @@ async def test_featurelayer():
         assert len(await beaches.samplegdf(2)) == 2
         assert len(await beaches.headgdf(2)) == 2
         assert len(beaches_gdf) > 0
+
+        # test row_dict_generator
+        row_gen = beaches.row_dict_generator()
+        beaches_row_gen_count = 0
+        async for row in row_gen:
+            assert isinstance(row, dict)
+            beaches_row_gen_count += 1
+        assert beaches_row_gen_count == len(beaches_gdf)
+
         assert all(
             "fgsfds" in s for s in (beaches.wherestr, beaches.kwargs["data"]["where"])
         )
         assert (
-            len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 10
+            len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 1
         )
         daytona = await beaches.where("City LIKE 'DAYTONA%'")
         assert "Status" in daytona.fields

@@ -8,7 +8,7 @@ from aiohttp import ClientSession
 from geopandas import GeoDataFrame
 from pandas import DataFrame
 
-from restgdf.utils.getgdf import get_gdf
+from restgdf.utils.getgdf import get_gdf, row_dict_generator
 from restgdf.utils.getinfo import (
     default_data,
     get_feature_count,
@@ -22,6 +22,7 @@ from restgdf.utils.getinfo import (
     FIELDDOESNOTEXIST,
 )
 from restgdf.utils.utils import where_var_in_list, ends_with_num
+from typing import AsyncIterable
 
 
 class FeatureLayer:
@@ -113,6 +114,15 @@ class FeatureLayer:
         if self.gdf is None:
             self.gdf = await get_gdf(self.url, self.session, **self.kwargs)
         return self.gdf
+
+    async def row_dict_generator(
+        self,
+        **kwargs,
+    ) -> AsyncIterable[dict]:
+        """Asynchronously yield rows from a GeoDataFrame as dictionaries."""
+        _gen = row_dict_generator(self.url, self.session, **self.kwargs, **kwargs)
+        async for row in _gen:
+            yield row
 
     async def getuniquevalues(
         self,
