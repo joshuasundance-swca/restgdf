@@ -32,3 +32,11 @@ restgdf.utils.utils
    :members:
    :undoc-members:
    :show-inheritance:
+
+restgdf.utils.token
+-------------------
+
+.. automodule:: restgdf.utils.token
+   :members:
+   :undoc-members:
+   :show-inheritance:

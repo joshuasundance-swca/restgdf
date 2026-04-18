@@ -30,9 +30,9 @@ so if you read a service with 100000 features but there's a limit of 1000 record
 
 these functions use asyncio to read all features from a service, not limited by max record count
 
-keyword arguments to `FeatureLayer.getgdf` are passed on to `requests.Session.post`; include query parameters like where str and token str in data dict
+keyword arguments to `FeatureLayer.getgdf` are passed on to `aiohttp.ClientSession.post`; include query parameters like `where` and `token` in the `data` dict when needed
 
-this enables enhanced control over queries and allow use of any valid authentication scheme (eg `requests_ntlm.HttpNtlmAuth`) with use of `requests.Session.auth` or `data={"token": str}`
+this enables enhanced control over queries and supports either direct `data={"token": "..."}` usage or a reusable `ArcGISTokenSession`
 
 # Usage
 
@@ -77,6 +77,37 @@ print(daytona_gdf.shape)
 print(oh_zipcodes_gdf.shape)
 # (1026, 8)
 ```
+
+## Token authentication
+
+```python
+import asyncio
+
+from aiohttp import ClientSession
+
+from restgdf import AGOLUserPass, ArcGISTokenSession, FeatureLayer
+
+
+secured_url = "https://example.com/arcgis/rest/services/Secured/FeatureServer/0"
+
+
+async def main():
+    async with ClientSession() as base_session:
+        token_session = ArcGISTokenSession(
+            session=base_session,
+            credentials=AGOLUserPass(
+                username="my-username",
+                password="my-password",
+            ),
+        )
+        layer = await FeatureLayer.from_url(secured_url, session=token_session)
+        return await layer.getgdf()
+
+
+secured_gdf = asyncio.run(main())
+```
+
+If you already have a token, you can pass it with `token="..."` or `data={"token": "..."}`.
 
 # Documentation
 

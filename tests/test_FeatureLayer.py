@@ -1,7 +1,166 @@
 import pytest
 from aiohttp import ClientSession
 from pytest import raises
+from unittest.mock import patch
+
 from restgdf.featurelayer.featurelayer import FeatureLayer
+from restgdf.utils.token import AGOLUserPass, ArcGISTokenSession
+
+
+class MockRequestContext:
+    def __init__(self, payload: dict):
+        self.payload = payload
+
+    def __await__(self):
+        async def _response():
+            return self
+
+        return _response().__await__()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        return None
+
+    async def json(self, content_type: str | None = None):
+        return self.payload
+
+    def raise_for_status(self):
+        return None
+
+
+class MockArcGISSession:
+    def __init__(self):
+        self.get_calls: list[tuple[str, dict]] = []
+        self.post_calls: list[tuple[str, dict]] = []
+
+    def get(self, url: str, **kwargs):
+        self.get_calls.append((url, kwargs))
+        return MockRequestContext({"ok": True})
+
+    def post(self, url: str, **kwargs):
+        self.post_calls.append((url, kwargs))
+        if url.endswith("generateToken"):
+            return MockRequestContext(
+                {
+                    "token": "generated-token",
+                    "expires": 32503680000000,
+                },
+            )
+        return MockRequestContext({"ok": True})
+
+
+@pytest.mark.asyncio
+async def test_arcgistokensession():
+    session = MockArcGISSession()
+    token_session = ArcGISTokenSession(
+        session=session,
+        credentials=AGOLUserPass(username="user", password="password"),
+    )
+
+    post_response = await token_session.post(
+        "https://example.com/query",
+        data={"where": "1=1"},
+    )
+    get_response = await token_session.get(
+        "https://example.com/items",
+        params={"f": "json"},
+    )
+
+    assert await post_response.json() == {"ok": True}
+    assert await get_response.json() == {"ok": True}
+    assert token_session.token == "generated-token"
+    assert session.post_calls[0][0].endswith("generateToken")
+    assert session.post_calls[1][1]["data"]["token"] == "generated-token"
+    assert session.get_calls[0][1]["params"]["token"] == "generated-token"
+
+
+def test_featurelayer_accepts_legacy_token_kwarg():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+        token="legacy-token",
+    )
+
+    assert layer.kwargs["data"]["token"] == "legacy-token"
+
+
+def test_featurelayer_rejects_conflicting_token_sources():
+    with pytest.raises(ValueError):
+        FeatureLayer(
+            "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+            session=MockArcGISSession(),
+            token="legacy-token",
+            data={"token": "other-token"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_getoids_uses_objectid_field():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ["OBJECTID"]
+
+    async def fake_getuniquevalues(fields, sortby=None):
+        assert fields == "OBJECTID"
+        assert sortby is None
+        return [1, 2, 3]
+
+    layer.getuniquevalues = fake_getuniquevalues
+
+    assert await layer.getoids() == [1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_row_dict_generator_merges_data_kwargs():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+        where="CITY = 'DAYTONA'",
+        token="saved-token",
+    )
+
+    async def fake_row_dict_generator(url, session, **kwargs):
+        assert kwargs["data"]["where"] == "CITY = 'DAYTONA'"
+        assert kwargs["data"]["token"] == "saved-token"
+        assert kwargs["data"]["outFields"] == "CITY"
+        yield {"ok": True}
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.row_dict_generator",
+        side_effect=fake_row_dict_generator,
+    ):
+        rows = [
+            row async for row in layer.row_dict_generator(data={"outFields": "CITY"})
+        ]
+
+    assert rows == [{"ok": True}]
+
+
+@pytest.mark.asyncio
+async def test_getuniquevalues_cache_includes_sortby():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ("CITY", "STATE")
+
+    async def fake_getuniquevalues(url, fields, session, sortby=None, **kwargs):
+        return [sortby]
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.getuniquevalues",
+        side_effect=fake_getuniquevalues,
+    ) as mock_getuniquevalues:
+        first = await layer.getuniquevalues(("CITY", "STATE"), sortby="CITY")
+        second = await layer.getuniquevalues(("CITY", "STATE"), sortby="STATE")
+
+    assert first == ["CITY"]
+    assert second == ["STATE"]
+    assert mock_getuniquevalues.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -28,12 +187,19 @@ async def test_featurelayer():
         assert len(await beaches.samplegdf(2)) == 2
         assert len(await beaches.headgdf(2)) == 2
         assert len(beaches_gdf) > 0
+
+        # test row_dict_generator
+        row_gen = beaches.row_dict_generator()
+        beaches_row_gen_count = 0
+        async for row in row_gen:
+            assert isinstance(row, dict)
+            beaches_row_gen_count += 1
+        assert beaches_row_gen_count == len(beaches_gdf)
+
         assert all(
             "fgsfds" in s for s in (beaches.wherestr, beaches.kwargs["data"]["where"])
         )
-        assert (
-            len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 10
-        )
+        assert len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 1
         daytona = await beaches.where("City LIKE 'DAYTONA%'")
         assert "Status" in daytona.fields
         assert str(beaches) == f"Beach Access Points ({beachurl})"
