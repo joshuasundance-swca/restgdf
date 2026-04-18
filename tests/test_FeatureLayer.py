@@ -1,6 +1,7 @@
 import pytest
 from aiohttp import ClientSession
 from pytest import raises
+from unittest.mock import patch
 
 from restgdf.featurelayer.featurelayer import FeatureLayer
 from restgdf.utils.token import AGOLUserPass, ArcGISTokenSession
@@ -83,6 +84,83 @@ def test_featurelayer_accepts_legacy_token_kwarg():
     )
 
     assert layer.kwargs["data"]["token"] == "legacy-token"
+
+
+def test_featurelayer_rejects_conflicting_token_sources():
+    with pytest.raises(ValueError):
+        FeatureLayer(
+            "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+            session=MockArcGISSession(),
+            token="legacy-token",
+            data={"token": "other-token"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_getoids_uses_objectid_field():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ["OBJECTID"]
+
+    async def fake_getuniquevalues(fields, sortby=None):
+        assert fields == "OBJECTID"
+        assert sortby is None
+        return [1, 2, 3]
+
+    layer.getuniquevalues = fake_getuniquevalues
+
+    assert await layer.getoids() == [1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_row_dict_generator_merges_data_kwargs():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+        where="CITY = 'DAYTONA'",
+        token="saved-token",
+    )
+
+    async def fake_row_dict_generator(url, session, **kwargs):
+        assert kwargs["data"]["where"] == "CITY = 'DAYTONA'"
+        assert kwargs["data"]["token"] == "saved-token"
+        assert kwargs["data"]["outFields"] == "CITY"
+        yield {"ok": True}
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.row_dict_generator",
+        side_effect=fake_row_dict_generator,
+    ):
+        rows = [
+            row async for row in layer.row_dict_generator(data={"outFields": "CITY"})
+        ]
+
+    assert rows == [{"ok": True}]
+
+
+@pytest.mark.asyncio
+async def test_getuniquevalues_cache_includes_sortby():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ("CITY", "STATE")
+
+    async def fake_getuniquevalues(url, fields, session, sortby=None, **kwargs):
+        return [sortby]
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.getuniquevalues",
+        side_effect=fake_getuniquevalues,
+    ) as mock_getuniquevalues:
+        first = await layer.getuniquevalues(("CITY", "STATE"), sortby="CITY")
+        second = await layer.getuniquevalues(("CITY", "STATE"), sortby="STATE")
+
+    assert first == ["CITY"]
+    assert second == ["STATE"]
+    assert mock_getuniquevalues.await_count == 2
 
 
 @pytest.mark.asyncio

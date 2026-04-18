@@ -50,10 +50,15 @@ class FeatureLayer:
         self.datadict = default_data(kwargs.pop("data", {}))
         self.datadict["where"] = self.wherestr
         if token is not None:
+            existing_token = self.datadict.get("token")
+            if existing_token is not None and existing_token != token:
+                raise ValueError(
+                    "Pass token either via token= or data['token'], not both with different values.",
+                )
             self.datadict["token"] = token
         self.kwargs["data"] = self.datadict
 
-        self.uniquevalues: dict = {}
+        self.uniquevalues: dict[tuple[str | tuple, str | None], list | DataFrame] = {}
         self.valuecounts: dict = {}
         self.nestedcount: dict = {}
 
@@ -91,7 +96,7 @@ class FeatureLayer:
 
     async def getoids(self) -> list[int]:
         """Get the object ids for the Rest object."""
-        return await self.getuniquevalues(self.url, "OBJECTID")
+        return await self.getuniquevalues("OBJECTID")
 
     async def samplegdf(self, n: int = 10) -> GeoDataFrame:
         """Get n random features as a GeoDataFrame."""
@@ -120,7 +125,13 @@ class FeatureLayer:
         **kwargs,
     ) -> AsyncIterable[dict]:
         """Asynchronously yield rows from a GeoDataFrame as dictionaries."""
-        _gen = row_dict_generator(self.url, self.session, **self.kwargs, **kwargs)
+        merged_kwargs = {**self.kwargs, **kwargs}
+        if "data" in self.kwargs or "data" in kwargs:
+            merged_kwargs["data"] = default_data(
+                kwargs.get("data"),
+                self.kwargs.get("data"),
+            )
+        _gen = row_dict_generator(self.url, self.session, **merged_kwargs)
         async for row in _gen:
             yield row
 
@@ -130,20 +141,21 @@ class FeatureLayer:
         sortby: str | None = None,
     ) -> list | DataFrame:
         """Get the unique values for a field."""
-        if fields not in self.uniquevalues:
+        cache_key = (fields, sortby)
+        if cache_key not in self.uniquevalues:
             if (isinstance(fields, str) and fields not in self.fields) or (
                 not isinstance(fields, str)
                 and any(field not in self.fields for field in fields)
             ):
                 raise FIELDDOESNOTEXIST
-            self.uniquevalues[fields] = await getuniquevalues(
+            self.uniquevalues[cache_key] = await getuniquevalues(
                 self.url,
                 fields,
                 self.session,
                 sortby,
                 **self.kwargs,
             )
-        return self.uniquevalues[fields]
+        return self.uniquevalues[cache_key]
 
     async def getvaluecounts(self, field: str) -> DataFrame:
         """Get the value counts for a field."""

@@ -23,7 +23,7 @@ async def get_sub_gdf(
     offset: int,
     **kwargs,
 ) -> GeoDataFrame:
-    data = kwargs.pop("data", {})
+    data = kwargs.pop("data", None) or {}
     gdfdriver = "ESRIJSON" if "ESRIJSON" in supported_drivers else "GeoJSON"
     if gdfdriver == "GeoJSON":
         data["f"] = "GeoJSON"
@@ -111,9 +111,14 @@ async def get_gdf(
     **kwargs,
 ) -> GeoDataFrame:
     session = session or ClientSession()
-    datadict = default_data(kwargs.pop("data", {}))
+    datadict = default_data(kwargs.pop("data", None) or {})
     if where is not None:
         datadict["where"] = where
     if token is not None:
+        existing_token = datadict.get("token")
+        if existing_token is not None and existing_token != token:
+            raise ValueError(
+                "Pass token either via token= or data['token'], not both with different values.",
+            )
         datadict["token"] = token
     return await gdf_by_concat(url, session, data=datadict, **kwargs)

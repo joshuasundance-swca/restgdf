@@ -36,10 +36,11 @@ async def get_feature_count(
 ) -> int:
     """Get the feature count for a layer."""
     datadict: dict = {"where": "1=1", "returnCountOnly": True, "f": "json"}
-    if "data" in kwargs:
-        datadict["where"] = kwargs["data"].get("where", "1=1")
-        if "token" in kwargs["data"]:
-            datadict["token"] = kwargs["data"]["token"]
+    request_data = kwargs.get("data") or {}
+    if request_data:
+        datadict["where"] = request_data.get("where", "1=1")
+        if "token" in request_data:
+            datadict["token"] = request_data["token"]
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
     response = await session.post(f"{url}/query", data=datadict, **xkwargs)
     # the line above provides keyword arguments other than data dict
@@ -62,7 +63,7 @@ async def get_metadata(
 ) -> dict:
     """Get the JSON dict for a layer."""
     data = {"f": "json"}
-    if token:
+    if token is not None:
         data["token"] = token
     response = await session.post(url, data=data)
     return await response.json(content_type=None)
@@ -87,7 +88,7 @@ async def get_offset_range(
 ) -> range:
     """Get the offset range for a layer."""
     feature_count = await get_feature_count(url, session, **kwargs)
-    token = kwargs.get("data", {}).get("token")
+    token = (kwargs.get("data") or {}).get("token")
     metadata = await get_metadata(url, session, token=token)
     max_record_count = get_max_record_count(metadata)
     return range(0, feature_count, max_record_count)
@@ -139,10 +140,11 @@ async def getuniquevalues(
         "returnDistinctValues": True,
         "outFields": fields if isinstance(fields, str) else ",".join(fields),
     }
-    if "data" in kwargs:
-        datadict["where"] = kwargs["data"].get("where", "1=1")
-        if "token" in kwargs["data"]:
-            datadict["token"] = kwargs["data"]["token"]
+    request_data = kwargs.get("data") or {}
+    if request_data:
+        datadict["where"] = request_data.get("where", "1=1")
+        if "token" in request_data:
+            datadict["token"] = request_data["token"]
 
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
 
@@ -154,8 +156,12 @@ async def getuniquevalues(
 
     if isinstance(fields, str):
         res_l = [x["attributes"][fields] for x in metadata["features"]]
+        if sortby and sortby == fields:
+            res_l = sorted(res_l)
     elif len(fields) == 1:
         res_l = [x["attributes"][fields[0]] for x in metadata["features"]]
+        if sortby and sortby == fields[0]:
+            res_l = sorted(res_l)
     else:
         res_df = concat(
             [DataFrame(x).T.reset_index(drop=True) for x in metadata["features"]],
@@ -174,7 +180,7 @@ async def getvaluecounts(
 ) -> DataFrame:
     """Get the value counts for a field."""
     statstr = f'[{{"statisticType":"count","onStatisticField":"{field}","outStatisticFieldName":"{field}_count"}}]'
-    data = kwargs.pop("data", {})
+    data = kwargs.pop("data", None) or {}
     data = {
         "where": "1=1",
         "f": "json",
@@ -211,7 +217,7 @@ async def nestedcount(
             "]",
         ),
     )
-    data = kwargs.pop("data", {})
+    data = kwargs.pop("data", None) or {}
     data = {
         "where": "1=1",
         "f": "json",
@@ -255,7 +261,7 @@ async def service_metadata(
                 feature_count = await get_feature_count(
                     layer_url,
                     session,
-                    data={"token": token} if token else None,
+                    **({"data": {"token": token}} if token is not None else {}),
                 )
             except KeyError:
                 feature_count = None

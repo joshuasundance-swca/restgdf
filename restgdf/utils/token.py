@@ -73,7 +73,7 @@ class ArcGISTokenSession:
     def update_dict(self, input_dict: dict | None = None) -> dict:
         """Return a request payload/query dict merged with the active token."""
         output_dict = dict(input_dict or {})
-        if self.token:
+        if self.token and "token" not in output_dict:
             output_dict["token"] = self.token
         return output_dict
 
@@ -117,7 +117,13 @@ class ArcGISTokenSession:
     ) -> aiohttp.ClientResponse:
         """Make a GET request to the specified URL with the token."""
         await self.update_token_if_needed()
-        request_headers = self.update_headers(headers)
+        request_headers = (
+            self.update_headers(
+                headers,
+            )
+            if "token" not in (params or {})
+            else dict(headers or {})
+        )
         request_params = self.update_dict(params)
         return await self.session.get(
             url,
@@ -135,7 +141,13 @@ class ArcGISTokenSession:
     ) -> aiohttp.ClientResponse:
         """Make a POST request to the specified URL with the token."""
         await self.update_token_if_needed()
-        request_headers = self.update_headers(headers)
+        request_headers = (
+            self.update_headers(
+                headers,
+            )
+            if "token" not in (data or {})
+            else dict(headers or {})
+        )
         request_data = self.update_dict(data)
         return await self.session.post(
             url,
