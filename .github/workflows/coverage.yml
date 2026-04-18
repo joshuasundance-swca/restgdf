@@ -22,9 +22,9 @@ jobs:
         token: ${{ secrets.WORKFLOW_GIT_ACCESS_TOKEN }}
         fetch-depth: 0
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.11
+        python-version: "3.14"
         cache: pip
     - name: Install Python libraries
       run: |
@@ -38,4 +38,4 @@ jobs:
     - name: Commit changes
       with:
         COMMIT_MESSAGE: "Update coverage"
-      uses: stefanzweifel/git-auto-commit-action@v4
+      uses: stefanzweifel/git-auto-commit-action@v5

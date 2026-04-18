@@ -5,6 +5,7 @@ improved esri rest io for geopandas
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/bsd-3-clause/)
 [![python](https://img.shields.io/badge/Python-3.9+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+[![dev python](https://img.shields.io/badge/Dev%2FCI%20Python-3.14-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
 
 [![Publish to PyPI](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml/badge.svg)](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml)
 ![GitHub tag (with filter)](https://img.shields.io/github/v/tag/joshuasundance-swca/restgdf)
