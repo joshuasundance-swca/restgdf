@@ -7,6 +7,8 @@ from re import compile, IGNORECASE
 from aiohttp import ClientSession
 from pandas import DataFrame, concat
 
+from restgdf.utils.token import ArcGISTokenSession
+
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
 
 DEFAULTDICT: dict = {
@@ -29,15 +31,16 @@ def default_data(
 
 async def get_feature_count(
     url: str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> int:
     """Get the feature count for a layer."""
     datadict: dict = {"where": "1=1", "returnCountOnly": True, "f": "json"}
-    if "data" in kwargs:
-        datadict["where"] = kwargs["data"].get("where", "1=1")
-        if "token" in kwargs["data"]:
-            datadict["token"] = kwargs["data"]["token"]
+    request_data = kwargs.get("data") or {}
+    if request_data:
+        datadict["where"] = request_data.get("where", "1=1")
+        if "token" in request_data:
+            datadict["token"] = request_data["token"]
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
     response = await session.post(f"{url}/query", data=datadict, **xkwargs)
     # the line above provides keyword arguments other than data dict
@@ -55,12 +58,12 @@ async def get_feature_count(
 
 async def get_metadata(
     url: str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     token: str | None = None,
 ) -> dict:
     """Get the JSON dict for a layer."""
     data = {"f": "json"}
-    if token:
+    if token is not None:
         data["token"] = token
     response = await session.post(url, data=data)
     return await response.json(content_type=None)
@@ -80,12 +83,13 @@ def get_max_record_count(metadata: dict) -> int:
 
 async def get_offset_range(
     url: str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> range:
     """Get the offset range for a layer."""
     feature_count = await get_feature_count(url, session, **kwargs)
-    metadata = await get_metadata(url, session)
+    token = (kwargs.get("data") or {}).get("token")
+    metadata = await get_metadata(url, session, token=token)
     max_record_count = get_max_record_count(metadata)
     return range(0, feature_count, max_record_count)
 
@@ -124,7 +128,7 @@ def getfields_df(layer_metadata: dict) -> DataFrame:
 async def getuniquevalues(
     url: str,
     fields: tuple | str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     sortby: str | None = None,
     **kwargs,
 ) -> list | DataFrame:
@@ -136,10 +140,11 @@ async def getuniquevalues(
         "returnDistinctValues": True,
         "outFields": fields if isinstance(fields, str) else ",".join(fields),
     }
-    if "data" in kwargs:
-        datadict["where"] = kwargs["data"].get("where", "1=1")
-        if "token" in kwargs["data"]:
-            datadict["token"] = kwargs["data"]["token"]
+    request_data = kwargs.get("data") or {}
+    if request_data:
+        datadict["where"] = request_data.get("where", "1=1")
+        if "token" in request_data:
+            datadict["token"] = request_data["token"]
 
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
 
@@ -151,8 +156,12 @@ async def getuniquevalues(
 
     if isinstance(fields, str):
         res_l = [x["attributes"][fields] for x in metadata["features"]]
+        if sortby and sortby == fields:
+            res_l = sorted(res_l)
     elif len(fields) == 1:
         res_l = [x["attributes"][fields[0]] for x in metadata["features"]]
+        if sortby and sortby == fields[0]:
+            res_l = sorted(res_l)
     else:
         res_df = concat(
             [DataFrame(x).T.reset_index(drop=True) for x in metadata["features"]],
@@ -166,12 +175,12 @@ async def getuniquevalues(
 async def getvaluecounts(
     url: str,
     field: str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> DataFrame:
     """Get the value counts for a field."""
     statstr = f'[{{"statisticType":"count","onStatisticField":"{field}","outStatisticFieldName":"{field}_count"}}]'
-    data = kwargs.pop("data", {})
+    data = kwargs.pop("data", None) or {}
     data = {
         "where": "1=1",
         "f": "json",
@@ -194,7 +203,7 @@ async def getvaluecounts(
 async def nestedcount(
     url: str,
     fields,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> DataFrame:
     """Get the nested value counts for a field."""
@@ -208,7 +217,7 @@ async def nestedcount(
             "]",
         ),
     )
-    data = kwargs.pop("data", {})
+    data = kwargs.pop("data", None) or {}
     data = {
         "where": "1=1",
         "f": "json",
@@ -236,7 +245,7 @@ async def nestedcount(
 
 
 async def service_metadata(
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     service_url: str,
     token: str | None = None,
     return_feature_count: bool = False,
@@ -245,11 +254,15 @@ async def service_metadata(
     _service_metadata = await get_metadata(service_url, session, token=token)
 
     async def _comprehensive_metadata(layer_url: str) -> dict:
-        metadata = await get_metadata(layer_url, session)
+        metadata = await get_metadata(layer_url, session, token=token)
         metadata["url"] = layer_url
         if return_feature_count and metadata["type"] == "Feature Layer":
             try:
-                feature_count = await get_feature_count(layer_url, session)
+                feature_count = await get_feature_count(
+                    layer_url,
+                    session,
+                    **({"data": {"token": token}} if token is not None else {}),
+                )
             except KeyError:
                 feature_count = None
             metadata["feature_count"] = feature_count  # type: ignore

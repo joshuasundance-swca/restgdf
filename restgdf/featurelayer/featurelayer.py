@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import random
+from collections.abc import AsyncIterable
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame
 from pandas import DataFrame
 
-from restgdf.utils.getgdf import get_gdf
+from restgdf.utils.getgdf import get_gdf, row_dict_generator
 from restgdf.utils.getinfo import (
     default_data,
     get_feature_count,
@@ -21,6 +22,7 @@ from restgdf.utils.getinfo import (
     nestedcount,
     FIELDDOESNOTEXIST,
 )
+from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list, ends_with_num
 
 
@@ -30,7 +32,7 @@ class FeatureLayer:
     def __init__(
         self,
         url: str,
-        session: ClientSession,
+        session: ClientSession | ArcGISTokenSession,
         where: str = "1=1",
         token: str | None = None,
         **kwargs,
@@ -44,15 +46,19 @@ class FeatureLayer:
         self.session = session
 
         self.wherestr = where
-        self.token = token
         self.kwargs = kwargs
         self.datadict = default_data(kwargs.pop("data", {}))
         self.datadict["where"] = self.wherestr
-        if self.token is not None:
-            self.datadict["token"] = self.token
+        if token is not None:
+            existing_token = self.datadict.get("token")
+            if existing_token is not None and existing_token != token:
+                raise ValueError(
+                    "Pass token either via token= or data['token'], not both with different values.",
+                )
+            self.datadict["token"] = token
         self.kwargs["data"] = self.datadict
 
-        self.uniquevalues: dict = {}
+        self.uniquevalues: dict[tuple[str | tuple, str | None], list | DataFrame] = {}
         self.valuecounts: dict = {}
         self.nestedcount: dict = {}
 
@@ -69,7 +75,7 @@ class FeatureLayer:
         self.metadata = await get_metadata(
             self.url,
             self.session,
-            token=self.token,
+            token=self.kwargs["data"].get("token"),
         )
         try:
             if not self.metadata["type"] == "Feature Layer":
@@ -90,7 +96,7 @@ class FeatureLayer:
 
     async def getoids(self) -> list[int]:
         """Get the object ids for the Rest object."""
-        return await self.getuniquevalues(self.url, "OBJECTID")
+        return await self.getuniquevalues("OBJECTID")
 
     async def samplegdf(self, n: int = 10) -> GeoDataFrame:
         """Get n random features as a GeoDataFrame."""
@@ -114,26 +120,42 @@ class FeatureLayer:
             self.gdf = await get_gdf(self.url, self.session, **self.kwargs)
         return self.gdf
 
+    async def row_dict_generator(
+        self,
+        **kwargs,
+    ) -> AsyncIterable[dict]:
+        """Asynchronously yield rows from a GeoDataFrame as dictionaries."""
+        merged_kwargs = {**self.kwargs, **kwargs}
+        if "data" in self.kwargs or "data" in kwargs:
+            merged_kwargs["data"] = default_data(
+                kwargs.get("data"),
+                self.kwargs.get("data"),
+            )
+        _gen = row_dict_generator(self.url, self.session, **merged_kwargs)
+        async for row in _gen:
+            yield row
+
     async def getuniquevalues(
         self,
         fields: tuple | str,
         sortby: str | None = None,
     ) -> list | DataFrame:
         """Get the unique values for a field."""
-        if fields not in self.uniquevalues:
+        cache_key = (fields, sortby)
+        if cache_key not in self.uniquevalues:
             if (isinstance(fields, str) and fields not in self.fields) or (
                 not isinstance(fields, str)
                 and any(field not in self.fields for field in fields)
             ):
                 raise FIELDDOESNOTEXIST
-            self.uniquevalues[fields] = await getuniquevalues(
+            self.uniquevalues[cache_key] = await getuniquevalues(
                 self.url,
                 fields,
                 self.session,
                 sortby,
                 **self.kwargs,
             )
-        return self.uniquevalues[fields]
+        return self.uniquevalues[cache_key]
 
     async def getvaluecounts(self, field: str) -> DataFrame:
         """Get the value counts for a field."""
@@ -170,14 +192,13 @@ class FeatureLayer:
             self.url,
             session=self.session,
             where=wherestr_plus,
-            token=self.token,
             **self.kwargs,
         )
 
     def __repr__(self) -> str:
         """Return a string representation of the Rest object."""
         kwargstr = ", ".join(f"{k}={v}" for k, v in self.kwargs.items())
-        return f"Rest({self.url}, {self.session}, {self.wherestr}, {self.token}, {kwargstr})"
+        return f"Rest({self.url}, {self.session}, {self.wherestr}, {kwargstr})"
 
     def __str__(self) -> str:
         """Return a string representation of the Rest object."""

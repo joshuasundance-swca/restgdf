@@ -11,6 +11,7 @@ Welcome to restgdf's documentation!
    :caption: Contents:
 
    restgdf
+   authentication
    utils
 
 Indices and tables
