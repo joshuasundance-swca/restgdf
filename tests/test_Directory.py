@@ -19,7 +19,10 @@ async def test_directory():
         if service_layers:
             first_service_with_layers = service
             break
-    first_service_layers = first_service_with_layers.get("metadata", {}).get("layers", [])
+    first_service_layers = first_service_with_layers.get("metadata", {}).get(
+        "layers",
+        [],
+    )
     assert len(first_service_layers) > 0
     assert isinstance(first_service_layers[0], dict)
     assert len(directory.metadata) > 0

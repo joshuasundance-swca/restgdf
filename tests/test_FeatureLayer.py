@@ -3,6 +3,86 @@ from aiohttp import ClientSession
 from pytest import raises
 
 from restgdf.featurelayer.featurelayer import FeatureLayer
+from restgdf.utils.token import AGOLUserPass, ArcGISTokenSession
+
+
+class MockRequestContext:
+    def __init__(self, payload: dict):
+        self.payload = payload
+
+    def __await__(self):
+        async def _response():
+            return self
+
+        return _response().__await__()
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc_value, traceback):
+        return None
+
+    async def json(self, content_type: str | None = None):
+        return self.payload
+
+    def raise_for_status(self):
+        return None
+
+
+class MockArcGISSession:
+    def __init__(self):
+        self.get_calls: list[tuple[str, dict]] = []
+        self.post_calls: list[tuple[str, dict]] = []
+
+    def get(self, url: str, **kwargs):
+        self.get_calls.append((url, kwargs))
+        return MockRequestContext({"ok": True})
+
+    def post(self, url: str, **kwargs):
+        self.post_calls.append((url, kwargs))
+        if url.endswith("generateToken"):
+            return MockRequestContext(
+                {
+                    "token": "generated-token",
+                    "expires": 32503680000000,
+                },
+            )
+        return MockRequestContext({"ok": True})
+
+
+@pytest.mark.asyncio
+async def test_arcgistokensession():
+    session = MockArcGISSession()
+    token_session = ArcGISTokenSession(
+        session=session,
+        credentials=AGOLUserPass(username="user", password="password"),
+    )
+
+    post_response = await token_session.post(
+        "https://example.com/query",
+        data={"where": "1=1"},
+    )
+    get_response = await token_session.get(
+        "https://example.com/items",
+        params={"f": "json"},
+    )
+
+    assert await post_response.json() == {"ok": True}
+    assert await get_response.json() == {"ok": True}
+    assert token_session.token == "generated-token"
+    assert session.post_calls[0][0].endswith("generateToken")
+    assert session.post_calls[1][1]["data"]["token"] == "generated-token"
+    assert session.get_calls[0][1]["params"]["token"] == "generated-token"
+
+
+def test_featurelayer_accepts_legacy_token_kwarg():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+        token="legacy-token",
+    )
+
+    assert layer.kwargs["data"]["token"] == "legacy-token"
 
 
 @pytest.mark.asyncio
@@ -41,9 +121,7 @@ async def test_featurelayer():
         assert all(
             "fgsfds" in s for s in (beaches.wherestr, beaches.kwargs["data"]["where"])
         )
-        assert (
-            len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 1
-        )
+        assert len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 1
         daytona = await beaches.where("City LIKE 'DAYTONA%'")
         assert "Status" in daytona.fields
         assert str(beaches) == f"Beach Access Points ({beachurl})"

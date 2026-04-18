@@ -19,6 +19,7 @@ TESTJSON = {"count": 500, "maxRecordCount": 100}
 
 def test_wherevarinlist():
     assert where_var_in_list("STATE", ["FL", "GA"]) == "STATE In ('FL', 'GA')"
+    assert where_var_in_list("OBJECTID", [1, 2]) == "OBJECTID In (1, 2)"
 
 
 # def mock_session_post(*args, **kwargs):

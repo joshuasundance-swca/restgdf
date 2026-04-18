@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from typing import AsyncIterable
+from collections.abc import AsyncIterable
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame
@@ -22,6 +22,7 @@ from restgdf.utils.getinfo import (
     nestedcount,
     FIELDDOESNOTEXIST,
 )
+from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list, ends_with_num
 
 
@@ -31,7 +32,7 @@ class FeatureLayer:
     def __init__(
         self,
         url: str,
-        session: ClientSession,
+        session: ClientSession | ArcGISTokenSession,
         where: str = "1=1",
         token: str | None = None,
         **kwargs,
@@ -45,12 +46,11 @@ class FeatureLayer:
         self.session = session
 
         self.wherestr = where
-        self.token = token
         self.kwargs = kwargs
         self.datadict = default_data(kwargs.pop("data", {}))
         self.datadict["where"] = self.wherestr
-        if self.token is not None:
-            self.datadict["token"] = self.token
+        if token is not None:
+            self.datadict["token"] = token
         self.kwargs["data"] = self.datadict
 
         self.uniquevalues: dict = {}
@@ -70,7 +70,7 @@ class FeatureLayer:
         self.metadata = await get_metadata(
             self.url,
             self.session,
-            token=self.token,
+            token=self.kwargs["data"].get("token"),
         )
         try:
             if not self.metadata["type"] == "Feature Layer":
@@ -180,14 +180,13 @@ class FeatureLayer:
             self.url,
             session=self.session,
             where=wherestr_plus,
-            token=self.token,
             **self.kwargs,
         )
 
     def __repr__(self) -> str:
         """Return a string representation of the Rest object."""
         kwargstr = ", ".join(f"{k}={v}" for k, v in self.kwargs.items())
-        return f"Rest({self.url}, {self.session}, {self.wherestr}, {self.token}, {kwargstr})"
+        return f"Rest({self.url}, {self.session}, {self.wherestr}, {kwargstr})"
 
     def __str__(self) -> str:
         """Return a string representation of the Rest object."""

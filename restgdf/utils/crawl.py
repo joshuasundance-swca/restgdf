@@ -4,10 +4,11 @@ from typing import Optional
 import aiohttp
 
 from restgdf.utils.getinfo import service_metadata, get_metadata
+from restgdf.utils.token import ArcGISTokenSession
 
 
 async def fetch_all_data(
-    session: aiohttp.ClientSession,
+    session: aiohttp.ClientSession | ArcGISTokenSession,
     base_url: str,
     token: Optional[str] = None,
     return_feature_count: bool = False,

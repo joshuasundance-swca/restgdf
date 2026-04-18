@@ -12,13 +12,14 @@ from pandas import concat
 from pyogrio import list_drivers
 
 from restgdf.utils.getinfo import default_data, get_offset_range
+from restgdf.utils.token import ArcGISTokenSession
 
 supported_drivers = list_drivers()
 
 
 async def get_sub_gdf(
     url: str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     offset: int,
     **kwargs,
 ) -> GeoDataFrame:
@@ -40,7 +41,7 @@ async def get_sub_gdf(
 
 async def get_gdf_list(
     url: str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> list[GeoDataFrame]:
     offset_list = await get_offset_range(url, session, **kwargs)
@@ -51,7 +52,7 @@ async def get_gdf_list(
 
 async def chunk_generator(
     url: str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> AsyncGenerator[GeoDataFrame, None]:
     """
@@ -61,18 +62,16 @@ async def chunk_generator(
     """
     offset_list = await get_offset_range(url, session, **kwargs)
     tasks = {
-        asyncio.create_task(
-            get_sub_gdf(url, session, offset, **kwargs)
-        )
+        asyncio.create_task(get_sub_gdf(url, session, offset, **kwargs))
         for offset in offset_list
     }
-    for sub_gdf in asyncio.as_completed(tasks):
-        yield await sub_gdf
+    for sub_gdf_future in asyncio.as_completed(tasks):
+        yield await sub_gdf_future
 
 
 async def row_dict_generator(
     url: str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> AsyncGenerator[dict, None]:
     async for sub_gdf in chunk_generator(url, session, **kwargs):
@@ -97,7 +96,7 @@ async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
 
 async def gdf_by_concat(
     url: str,
-    session: ClientSession,
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> GeoDataFrame:
     gdfs = await get_gdf_list(url, session, **kwargs)

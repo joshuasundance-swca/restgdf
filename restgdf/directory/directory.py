@@ -5,6 +5,7 @@ import aiohttp
 
 from restgdf.utils.getinfo import get_metadata
 from restgdf.utils.crawl import fetch_all_data
+from restgdf.utils.token import ArcGISTokenSession
 
 
 class Directory:
@@ -13,7 +14,7 @@ class Directory:
     def __init__(
         self,
         url: str,
-        session: aiohttp.ClientSession,
+        session: aiohttp.ClientSession | ArcGISTokenSession,
         token: str | None = None,
     ):
         """A class for interacting with ArcGIS Server directories."""
@@ -50,7 +51,7 @@ class Directory:
         return [
             layer
             for service in self.services
-            for layer in service["metadata"]["layers"]
+            for layer in service.get("metadata", {}).get("layers", [])
             if layer["type"] == layer_type
         ]
 
