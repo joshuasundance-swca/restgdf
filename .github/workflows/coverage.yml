@@ -8,6 +8,7 @@ on:
       - "restgdf/**"
       - "tests/**"
       - "requirements.txt"
+  workflow_dispatch:
 
 jobs:
   coverage:

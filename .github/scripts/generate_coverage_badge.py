@@ -76,7 +76,10 @@ def _build_svg(percent_text: str, color: str) -> str:
 
 def main() -> int:
     if len(sys.argv) != 3:
-        print("Usage: generate_coverage_badge.py <coverage.json> <coverage.svg>", file=sys.stderr)
+        print(
+            "Usage: generate_coverage_badge.py <coverage.json> <coverage.svg>",
+            file=sys.stderr,
+        )
         return 2
 
     input_path = Path(sys.argv[1])
