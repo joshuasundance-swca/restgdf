@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 from re import compile, IGNORECASE
-from typing import Optional, Tuple, Union
 
 from aiohttp import ClientSession
 from pandas import DataFrame, concat
@@ -25,14 +24,14 @@ DEFAULTDICT: dict = {
 }
 
 
-def default_headers(headers: Optional[dict] = None) -> dict:
+def default_headers(headers: dict | None = None) -> dict:
     """Return request headers merged with ArcGIS-compatible defaults."""
     return {**DEFAULT_METADATA_HEADERS, **(headers or {})}
 
 
 def default_data(
-    data: Optional[dict] = None,
-    default_dict: Optional[dict] = None,
+    data: dict | None = None,
+    default_dict: dict | None = None,
 ) -> dict:
     """Return a dict with default values for ArcGIS REST API requests."""
     default_dict = default_dict or DEFAULTDICT
@@ -41,7 +40,7 @@ def default_data(
 
 async def get_feature_count(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> int:
     """Get the feature count for a layer."""
@@ -73,8 +72,8 @@ async def get_feature_count(
 
 async def get_metadata(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
-    token: Optional[str] = None,
+    session: ClientSession | ArcGISTokenSession,
+    token: str | None = None,
 ) -> dict:
     """Get the JSON dict for a layer."""
     data = {"f": "json"}
@@ -120,7 +119,7 @@ def get_max_record_count(metadata: dict) -> int:
 
 async def get_offset_range(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> range:
     """Get the offset range for a layer."""
@@ -133,9 +132,9 @@ async def get_offset_range(
 
 async def get_object_ids(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
-) -> Tuple[str, list[int]]:
+) -> tuple[str, list[int]]:
     """Get the object id field name and matching object ids for a layer query."""
     datadict: dict = {"where": "1=1", "returnIdsOnly": True, "f": "json"}
     request_data = kwargs.get("data") or {}
@@ -187,11 +186,11 @@ def getfields_df(layer_metadata: dict) -> DataFrame:
 
 async def getuniquevalues(
     url: str,
-    fields: Union[tuple, str],
-    session: Union[ClientSession, ArcGISTokenSession],
-    sortby: Optional[str] = None,
+    fields: tuple | str,
+    session: ClientSession | ArcGISTokenSession,
+    sortby: str | None = None,
     **kwargs,
-) -> Union[list, DataFrame]:
+) -> list | DataFrame:
     """Get the unique values for a field."""
     datadict: dict = {
         "where": "1=1",
@@ -216,8 +215,8 @@ async def getuniquevalues(
     )
     metadata = await response.json(content_type=None)
 
-    res_l: Optional[list] = None
-    res_df: Optional[DataFrame] = None
+    res_l: list | None = None
+    res_df: DataFrame | None = None
 
     if isinstance(fields, str):
         res_l = [x["attributes"][fields] for x in metadata["features"]]
@@ -240,7 +239,7 @@ async def getuniquevalues(
 async def getvaluecounts(
     url: str,
     field: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> DataFrame:
     """Get the value counts for a field."""
@@ -273,7 +272,7 @@ async def getvaluecounts(
 async def nestedcount(
     url: str,
     fields,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> DataFrame:
     """Get the nested value counts for a field."""
@@ -320,9 +319,9 @@ async def nestedcount(
 
 
 async def service_metadata(
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     service_url: str,
-    token: Optional[str] = None,
+    token: str | None = None,
     return_feature_count: bool = False,
 ) -> dict:
     """Asynchronously retrieve layers for a single service."""

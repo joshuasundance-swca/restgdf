@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import aiohttp
-from typing import Optional, Union
 
 from restgdf.utils.getinfo import get_metadata
 from restgdf.utils.crawl import fetch_all_data
@@ -14,16 +13,16 @@ class Directory:
     def __init__(
         self,
         url: str,
-        session: Union[aiohttp.ClientSession, ArcGISTokenSession],
-        token: Optional[str] = None,
+        session: aiohttp.ClientSession | ArcGISTokenSession,
+        token: str | None = None,
     ):
         """A class for interacting with ArcGIS Server directories."""
         self.url = url
         self.session = session
         self.token = token
-        self.services: Optional[list[dict]] = None
-        self.services_with_feature_count: Optional[list[dict]] = None
-        self.metadata: Optional[dict] = None
+        self.services: list[dict] | None = None
+        self.services_with_feature_count: list[dict] | None = None
+        self.metadata: dict | None = None
 
     async def prep(self):
         self.metadata = await get_metadata(self.url, self.session, self.token)
