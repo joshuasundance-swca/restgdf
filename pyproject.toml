@@ -41,7 +41,6 @@ Homepage = "https://github.com/joshuasundance-swca/restgdf"
 dev = [
     "bumpver",
     "coverage",
-    "coverage-badge",
     "pre-commit",
     "pytest",
     "pytest-asyncio",
