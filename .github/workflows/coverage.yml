@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main"]
     paths:
+      - ".github/workflows/**"
       - "restgdf/**"
       - "tests/**"
       - "requirements.txt"
@@ -17,12 +18,12 @@ jobs:
       pull-requests: write
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
       with:
         token: ${{ secrets.WORKFLOW_GIT_ACCESS_TOKEN }}
         fetch-depth: 0
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: "3.14"
         cache: pip
@@ -38,4 +39,4 @@ jobs:
     - name: Commit changes
       with:
         COMMIT_MESSAGE: "Update coverage"
-      uses: stefanzweifel/git-auto-commit-action@v5
+      uses: stefanzweifel/git-auto-commit-action@v7
