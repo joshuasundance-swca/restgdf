@@ -4,7 +4,7 @@ import asyncio
 from asyncio import gather
 from collections.abc import AsyncGenerator
 from functools import reduce
-from typing import Union
+from typing import Optional, Union
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame, read_file
@@ -26,7 +26,7 @@ from restgdf.utils.utils import where_var_in_list
 supported_drivers = list_drivers()
 
 
-def combine_where_clauses(base_where: str | None, extra_where: str) -> str:
+def combine_where_clauses(base_where: Optional[str], extra_where: str) -> str:
     """Combine where clauses without changing the default all-records predicate."""
     if base_where in (None, "", "1=1"):
         return extra_where
@@ -40,7 +40,7 @@ def chunk_values(values: list[int], chunk_size: int) -> list[list[int]]:
 
 async def get_query_data_batches(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: Union[ClientSession, ArcGISTokenSession],
     **kwargs,
 ) -> list[dict]:
     """Build query payloads for each request needed to read a layer."""
@@ -75,7 +75,7 @@ async def get_query_data_batches(
 
 async def get_sub_gdf(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: Union[ClientSession, ArcGISTokenSession],
     query_data: dict,
     **kwargs,
 ) -> GeoDataFrame:
@@ -101,7 +101,7 @@ async def get_sub_gdf(
 
 async def get_gdf_list(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: Union[ClientSession, ArcGISTokenSession],
     **kwargs,
 ) -> list[GeoDataFrame]:
     query_data_batches = await get_query_data_batches(url, session, **kwargs)
@@ -115,7 +115,7 @@ async def get_gdf_list(
 
 async def chunk_generator(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: Union[ClientSession, ArcGISTokenSession],
     **kwargs,
 ) -> AsyncGenerator[GeoDataFrame, None]:
     """
@@ -134,7 +134,7 @@ async def chunk_generator(
 
 async def row_dict_generator(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: Union[ClientSession, ArcGISTokenSession],
     **kwargs,
 ) -> AsyncGenerator[dict, None]:
     async for sub_gdf in chunk_generator(url, session, **kwargs):
@@ -159,7 +159,7 @@ async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
 
 async def gdf_by_concat(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: Union[ClientSession, ArcGISTokenSession],
     **kwargs,
 ) -> GeoDataFrame:
     gdfs = await get_gdf_list(url, session, **kwargs)

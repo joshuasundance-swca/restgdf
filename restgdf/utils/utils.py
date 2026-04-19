@@ -1,5 +1,6 @@
 import re
 from collections.abc import Iterable
+from typing import Union
 
 ends_with_num_pat = re.compile(r"\d+$")
 
@@ -9,7 +10,7 @@ def ends_with_num(url: str) -> bool:
     return bool(ends_with_num_pat.search(url))
 
 
-def where_var_in_list(var: str, vals: Iterable[str | int | float]) -> str:
+def where_var_in_list(var: str, vals: Iterable[Union[str, int, float]]) -> str:
     """Return a where clause for a variable in a list of values."""
     vals_str = ", ".join(
         f"'{val}'" if isinstance(val, str) else str(val) for val in vals
