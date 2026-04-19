@@ -45,6 +45,7 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-asyncio",
+    "setuptools>=61.0.0",
 ]
 
 doc = [

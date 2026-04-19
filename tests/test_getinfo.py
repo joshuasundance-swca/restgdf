@@ -56,6 +56,23 @@ def mock_session_post(*args, **kwargs):
     return future  # return the future
 
 
+def mock_session_get(*args, **kwargs):
+    class MockResponse:
+        def __init__(self, json_data):
+            self.json_data = json_data
+            self.content_type = "application/json"
+
+        async def json(
+            self,
+            content_type: str = "application/json",
+        ):
+            return self.json_data
+
+    future = asyncio.Future()
+    future.set_result(MockResponse(TESTJSON))
+    return future
+
+
 def mock_uniquevalues_post(*args, **kwargs):
     class MockResponse:
         def __init__(self, json_data):
@@ -82,8 +99,8 @@ def mock_uniquevalues_post(*args, **kwargs):
 
 @pytest.mark.asyncio
 @patch(
-    "restgdf.utils.getinfo.ClientSession.post",
-    side_effect=mock_session_post,
+    "restgdf.utils.getinfo.ClientSession.get",
+    side_effect=mock_session_get,
 )
 async def test_get_json_dict(mock_response):
     async with ClientSession() as s:
@@ -113,10 +130,14 @@ def test_get_max_record_count(mock_response):
 
 @pytest.mark.asyncio
 @patch(
+    "restgdf.utils.getinfo.ClientSession.get",
+    side_effect=mock_session_get,
+)
+@patch(
     "restgdf.utils.getinfo.ClientSession.post",
     side_effect=mock_session_post,
 )
-async def test_get_offset_range(mock_response):
+async def test_get_offset_range(mock_post, mock_get):
     async with ClientSession() as s:
         assert await get_offset_range("test", session=s) == range(
             0,

@@ -11,26 +11,86 @@ from geopandas import GeoDataFrame, read_file
 from pandas import concat
 from pyogrio import list_drivers
 
-from restgdf.utils.getinfo import default_data, get_offset_range
+from restgdf.utils.getinfo import (
+    default_data,
+    default_headers,
+    get_feature_count,
+    get_max_record_count,
+    get_metadata,
+    get_object_ids,
+    supports_pagination,
+)
 from restgdf.utils.token import ArcGISTokenSession
+from restgdf.utils.utils import where_var_in_list
 
 supported_drivers = list_drivers()
+
+
+def combine_where_clauses(base_where: str | None, extra_where: str) -> str:
+    """Combine where clauses without changing the default all-records predicate."""
+    if base_where in (None, "", "1=1"):
+        return extra_where
+    return f"({base_where}) AND ({extra_where})"
+
+
+def chunk_values(values: list[int], chunk_size: int) -> list[list[int]]:
+    """Split values into evenly-sized chunks."""
+    return [values[i : i + chunk_size] for i in range(0, len(values), chunk_size)]
+
+
+async def get_query_data_batches(
+    url: str,
+    session: ClientSession | ArcGISTokenSession,
+    **kwargs,
+) -> list[dict]:
+    """Build query payloads for each request needed to read a layer."""
+    request_data = dict(kwargs.get("data") or {})
+    feature_count = await get_feature_count(url, session, **kwargs)
+    token = request_data.get("token")
+    metadata = await get_metadata(url, session, token=token)
+    max_record_count = get_max_record_count(metadata)
+
+    if feature_count <= max_record_count:
+        return [request_data]
+
+    if supports_pagination(metadata):
+        return [
+            {**request_data, "resultOffset": offset}
+            for offset in range(0, feature_count, max_record_count)
+        ]
+
+    object_id_field_name, object_ids = await get_object_ids(url, session, **kwargs)
+    base_where = request_data.get("where")
+    return [
+        {
+            **request_data,
+            "where": combine_where_clauses(
+                base_where,
+                where_var_in_list(object_id_field_name, object_id_chunk),
+            ),
+        }
+        for object_id_chunk in chunk_values(object_ids, max_record_count)
+    ]
 
 
 async def get_sub_gdf(
     url: str,
     session: ClientSession | ArcGISTokenSession,
-    offset: int,
+    query_data: dict,
     **kwargs,
 ) -> GeoDataFrame:
-    data = kwargs.pop("data", None) or {}
+    data = dict(query_data)
     gdfdriver = "ESRIJSON" if "ESRIJSON" in supported_drivers else "GeoJSON"
     if gdfdriver == "GeoJSON":
         data["f"] = "GeoJSON"
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
 
-    data["resultOffset"] = offset
-    response = await session.post(f"{url}/query", data=data, **kwargs)
+    response = await session.post(
+        f"{url}/query",
+        data=data,
+        headers=default_headers(kwargs.pop("headers", None)),
+        **kwargs,
+    )
     sub_gdf = read_file(
         await response.text(),
         # driver=gdfdriver,  # this line raises a warning when using pyogrio w/ ESRIJSON
@@ -44,8 +104,11 @@ async def get_gdf_list(
     session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> list[GeoDataFrame]:
-    offset_list = await get_offset_range(url, session, **kwargs)
-    tasks = [get_sub_gdf(url, session, offset, **kwargs) for offset in offset_list]
+    query_data_batches = await get_query_data_batches(url, session, **kwargs)
+    tasks = [
+        get_sub_gdf(url, session, query_data=query_data, **kwargs)
+        for query_data in query_data_batches
+    ]
     gdf_list = await gather(*tasks)
     return gdf_list
 
@@ -60,10 +123,10 @@ async def chunk_generator(
     This function retrieves GeoDataFrames in chunks based on the offset range
     and yields each GeoDataFrame as it is retrieved.
     """
-    offset_list = await get_offset_range(url, session, **kwargs)
+    query_data_batches = await get_query_data_batches(url, session, **kwargs)
     tasks = {
-        asyncio.create_task(get_sub_gdf(url, session, offset, **kwargs))
-        for offset in offset_list
+        asyncio.create_task(get_sub_gdf(url, session, query_data=query_data, **kwargs))
+        for query_data in query_data_batches
     }
     for sub_gdf_future in asyncio.as_completed(tasks):
         yield await sub_gdf_future
