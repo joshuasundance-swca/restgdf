@@ -10,6 +10,10 @@ from pandas import DataFrame, concat
 from restgdf.utils.token import ArcGISTokenSession
 
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
+DEFAULT_METADATA_HEADERS = {
+    "Accept": "application/json,text/plain,*/*",
+    "User-Agent": "Mozilla/5.0",
+}
 
 DEFAULTDICT: dict = {
     "where": "1=1",
@@ -18,6 +22,11 @@ DEFAULTDICT: dict = {
     "returnCountOnly": False,
     "f": "json",
 }
+
+
+def default_headers(headers: dict | None = None) -> dict:
+    """Return request headers merged with ArcGIS-compatible defaults."""
+    return {**DEFAULT_METADATA_HEADERS, **(headers or {})}
 
 
 def default_data(
@@ -42,7 +51,12 @@ async def get_feature_count(
         if "token" in request_data:
             datadict["token"] = request_data["token"]
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
-    response = await session.post(f"{url}/query", data=datadict, **xkwargs)
+    response = await session.post(
+        f"{url}/query",
+        data=datadict,
+        headers=default_headers(xkwargs.pop("headers", None)),
+        **xkwargs,
+    )
     # the line above provides keyword arguments other than data dict
     # because data dict is manipulated for this function
     # (this allows the use of token authentication, for example)
@@ -65,8 +79,30 @@ async def get_metadata(
     data = {"f": "json"}
     if token is not None:
         data["token"] = token
-    response = await session.post(url, data=data)
+    response = await session.get(url, params=data, headers=default_headers())
     return await response.json(content_type=None)
+
+
+def supports_pagination(metadata: dict) -> bool:
+    """Return whether the layer supports resultOffset/resultRecordCount pagination."""
+    advanced_query_capabilities = metadata.get("advancedQueryCapabilities") or {}
+    if "supportsPagination" in advanced_query_capabilities:
+        return advanced_query_capabilities["supportsPagination"]
+    if "supportsPagination" in metadata:
+        return metadata["supportsPagination"]
+    return True
+
+
+def get_object_id_field(metadata: dict) -> str:
+    """Get the object id field name for a layer."""
+    oid_fields = [
+        field["name"]
+        for field in metadata.get("fields", [])
+        if field.get("type") == "esriFieldTypeOID"
+    ]
+    if len(oid_fields) != 1:
+        raise FIELDDOESNOTEXIST
+    return oid_fields[0]
 
 
 def get_max_record_count(metadata: dict) -> int:
@@ -92,6 +128,29 @@ async def get_offset_range(
     metadata = await get_metadata(url, session, token=token)
     max_record_count = get_max_record_count(metadata)
     return range(0, feature_count, max_record_count)
+
+
+async def get_object_ids(
+    url: str,
+    session: ClientSession | ArcGISTokenSession,
+    **kwargs,
+) -> tuple[str, list[int]]:
+    """Get the object id field name and matching object ids for a layer query."""
+    datadict: dict = {"where": "1=1", "returnIdsOnly": True, "f": "json"}
+    request_data = kwargs.get("data") or {}
+    if request_data:
+        datadict["where"] = request_data.get("where", "1=1")
+        if "token" in request_data:
+            datadict["token"] = request_data["token"]
+    xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
+    response = await session.post(
+        f"{url}/query",
+        data=datadict,
+        headers=default_headers(xkwargs.pop("headers", None)),
+        **xkwargs,
+    )
+    response_json = await response.json(content_type=None)
+    return response_json["objectIdFieldName"], response_json["objectIds"]
 
 
 def get_name(metadata: dict) -> str:
@@ -148,7 +207,12 @@ async def getuniquevalues(
 
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
 
-    response = await session.post(f"{url}/query", data=datadict, **xkwargs)
+    response = await session.post(
+        f"{url}/query",
+        data=datadict,
+        headers=default_headers(xkwargs.pop("headers", None)),
+        **xkwargs,
+    )
     metadata = await response.json(content_type=None)
 
     res_l: list | None = None
@@ -190,7 +254,12 @@ async def getvaluecounts(
         "groupByFieldsForStatistics": field,
         **data,
     }
-    response = await session.post(f"{url}/query", data=data, **kwargs)
+    response = await session.post(
+        f"{url}/query",
+        data=data,
+        headers=default_headers(kwargs.pop("headers", None)),
+        **kwargs,
+    )
     metadata = await response.json(content_type=None)
     features = metadata["features"]
     cc = concat(
@@ -227,7 +296,12 @@ async def nestedcount(
         "groupByFieldsForStatistics": ",".join(fields),
         **data,
     }
-    response = await session.post(f"{url}/query", data=data, **kwargs)
+    response = await session.post(
+        f"{url}/query",
+        data=data,
+        headers=default_headers(kwargs.pop("headers", None)),
+        **kwargs,
+    )
     metadata = await response.json(content_type=None)
     features = metadata["features"]
     cc = concat(

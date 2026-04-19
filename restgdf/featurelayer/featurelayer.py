@@ -15,6 +15,7 @@ from restgdf.utils.getinfo import (
     get_feature_count,
     get_metadata,
     get_name,
+    get_object_id_field,
     getfields,
     getfields_df,
     getuniquevalues,
@@ -68,6 +69,7 @@ class FeatureLayer:
         self.name: str
         self.fields: tuple[str, ...]
         self.fieldtypes: DataFrame
+        self.object_id_field: str
         self.count: int
 
     async def prep(self):
@@ -85,6 +87,7 @@ class FeatureLayer:
         self.name = get_name(self.metadata)
         self.fields = getfields(self.metadata)
         self.fieldtypes = getfields_df(self.metadata)
+        self.object_id_field = get_object_id_field(self.metadata)
         self.count = await get_feature_count(self.url, self.session, **self.kwargs)
 
     @classmethod
@@ -96,21 +99,32 @@ class FeatureLayer:
 
     async def getoids(self) -> list[int]:
         """Get the object ids for the Rest object."""
-        return await self.getuniquevalues("OBJECTID")
+        object_id_field = getattr(self, "object_id_field", "OBJECTID")
+        return await self.getuniquevalues(object_id_field)
 
     async def samplegdf(self, n: int = 10) -> GeoDataFrame:
         """Get n random features as a GeoDataFrame."""
-        oids = await getuniquevalues(self.url, "OBJECTID", self.session, **self.kwargs)
+        oids = await getuniquevalues(
+            self.url,
+            self.object_id_field,
+            self.session,
+            **self.kwargs,
+        )
         sample_oids = random.sample(oids, min(n, len(oids)))
-        wherestr = where_var_in_list("OBJECTID", sample_oids)
+        wherestr = where_var_in_list(self.object_id_field, sample_oids)
         new_rest = await self.where(wherestr)
         return await new_rest.getgdf()
 
     async def headgdf(self, n: int = 10) -> GeoDataFrame:
         """Get the n first features as a GeoDataFrame."""
-        oids = await getuniquevalues(self.url, "OBJECTID", self.session, **self.kwargs)
+        oids = await getuniquevalues(
+            self.url,
+            self.object_id_field,
+            self.session,
+            **self.kwargs,
+        )
         head_oids = oids[:n]
-        wherestr = where_var_in_list("OBJECTID", head_oids)
+        wherestr = where_var_in_list(self.object_id_field, head_oids)
         new_rest = await self.where(wherestr)
         return await new_rest.getgdf()
 
