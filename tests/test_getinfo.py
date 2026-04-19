@@ -17,7 +17,6 @@ from restgdf.utils.getinfo import (
     get_offset_range,
     getfields,
     getfields_df,
-    getuniquevalues,
     getvaluecounts,
 )
 
