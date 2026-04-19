@@ -59,7 +59,10 @@ class FeatureLayer:
             self.datadict["token"] = token
         self.kwargs["data"] = self.datadict
 
-        self.uniquevalues: dict[tuple[str | tuple, str | None], list | DataFrame] = {}
+        self.uniquevalues: dict[
+            tuple[str | tuple, str | None],
+            list | DataFrame,
+        ] = {}
         self.valuecounts: dict = {}
         self.nestedcount: dict = {}
 

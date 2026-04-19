@@ -1,4 +1,5 @@
 """A package for getting GeoDataFrames from ArcGIS FeatureLayers."""
+
 from __future__ import annotations
 
 import asyncio
