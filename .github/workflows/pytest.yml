@@ -11,29 +11,61 @@ on:
       - ".github/workflows/**"
       - "restgdf/**"
       - "tests/**"
-      - "requirements.txt"
+      - "pyproject.toml"
+      - ".pre-commit-config.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  CI:
+  lint:
+    name: pre-commit
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v6
-      with:
-        token: ${{ secrets.WORKFLOW_GIT_ACCESS_TOKEN }}
-        fetch-depth: 0
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: "3.14"
-        cache: pip
-    - name: Install Python libraries
-      run: |
-        pip install --user -r requirements.txt
-    - name: "Run tests"
-      run: |
-        coverage run
-        coverage report -m --format=markdown
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - uses: pre-commit/action@v3.0.1
+
+  test:
+    name: pytest (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package with dev extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+      - name: Run tests
+        run: python -m pytest -q
+
+  ci:
+    name: ci
+    if: always()
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate job results
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }}"
+            exit 1
+          fi
+          echo "All required jobs succeeded."
