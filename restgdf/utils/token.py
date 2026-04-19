@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 from dataclasses import dataclass
+from typing import Optional, Union
 
 import aiohttp
 import requests
@@ -38,11 +39,11 @@ class ArcGISTokenSession:
     """
 
     session: aiohttp.ClientSession
-    credentials: AGOLUserPass | None = None
+    credentials: Optional[AGOLUserPass] = None
     token_url: str = "https://www.arcgis.com/sharing/rest/generateToken"
     token_refresh_threshold: int = 60
-    token: str | None = None
-    expires: int | float | None = None
+    token: Optional[str] = None
+    expires: Optional[Union[int, float]] = None
 
     @property
     def token_request_payload(self) -> dict:
@@ -64,13 +65,13 @@ class ArcGISTokenSession:
             headers["Authorization"] = f"Bearer {self.token}"
         return headers
 
-    def update_headers(self, headers: dict | None = None) -> dict:
+    def update_headers(self, headers: Optional[dict] = None) -> dict:
         """Return headers merged with the active token."""
         request_headers = dict(headers or {})
         request_headers.update(self.auth_headers)
         return request_headers
 
-    def update_dict(self, input_dict: dict | None = None) -> dict:
+    def update_dict(self, input_dict: Optional[dict] = None) -> dict:
         """Return a request payload/query dict merged with the active token."""
         output_dict = dict(input_dict or {})
         if self.token and "token" not in output_dict:
@@ -111,8 +112,8 @@ class ArcGISTokenSession:
     async def get(
         self,
         url: str,
-        params: dict | None = None,
-        headers: dict | None = None,
+        params: Optional[dict] = None,
+        headers: Optional[dict] = None,
         **kwargs,
     ) -> aiohttp.ClientResponse:
         """Make a GET request to the specified URL with the token."""
@@ -135,8 +136,8 @@ class ArcGISTokenSession:
     async def post(
         self,
         url: str,
-        data: dict | None = None,
-        headers: dict | None = None,
+        data: Optional[dict] = None,
+        headers: Optional[dict] = None,
         **kwargs,
     ) -> aiohttp.ClientResponse:
         """Make a POST request to the specified URL with the token."""

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import AsyncIterable
+from typing import Dict, Optional, Tuple, Union
 
 from aiohttp import ClientSession
 from geopandas import GeoDataFrame
@@ -33,9 +34,9 @@ class FeatureLayer:
     def __init__(
         self,
         url: str,
-        session: ClientSession | ArcGISTokenSession,
+        session: Union[ClientSession, ArcGISTokenSession],
         where: str = "1=1",
-        token: str | None = None,
+        token: Optional[str] = None,
         **kwargs,
     ):
         """A class for interacting with ArcGIS FeatureLayers."""
@@ -59,11 +60,14 @@ class FeatureLayer:
             self.datadict["token"] = token
         self.kwargs["data"] = self.datadict
 
-        self.uniquevalues: dict[tuple[str | tuple, str | None], list | DataFrame] = {}
+        self.uniquevalues: Dict[
+            Tuple[Union[str, tuple], Optional[str]],
+            Union[list, DataFrame],
+        ] = {}
         self.valuecounts: dict = {}
         self.nestedcount: dict = {}
 
-        self.gdf: GeoDataFrame | None = None
+        self.gdf: Optional[GeoDataFrame] = None
 
         self.metadata: dict
         self.name: str
@@ -151,9 +155,9 @@ class FeatureLayer:
 
     async def getuniquevalues(
         self,
-        fields: tuple | str,
-        sortby: str | None = None,
-    ) -> list | DataFrame:
+        fields: Union[tuple, str],
+        sortby: Optional[str] = None,
+    ) -> Union[list, DataFrame]:
         """Get the unique values for a field."""
         cache_key = (fields, sortby)
         if cache_key not in self.uniquevalues:

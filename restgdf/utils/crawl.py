@@ -1,5 +1,5 @@
 import asyncio
-from typing import Optional
+from typing import Optional, Union
 
 import aiohttp
 
@@ -8,7 +8,7 @@ from restgdf.utils.token import ArcGISTokenSession
 
 
 async def fetch_all_data(
-    session: aiohttp.ClientSession | ArcGISTokenSession,
+    session: Union[aiohttp.ClientSession, ArcGISTokenSession],
     base_url: str,
     token: Optional[str] = None,
     return_feature_count: bool = False,
