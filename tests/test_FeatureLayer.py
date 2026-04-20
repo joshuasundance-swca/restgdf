@@ -171,14 +171,14 @@ async def test_getoids_uses_objectid_field():
     )
     layer.fields = ["OBJECTID"]
 
-    async def fake_getuniquevalues(fields, sortby=None):
+    async def fake_get_unique_values(fields, sortby=None):
         assert fields == "OBJECTID"
         assert sortby is None
         return [1, 2, 3]
 
-    layer.getuniquevalues = fake_getuniquevalues
+    layer.get_unique_values = fake_get_unique_values
 
-    assert await layer.getoids() == [1, 2, 3]
+    assert await layer.get_oids() == [1, 2, 3]
 
 
 @pytest.mark.asyncio
@@ -235,10 +235,10 @@ async def test_featurelayer_samplegdf_uses_random_subset():
     layer.fields = ("OBJECTID",)
 
     sampled_layer = AsyncMock()
-    sampled_layer.getgdf = AsyncMock(return_value="sampled-gdf")
+    sampled_layer.get_gdf = AsyncMock(return_value="sampled-gdf")
 
     with patch(
-        "restgdf.featurelayer.featurelayer.getuniquevalues",
+        "restgdf.featurelayer.featurelayer.get_unique_values",
         new=AsyncMock(return_value=[1, 2, 3]),
     ), patch(
         "restgdf.featurelayer.featurelayer.random.sample",
@@ -248,7 +248,7 @@ async def test_featurelayer_samplegdf_uses_random_subset():
         "where",
         new=AsyncMock(return_value=sampled_layer),
     ) as mock_where:
-        result = await layer.samplegdf(10)
+        result = await layer.sample_gdf(10)
 
     assert result == "sampled-gdf"
     mock_sample.assert_called_once_with([1, 2, 3], 3)
@@ -265,17 +265,17 @@ async def test_featurelayer_headgdf_uses_first_ids():
     layer.fields = ("OBJECTID",)
 
     head_layer = AsyncMock()
-    head_layer.getgdf = AsyncMock(return_value="head-gdf")
+    head_layer.get_gdf = AsyncMock(return_value="head-gdf")
 
     with patch(
-        "restgdf.featurelayer.featurelayer.getuniquevalues",
+        "restgdf.featurelayer.featurelayer.get_unique_values",
         new=AsyncMock(return_value=[1, 2, 3, 4]),
     ), patch.object(
         layer,
         "where",
         new=AsyncMock(return_value=head_layer),
     ) as mock_where:
-        result = await layer.headgdf(2)
+        result = await layer.head_gdf(2)
 
     assert result == "head-gdf"
     mock_where.assert_awaited_once_with(where_var_in_list("OBJECTID", [1, 2]))
@@ -292,8 +292,8 @@ async def test_featurelayer_getgdf_caches_result(sample_feature_gdf):
         "restgdf.featurelayer.featurelayer.get_gdf",
         new=AsyncMock(return_value=sample_feature_gdf),
     ) as mock_get_gdf:
-        first = await layer.getgdf()
-        second = await layer.getgdf()
+        first = await layer.get_gdf()
+        second = await layer.get_gdf()
 
     assert first.equals(sample_feature_gdf)
     assert second.equals(sample_feature_gdf)
@@ -334,19 +334,19 @@ async def test_getuniquevalues_cache_includes_sortby():
     )
     layer.fields = ("CITY", "STATE")
 
-    async def fake_getuniquevalues(url, fields, session, sortby=None, **kwargs):
+    async def fake_get_unique_values(url, fields, session, sortby=None, **kwargs):
         return [sortby]
 
     with patch(
-        "restgdf.featurelayer.featurelayer.getuniquevalues",
-        side_effect=fake_getuniquevalues,
-    ) as mock_getuniquevalues:
-        first = await layer.getuniquevalues(("CITY", "STATE"), sortby="CITY")
-        second = await layer.getuniquevalues(("CITY", "STATE"), sortby="STATE")
+        "restgdf.featurelayer.featurelayer.get_unique_values",
+        side_effect=fake_get_unique_values,
+    ) as mock_get_unique_values:
+        first = await layer.get_unique_values(("CITY", "STATE"), sortby="CITY")
+        second = await layer.get_unique_values(("CITY", "STATE"), sortby="STATE")
 
     assert first == ["CITY"]
     assert second == ["STATE"]
-    assert mock_getuniquevalues.await_count == 2
+    assert mock_get_unique_values.await_count == 2
 
 
 @pytest.mark.asyncio
@@ -358,10 +358,10 @@ async def test_featurelayer_getuniquevalues_rejects_unknown_fields():
     layer.fields = ("CITY", "STATE")
 
     with pytest.raises(IndexError):
-        await layer.getuniquevalues("ZIP")
+        await layer.get_unique_values("ZIP")
 
     with pytest.raises(IndexError):
-        await layer.getuniquevalues(("CITY", "ZIP"))
+        await layer.get_unique_values(("CITY", "ZIP"))
 
 
 @pytest.mark.asyncio
@@ -373,17 +373,17 @@ async def test_featurelayer_getvaluecounts_caches_and_validates_fields():
     layer.fields = ("CITY", "STATE")
 
     with patch(
-        "restgdf.featurelayer.featurelayer.getvaluecounts",
+        "restgdf.featurelayer.featurelayer.get_value_counts",
         new=AsyncMock(return_value="counts"),
-    ) as mock_getvaluecounts:
-        first = await layer.getvaluecounts("CITY")
-        second = await layer.getvaluecounts("CITY")
+    ) as mock_get_value_counts:
+        first = await layer.get_value_counts("CITY")
+        second = await layer.get_value_counts("CITY")
 
     assert first == second == "counts"
-    mock_getvaluecounts.assert_awaited_once()
+    mock_get_value_counts.assert_awaited_once()
 
     with pytest.raises(IndexError):
-        await layer.getvaluecounts("ZIP")
+        await layer.get_value_counts("ZIP")
 
 
 @pytest.mark.asyncio
@@ -395,17 +395,17 @@ async def test_featurelayer_getnestedcount_caches_and_validates_fields():
     layer.fields = ("CITY", "STATE")
 
     with patch(
-        "restgdf.featurelayer.featurelayer.nestedcount",
+        "restgdf.featurelayer.featurelayer.nested_count",
         new=AsyncMock(return_value="nested"),
-    ) as mock_nestedcount:
-        first = await layer.getnestedcount(("CITY", "STATE"))
-        second = await layer.getnestedcount(("CITY", "STATE"))
+    ) as mock_nested_count:
+        first = await layer.get_nested_count(("CITY", "STATE"))
+        second = await layer.get_nested_count(("CITY", "STATE"))
 
     assert first == second == "nested"
-    mock_nestedcount.assert_awaited_once()
+    mock_nested_count.assert_awaited_once()
 
     with pytest.raises(IndexError):
-        await layer.getnestedcount(("CITY", "ZIP"))
+        await layer.get_nested_count(("CITY", "ZIP"))
 
 
 @pytest.mark.asyncio
