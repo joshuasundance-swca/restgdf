@@ -192,7 +192,10 @@ async def test_featurelayer_prep_populates_metadata_fields(feature_layer_metadat
 
     await layer.prep()
 
-    assert layer.metadata == feature_layer_metadata
+    assert (
+        layer.metadata.model_dump(by_alias=True, exclude_none=True)
+        == feature_layer_metadata
+    )
     assert layer.name == "Test Layer"
     assert layer.fields == ["OBJECTID", "CITY", "STATUS"]
     assert layer.object_id_field == "OBJECTID"
@@ -612,6 +615,6 @@ async def test_featurelayer(client_session):
     with raises(IndexError):
         assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP"))) > 900
     assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP_CODE"))) > 900
-    assert ziprest.count > ziprest.metadata["maxRecordCount"]
-    assert len(await ziprest.getgdf()) > ziprest.metadata["maxRecordCount"]
+    assert ziprest.count > ziprest.metadata.max_record_count
+    assert len(await ziprest.getgdf()) > ziprest.metadata.max_record_count
     assert ziprest.kwargs == testkwargs  # make sure nothing is altering kwargs

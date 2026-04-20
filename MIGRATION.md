@@ -1,0 +1,370 @@
+# Migrating from restgdf 1.x to 2.0
+
+restgdf 2.0 replaces the dict / `TypedDict` public surface with
+[pydantic 2.13](https://docs.pydantic.dev/) `BaseModel` classes. This means
+every response and config object you consumed in 1.x is now a typed model:
+attribute access instead of dict indexing, runtime validation instead of
+silent `KeyError`, and structured drift logging instead of opaque failures.
+
+This guide lists every breaking change, the migration aids shipped with 2.0,
+and the new capabilities you can opt into.
+
+## Contents
+
+- [Why 2.0](#why-20)
+- [Breaking changes](#breaking-changes)
+- [Migration aids](#migration-aids)
+- [New capabilities](#new-capabilities)
+- [Environment variables](#environment-variables)
+- [Drift logger](#drift-logger)
+- [`Settings` usage](#settings-usage)
+- [`SecretStr` credentials](#secretstr-credentials)
+- [Troubleshooting](#troubleshooting)
+
+## Why 2.0
+
+Real-world ArcGIS REST responses vary between vendor versions, deployments,
+and service types. In 1.x these variances surfaced as `KeyError` /
+`IndexError` deep in call stacks, or silently passed through as partially
+valid dicts. 2.0 fixes that:
+
+- **Pydantic-validated envelopes** catch malformed responses at the
+  boundary and raise a typed `RestgdfResponseError` that carries the raw
+  payload and request context.
+- **Permissive models** (`LayerMetadata`, `ServiceInfo`, `FieldSpec`, crawl
+  models) accept unknown extra keys and tolerate missing optional fields;
+  drift is reported through a dedicated `restgdf.schema_drift` logger
+  instead of crashing.
+- **Strict models** (`CountResponse`, `ObjectIdsResponse`, `TokenResponse`,
+  `ErrorResponse`) keep their fail-fast contract on operation-critical
+  payloads.
+- **Typed credentials** — passwords are `pydantic.SecretStr`, redacted
+  from `repr()` / logs.
+
+## Breaking changes
+
+Every change below is a public-API shape change from 1.x.
+
+| What changed | 1.x (dict) | 2.0 (model) |
+|---|---|---|
+| `FeatureLayer.metadata` | `dict` | `LayerMetadata` |
+| `Directory.metadata` | `dict` | `LayerMetadata` |
+| `Directory.services` | `list[dict]` | `list[CrawlServiceEntry]` |
+| `Directory.services_with_feature_count` | `list[dict]` | `list[CrawlServiceEntry]` |
+| `Directory.crawl(...)` return value | `list[dict]` | `list[CrawlServiceEntry]` |
+| `Directory.report` | *(did not exist)* | `Optional[CrawlReport]` |
+| `get_metadata(...)` | returns `dict` | returns `LayerMetadata` |
+| `get_feature_count(...)` | returns `int` (unvalidated) | returns `int` (validated via `CountResponse`) |
+| `get_object_ids(...)` | returns `tuple[str, list[int]]` (unvalidated) | returns `tuple[str, list[int]]` (validated via `ObjectIdsResponse`) |
+| `safe_crawl(...)` | returns `dict` | returns `CrawlReport` |
+| `fetch_all_data(...)` | returns raw `dict` (short-circuits on error) | unchanged signature, but internally validates; see `safe_crawl` for the typed report |
+| `AGOLUserPass.password` | plain `str` | `pydantic.SecretStr` (call `.get_secret_value()` at the HTTP boundary) |
+| `ArcGISTokenSession` config | ad-hoc dataclass | backed by `TokenSessionConfig` (pydantic) |
+| `restgdf._types.*` | `TypedDict` aliases | re-exported pydantic models, emit `DeprecationWarning` on import |
+
+### Code rewrites
+
+Dict indexing → attribute access. The examples below are representative,
+not exhaustive.
+
+**`FeatureLayer.metadata`**
+```python
+# 1.x
+layer_name = fl.metadata["name"]
+fields = fl.metadata["fields"]
+max_record_count = fl.metadata["maxRecordCount"]
+
+# 2.0
+layer_name = fl.metadata.name
+fields = fl.metadata.fields                 # list[FieldSpec] | None
+max_record_count = fl.metadata.max_record_count
+```
+
+**`Directory.services`**
+```python
+# 1.x
+for svc in directory.services:
+    print(svc["name"], svc["url"])
+
+# 2.0
+for svc in directory.services:              # list[CrawlServiceEntry]
+    print(svc.name, svc.url)
+    if svc.metadata is not None:            # LayerMetadata | None
+        print(svc.metadata.max_record_count)
+```
+
+**`AGOLUserPass`**
+```python
+# 1.x
+creds = AGOLUserPass(username="alice", password="hunter2")
+token_form["password"] = creds.password
+
+# 2.0
+creds = AGOLUserPass(username="alice", password="hunter2")
+token_form["password"] = creds.password.get_secret_value()
+```
+
+**`get_metadata`**
+```python
+# 1.x
+md = await get_metadata(url, session)
+service_type = md.get("type")
+
+# 2.0
+md = await get_metadata(url, session)       # LayerMetadata
+service_type = md.type                      # str | None
+```
+
+### ArcGIS camelCase round-trip
+
+Models accept either camelCase (native ArcGIS) or snake_case input via
+`pydantic.AliasChoices`. To emit camelCase for an ArcGIS round-trip, use
+`model.model_dump(by_alias=True)`. To get Python-native snake_case keys,
+use `model.model_dump()` or the `restgdf.compat.as_dict` helper.
+
+## Migration aids
+
+### `restgdf.compat.as_dict(obj)`
+
+Wrap any returned model to get a plain Python dict. Non-model values
+(plain dicts, `None`, primitives) pass through unchanged, so you can
+sprinkle it through transitional code without type checks:
+
+```python
+from restgdf.compat import as_dict
+
+for entry in directory.services:
+    row = as_dict(entry)                    # dict whether model or legacy
+    save(row["name"], row.get("url"))
+```
+
+`as_dict` uses `model_dump(mode="python", by_alias=False)` — snake_case
+keys, nested models recursively converted.
+
+### `restgdf.compat.as_json_dict(obj)`
+
+Like `as_dict`, but `mode="json"` so every value is JSON-serializable
+(`SecretStr` → `"**********"` placeholder, `datetime` → ISO string).
+Handy for structured logging:
+
+```python
+from restgdf.compat import as_json_dict
+
+logger.info("crawl_result", extra={"payload": as_json_dict(report)})
+```
+
+### Deprecated `restgdf._types` aliases
+
+`from restgdf._types import LayerMetadata` still works; it now returns
+the pydantic class and emits a `DeprecationWarning`:
+
+```python
+import warnings
+
+warnings.filterwarnings("default", category=DeprecationWarning)
+from restgdf._types import LayerMetadata   # DeprecationWarning
+```
+
+Switch the import to `from restgdf import LayerMetadata`. The shim will
+be removed in 3.x.
+
+## New capabilities
+
+### Typed response errors
+
+Strict-tier envelopes raise `RestgdfResponseError` on validation failure,
+carrying the raw payload and context:
+
+```python
+from restgdf import RestgdfResponseError, get_feature_count
+
+try:
+    count = await get_feature_count(url, session)
+except RestgdfResponseError as exc:
+    logger.error(
+        "ArcGIS returned malformed count envelope",
+        extra={
+            "model": exc.model_name,       # "CountResponse"
+            "context": exc.context,        # the request URL
+            "raw": exc.raw,                # the decoded body
+        },
+    )
+    raise
+```
+
+### Schema-drift observability
+
+Permissive models never raise on vendor variance; instead they log one
+record per `(model_name, path, kind, value_type)` tuple through
+`restgdf.schema_drift`. The logger is installed with a `NullHandler` by
+default — opt in by attaching a handler (see below).
+
+### Pydantic round-trip
+
+You can validate, inspect, and re-emit any response payload:
+
+```python
+from restgdf import LayerMetadata
+
+md = LayerMetadata.model_validate(raw_dict)
+native = md.model_dump(by_alias=True)   # camelCase, ArcGIS-compatible
+python = md.model_dump()                # snake_case, Python-native
+```
+
+### Centralized `Settings` / `get_settings()`
+
+See the [`Settings` usage](#settings-usage) section below.
+
+### `SecretStr` on credential passwords
+
+See the [`SecretStr` credentials](#secretstr-credentials) section below.
+
+## Environment variables
+
+All settings are overridable via `RESTGDF_*` env vars. Unset vars use
+the documented default.
+
+| Variable | Field | Type | Default |
+|---|---|---|---|
+| `RESTGDF_CHUNK_SIZE` | `chunk_size` | int (>0) | `100` |
+| `RESTGDF_TIMEOUT_SECONDS` | `timeout_seconds` | float (>0) | `30.0` |
+| `RESTGDF_USER_AGENT` | `user_agent` | str (non-empty) | `"restgdf/<version>"` |
+| `RESTGDF_LOG_LEVEL` | `log_level` | one of `CRITICAL`/`ERROR`/`WARNING`/`INFO`/`DEBUG`/`NOTSET` | `"WARNING"` |
+| `RESTGDF_TOKEN_URL` | `token_url` | `http(s)://` URL | `https://www.arcgis.com/sharing/rest/generateToken` |
+| `RESTGDF_REFRESH_THRESHOLD` | `refresh_threshold_seconds` | int (≥0) | `60` |
+| `RESTGDF_DEFAULT_HEADERS_JSON` | `default_headers_json` | JSON dict string | `None` |
+
+Malformed values raise `RestgdfResponseError` at first access.
+
+## Drift logger
+
+`restgdf.schema_drift` is the single logger name. It is silent by
+default — install a handler to see what ArcGIS deployments are sending
+you:
+
+```python
+import logging
+
+drift_logger = logging.getLogger("restgdf.schema_drift")
+drift_logger.setLevel(logging.DEBUG)
+drift_logger.addHandler(logging.StreamHandler())
+
+# Now any permissive model drift is visible:
+# WARNING restgdf.schema_drift: LayerMetadata.max_record_count missing at <url>
+# DEBUG   restgdf.schema_drift: LayerMetadata unknown extra 'foo' at <url>
+```
+
+Log levels:
+
+- **WARNING** — a field `restgdf` actually consumes is missing or has the
+  wrong shape. Library behavior is preserved (defaults to `None`), but
+  operators likely want to see this.
+- **DEBUG** — an unknown-extra key is present. Purely informational.
+
+Drift events are deduped per process via `(model_name, path, kind,
+value_type)` so repeated calls against the same drifty server don't
+spam the log.
+
+## `Settings` usage
+
+`Settings` is a frozen pydantic `BaseModel`. `get_settings()` returns a
+process-cached instance; tests can reset the cache to pick up environment
+changes:
+
+```python
+import os
+from restgdf import Settings, get_settings
+from restgdf._models._settings import reset_settings_cache
+
+# Default: read from os.environ.
+settings = get_settings()
+print(settings.chunk_size, settings.user_agent)
+
+# Programmatic override.
+settings = Settings(chunk_size=250, user_agent="my-app/1.0")
+
+# In tests, mutate env then reset the cache.
+os.environ["RESTGDF_CHUNK_SIZE"] = "500"
+reset_settings_cache()
+assert get_settings().chunk_size == 500
+
+# Bypass the real environment entirely:
+settings = Settings.from_env({"RESTGDF_TOKEN_URL": "http://internal/arcgis"})
+```
+
+## `SecretStr` credentials
+
+`AGOLUserPass.password` is a `pydantic.SecretStr`: its literal value is
+never in `repr()` or `str()`, so it is safe for log records, tracebacks,
+and error reports.
+
+```python
+from restgdf import AGOLUserPass
+
+creds = AGOLUserPass(username="alice", password="hunter2")
+print(creds)
+# username='alice' password=SecretStr('**********') ...
+
+# Unwrap only at the HTTP-POST boundary.
+password_str = creds.password.get_secret_value()
+```
+
+Do not store or log the unwrapped value.
+
+## Troubleshooting
+
+### `AttributeError: 'LayerMetadata' object has no attribute 'get'`
+
+You're calling `.get(...)` on what used to be a dict. Switch to attribute
+access:
+
+```python
+# old
+name = md.get("name", "unknown")
+
+# new
+name = md.name or "unknown"
+```
+
+Or wrap it: `as_dict(md).get("name", "unknown")`.
+
+### `TypeError: 'LayerMetadata' object is not subscriptable`
+
+Indexing (`md["name"]`) is gone. Use `md.name`, or `as_dict(md)["name"]`
+during a transitional window.
+
+### `RestgdfResponseError: Settings validation failed`
+
+A `RESTGDF_*` env var is malformed (for example, `RESTGDF_CHUNK_SIZE=0`
+fails `gt=0`). Check `exc.raw` for the offending values and `exc.context`
+for the origin (`"Settings.from_env"`).
+
+### `RestgdfResponseError` from `get_feature_count` / `get_object_ids` / `update_token`
+
+The ArcGIS server returned a payload that did not match the strict
+envelope (often an HTML error page or an `{"error": {...}}` body).
+`exc.model_name` identifies the expected envelope, `exc.context` holds
+the request URL, and `exc.raw` holds the decoded body for triage.
+
+### Silencing the deprecation warnings
+
+During migration you may want to suppress the `restgdf._types.*`
+`DeprecationWarning` without papering over others:
+
+```python
+import warnings
+
+warnings.filterwarnings(
+    "ignore",
+    message=r"restgdf\._types\..* is deprecated",
+    category=DeprecationWarning,
+)
+```
+
+Remove the filter once all imports are updated.
+
+### `SecretStr` string coercion
+
+`str(creds.password)` returns `"**********"`, not the password. If some
+library expects a plain `str`, unwrap explicitly with
+`creds.password.get_secret_value()`.

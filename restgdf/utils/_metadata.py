@@ -7,17 +7,35 @@ Private submodule; all public names are re-exported by
 from __future__ import annotations
 
 from re import IGNORECASE, compile
+from typing import Any, Union
+from collections.abc import Mapping
 
 from pandas import DataFrame
+from pydantic import BaseModel
 
-from restgdf._types import FieldSpec, LayerMetadata
+from restgdf._models.responses import FieldSpec, LayerMetadata
 from restgdf.utils._deprecations import deprecated_alias
 
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
 
+LayerMetadataLike = Union[LayerMetadata, Mapping[str, Any]]
 
-def supports_pagination(metadata: LayerMetadata) -> bool:
+
+def _as_dict(metadata: LayerMetadataLike) -> dict:
+    """Normalize a ``LayerMetadata`` model or raw mapping to a plain dict.
+
+    Extras from permissive-tier parsing are preserved so that case-insensitive
+    regex lookups on keys like ``Name`` or ``MaxRecordCount`` keep working
+    even when the input has already been validated into a pydantic model.
+    """
+    if isinstance(metadata, BaseModel):
+        return metadata.model_dump(by_alias=True, exclude_none=True)
+    return dict(metadata)
+
+
+def supports_pagination(metadata: LayerMetadataLike) -> bool:
     """Return whether the layer supports resultOffset/resultRecordCount pagination."""
+    metadata = _as_dict(metadata)
     advanced_query_capabilities = metadata.get("advancedQueryCapabilities") or {}
     if "supportsPagination" in advanced_query_capabilities:
         return advanced_query_capabilities["supportsPagination"]
@@ -26,8 +44,9 @@ def supports_pagination(metadata: LayerMetadata) -> bool:
     return True
 
 
-def get_object_id_field(metadata: LayerMetadata) -> str:
+def get_object_id_field(metadata: LayerMetadataLike) -> str:
     """Get the object id field name for a layer."""
+    metadata = _as_dict(metadata)
     oid_fields = [
         field["name"]
         for field in metadata.get("fields", [])
@@ -38,8 +57,9 @@ def get_object_id_field(metadata: LayerMetadata) -> str:
     return oid_fields[0]
 
 
-def get_max_record_count(metadata: LayerMetadata) -> int:
+def get_max_record_count(metadata: LayerMetadataLike) -> int:
     """Get the maximum record count for a layer."""
+    metadata = _as_dict(metadata)
     key_pattern = compile(
         r"max(imum)?(\s|_)?record(\s|_)?count$",
         flags=IGNORECASE,
@@ -47,32 +67,32 @@ def get_max_record_count(metadata: LayerMetadata) -> int:
     key_list = [key for key in metadata.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
         raise FIELDDOESNOTEXIST
-    return metadata[key_list[0]]  # type: ignore[literal-required]
+    return metadata[key_list[0]]
 
 
-def get_name(metadata: LayerMetadata) -> str:
+def get_name(metadata: LayerMetadataLike) -> str:
     """Get the name of a layer."""
+    metadata = _as_dict(metadata)
     key_pattern = compile("name", flags=IGNORECASE)
     key_list = [key for key in metadata.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
         raise FIELDDOESNOTEXIST
-    return metadata[key_list[0]]  # type: ignore[literal-required]
+    return metadata[key_list[0]]
 
 
-def get_fields(layer_metadata: LayerMetadata, types: bool = False):
+def get_fields(layer_metadata: LayerMetadataLike, types: bool = False):
     """Get the fields of a layer."""
+    layer_metadata = _as_dict(layer_metadata)
+    fields = layer_metadata.get("fields") or []
     if types:
-        return {
-            f["name"]: f["type"].replace("esriFieldType", "")
-            for f in layer_metadata["fields"]
-        }
-    else:
-        return [f["name"] for f in layer_metadata["fields"]]
+        return {f["name"]: f["type"].replace("esriFieldType", "") for f in fields}
+    return [f["name"] for f in fields]
 
 
-def get_fields_frame(layer_metadata: LayerMetadata) -> DataFrame:
+def get_fields_frame(layer_metadata: LayerMetadataLike) -> DataFrame:
     """Get the fields of a layer as a DataFrame."""
-    fields: list[FieldSpec] = layer_metadata["fields"]
+    layer_metadata = _as_dict(layer_metadata)
+    fields: list[FieldSpec] = layer_metadata.get("fields") or []
     return DataFrame(
         [(f["name"], f["type"].replace("esriFieldType", "")) for f in fields],
         columns=["name", "type"],

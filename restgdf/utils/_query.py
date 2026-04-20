@@ -13,7 +13,12 @@ from __future__ import annotations
 from aiohttp import ClientSession
 
 from restgdf._client.request import build_conservative_query_data
-from restgdf._types import CountResponse, LayerMetadata, ObjectIdsResponse
+from restgdf._models._drift import _parse_response
+from restgdf._models.responses import (
+    CountResponse,
+    LayerMetadata,
+    ObjectIdsResponse,
+)
 from restgdf.utils._http import default_headers
 from restgdf.utils.token import ArcGISTokenSession
 
@@ -23,23 +28,28 @@ async def get_feature_count(
     session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> int:
-    """Get the feature count for a layer."""
+    """Get the feature count for a layer.
+
+    The JSON body is validated against :class:`CountResponse` (strict
+    tier). A missing/ill-typed ``count`` key raises
+    :class:`~restgdf._models.RestgdfResponseError` with the original
+    payload and request URL attached for operator triage.
+    """
     datadict = build_conservative_query_data(
         {"where": "1=1", "returnCountOnly": True, "f": "json"},
         kwargs.get("data"),
     )
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
+    query_url = f"{url}/query"
     response = await session.post(
-        f"{url}/query",
+        query_url,
         data=datadict,
         headers=default_headers(xkwargs.pop("headers", None)),
         **xkwargs,
     )
-    response_json: CountResponse = await response.json(content_type=None)
-    try:
-        return response_json["count"]
-    except KeyError as e:
-        raise e
+    response_json = await response.json(content_type=None)
+    envelope = _parse_response(CountResponse, response_json, context=query_url)
+    return envelope.count
 
 
 async def get_metadata(
@@ -47,12 +57,20 @@ async def get_metadata(
     session: ClientSession | ArcGISTokenSession,
     token: str | None = None,
 ) -> LayerMetadata:
-    """Get the JSON dict for a layer."""
+    """Get the parsed metadata model for a layer.
+
+    The JSON body is validated against :class:`LayerMetadata` (permissive
+    tier). Vendor-variance extras are preserved via ``extra="allow"``;
+    missing fields default to ``None`` rather than raise. Drift is logged
+    through :mod:`restgdf._models._drift` rather than returned to the
+    caller.
+    """
     data = {"f": "json"}
     if token is not None:
         data["token"] = token
     response = await session.get(url, params=data, headers=default_headers())
-    return await response.json(content_type=None)
+    raw = await response.json(content_type=None)
+    return _parse_response(LayerMetadata, raw, context=url)
 
 
 async def get_object_ids(
@@ -60,17 +78,26 @@ async def get_object_ids(
     session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> tuple[str, list[int]]:
-    """Get the object id field name and matching object ids for a layer query."""
+    """Get the object id field name and matching object ids for a layer query.
+
+    The JSON body is validated against :class:`ObjectIdsResponse` (strict
+    tier) so missing field names or non-list id payloads raise
+    :class:`~restgdf._models.RestgdfResponseError` before the caller can
+    misuse them. ArcGIS returns ``objectIds: null`` for zero-row
+    matches; the model coerces that to ``[]``.
+    """
     datadict = build_conservative_query_data(
         {"where": "1=1", "returnIdsOnly": True, "f": "json"},
         kwargs.get("data"),
     )
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
+    query_url = f"{url}/query"
     response = await session.post(
-        f"{url}/query",
+        query_url,
         data=datadict,
         headers=default_headers(xkwargs.pop("headers", None)),
         **xkwargs,
     )
-    response_json: ObjectIdsResponse = await response.json(content_type=None)
-    return response_json["objectIdFieldName"], response_json["objectIds"]
+    response_json = await response.json(content_type=None)
+    envelope = _parse_response(ObjectIdsResponse, response_json, context=query_url)
+    return envelope.object_id_field_name, envelope.object_ids

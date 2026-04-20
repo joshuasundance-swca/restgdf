@@ -12,6 +12,8 @@ aiosignal==1.4.0
     # via aiohttp
 alabaster==1.0.0
     # via sphinx
+annotated-types==0.7.0
+    # via pydantic
 attrs==26.1.0
     # via aiohttp
 babel==2.18.0
@@ -103,6 +105,10 @@ propcache==0.4.1
     # via
     #   aiohttp
     #   yarl
+pydantic==2.13.3
+    # via restgdf (pyproject.toml)
+pydantic-core==2.46.3
+    # via pydantic
 pygments==2.20.0
     # via
     #   pytest
@@ -160,6 +166,13 @@ sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
 toml==0.10.2
     # via bumpver
+typing-extensions==4.15.0
+    # via
+    #   pydantic
+    #   pydantic-core
+    #   typing-inspection
+typing-inspection==0.4.2
+    # via pydantic
 tzdata==2026.1
     # via pandas
 urllib3==2.6.3

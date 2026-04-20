@@ -108,7 +108,8 @@ def mock_uniquevalues_post(*args, **kwargs):
     side_effect=mock_session_get,
 )
 async def test_get_json_dict(mock_response, client_session):
-    assert await get_metadata("test", session=client_session) == TESTJSON
+    result = await get_metadata("test", session=client_session)
+    assert result.model_dump(by_alias=True, exclude_none=True) == TESTJSON
 
 
 @pytest.mark.asyncio
@@ -501,9 +502,9 @@ async def test_service_metadata_fetches_layers_and_feature_counts():
             return_feature_count=True,
         )
 
-    assert result["layers"][0]["url"] == "https://example.com/service/0"
-    assert result["layers"][0]["feature_count"] == 12
-    assert "feature_count" not in result["layers"][1]
+    assert result.layers[0].url == "https://example.com/service/0"
+    assert result.layers[0].feature_count == 12
+    assert result.layers[1].feature_count is None
     mock_get_feature_count.assert_awaited_once()
 
 
@@ -527,4 +528,4 @@ async def test_service_metadata_sets_feature_count_none_when_count_lookup_fails(
             return_feature_count=True,
         )
 
-    assert result["layers"][0]["feature_count"] is None
+    assert result.layers[0].feature_count is None

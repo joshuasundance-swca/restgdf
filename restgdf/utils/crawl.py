@@ -4,10 +4,19 @@ import asyncio
 from typing import Any
 
 import aiohttp
+from pydantic import BaseModel
 
-from restgdf._types import CrawlError, CrawlReport, CrawlServiceEntry, LayerMetadata
+from restgdf._models.crawl import CrawlError, CrawlReport, CrawlServiceEntry
+from restgdf._models.responses import LayerMetadata
 from restgdf.utils.getinfo import service_metadata, get_metadata
 from restgdf.utils.token import ArcGISTokenSession
+
+
+def _to_plain_dict(value: Any) -> dict:
+    """Normalize a pydantic model or mapping to a mutable ``dict``."""
+    if isinstance(value, BaseModel):
+        return value.model_dump(by_alias=True)
+    return dict(value)
 
 
 async def fetch_all_data(
@@ -19,7 +28,7 @@ async def fetch_all_data(
     """Fetch all services and their layers in a highly concurrent manner."""
     # Retrieve the initial list of folders and services
     try:
-        base_metadata = await get_metadata(base_url, session, token)
+        base_metadata = _to_plain_dict(await get_metadata(base_url, session, token))
     except Exception as e:
         return {"error": e}
 
@@ -38,7 +47,9 @@ async def fetch_all_data(
     for folder in base_metadata.get("folders") or []:
         folder_url = f"{base_url}/{folder}"
         try:
-            folder_metadata = await get_metadata(folder_url, session, token)
+            folder_metadata = _to_plain_dict(
+                await get_metadata(folder_url, session, token),
+            )
         except Exception as e:
             return {"error": e}
         folder_metadata["url"] = folder_url
@@ -82,12 +93,13 @@ async def fetch_all_data(
 
 
 def _make_error(stage: str, url: str, exc: BaseException) -> CrawlError:
-    return {
-        "stage": stage,
-        "url": url,
-        "message": str(exc),
-        "exception": exc,
-    }
+    return CrawlError(stage=stage, url=url, message=str(exc), exception=exc)
+
+
+def _as_layer_metadata(raw: Any) -> LayerMetadata:
+    if isinstance(raw, LayerMetadata):
+        return raw
+    return LayerMetadata.model_validate(raw)
 
 
 async def safe_crawl(
@@ -100,30 +112,34 @@ async def safe_crawl(
 
     Unlike :func:`fetch_all_data`, this function never short-circuits on
     the first failure. Every recoverable error is captured as a typed
-    :class:`~restgdf._types.CrawlError` entry in ``report["errors"]`` and
-    successful services are always present in ``report["services"]``.
+    :class:`~restgdf._models.crawl.CrawlError` entry in
+    :attr:`CrawlReport.errors` and successful services are always
+    present in :attr:`CrawlReport.services`.
 
-    The three failure stages are ``"base_metadata"`` (root ``get_metadata``
-    call), ``"folder_metadata"`` (per-folder ``get_metadata`` call), and
-    ``"service_metadata"`` (per-service ``service_metadata`` call). When a
-    folder's metadata fails, services discovered in earlier folders (and
-    the base) are still returned.
+    The three failure stages are ``"base_metadata"`` (root
+    ``get_metadata`` call), ``"folder_metadata"`` (per-folder
+    ``get_metadata`` call), and ``"service_metadata"`` (per-service
+    ``service_metadata`` call). When a folder's metadata fails, services
+    discovered in earlier folders (and the base) are still returned.
     """
     errors: list[CrawlError] = []
-    services_list: list[CrawlServiceEntry] = []
+    services_raw: list[dict[str, Any]] = []
 
     try:
-        base_metadata: LayerMetadata = await get_metadata(base_url, session, token)
+        base_metadata: dict[str, Any] = _to_plain_dict(
+            await get_metadata(base_url, session, token),
+        )
     except Exception as exc:
         errors.append(_make_error("base_metadata", base_url, exc))
-        return {"services": services_list, "errors": errors}
+        return CrawlReport(services=[], errors=errors, metadata=None)
 
     base_metadata["url"] = base_url
 
     for service in base_metadata.get("services") or []:
-        services_list.append(
+        services_raw.append(
             {
                 "name": service["name"],
+                "type": service.get("type"),
                 "url": f"{base_url}/{service['name']}/{service['type']}",
             },
         )
@@ -131,16 +147,19 @@ async def safe_crawl(
     for folder in base_metadata.get("folders") or []:
         folder_url = f"{base_url}/{folder}"
         try:
-            folder_metadata = await get_metadata(folder_url, session, token)
+            folder_metadata = _to_plain_dict(
+                await get_metadata(folder_url, session, token),
+            )
         except Exception as exc:
             errors.append(_make_error("folder_metadata", folder_url, exc))
             continue
 
         folder_metadata["url"] = folder_url
         for service in folder_metadata.get("services") or []:
-            services_list.append(
+            services_raw.append(
                 {
                     "name": service["name"],
+                    "type": service.get("type"),
                     "url": f"{base_url}/{service['name']}/{service['type']}",
                 },
             )
@@ -157,13 +176,20 @@ async def safe_crawl(
             errors.append(_make_error("service_metadata", url, exc))
             return None
 
-    results = await asyncio.gather(*(_svc(svc["url"]) for svc in services_list))
-    for entry, result in zip(services_list, results):
-        if result is not None:
-            entry["metadata"] = result
+    results = await asyncio.gather(*(_svc(svc["url"]) for svc in services_raw))
+    service_entries: list[CrawlServiceEntry] = []
+    for entry, result in zip(services_raw, results):
+        service_entries.append(
+            CrawlServiceEntry(
+                name=entry["name"],
+                url=entry["url"],
+                type=entry.get("type"),
+                metadata=_as_layer_metadata(result) if result is not None else None,
+            ),
+        )
 
-    return {
-        "metadata": base_metadata,
-        "services": services_list,
-        "errors": errors,
-    }
+    return CrawlReport(
+        services=service_entries,
+        errors=errors,
+        metadata=_as_layer_metadata(base_metadata),
+    )

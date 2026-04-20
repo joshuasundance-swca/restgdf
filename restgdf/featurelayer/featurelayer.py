@@ -10,6 +10,7 @@ from aiohttp import ClientSession
 from geopandas import GeoDataFrame
 from pandas import DataFrame
 
+from restgdf._models.responses import LayerMetadata
 from restgdf.utils.getgdf import get_gdf, row_dict_generator
 from restgdf.utils.getinfo import (
     default_data,
@@ -52,7 +53,25 @@ from restgdf.utils.utils import where_var_in_list, ends_with_num
 
 
 class FeatureLayer:
-    """A class for interacting with ArcGIS FeatureLayers."""
+    """A class for interacting with an ArcGIS REST FeatureLayer.
+
+    Attributes
+    ----------
+    metadata : restgdf.LayerMetadata
+        Pydantic-validated layer metadata (name, fields, max record
+        count, advanced query capabilities, ...). Replaces the pre-2.0
+        raw ``dict``. Extra keys sent by the server are preserved via
+        ``extra="allow"`` and reachable through ``metadata.model_extra``.
+    name : str
+        Convenience alias for ``metadata.name``.
+    fields : tuple[str, ...]
+        Field names consumed by restgdf.
+    object_id_field : str
+        Resolved object-id field name (``"OBJECTID"`` when the server
+        omits it).
+    count : int
+        Feature count, validated via ``CountResponse`` at prep time.
+    """
 
     def __init__(
         self,
@@ -92,7 +111,7 @@ class FeatureLayer:
 
         self.gdf: GeoDataFrame | None = None
 
-        self.metadata: dict
+        self.metadata: LayerMetadata
         self.name: str
         self.fields: tuple[str, ...]
         self.fieldtypes: DataFrame
@@ -101,15 +120,15 @@ class FeatureLayer:
 
     async def prep(self):
         """Prepare the Rest object."""
-        self.metadata = await get_metadata(
+        raw = await get_metadata(
             self.url,
             self.session,
             token=self.kwargs["data"].get("token"),
         )
-        try:
-            if not self.metadata["type"] == "Feature Layer":
-                raise ValueError("The url must point to a FeatureLayer.")
-        except KeyError:
+        self.metadata = (
+            raw if isinstance(raw, LayerMetadata) else LayerMetadata.model_validate(raw)
+        )
+        if self.metadata.type != "Feature Layer":
             raise ValueError("The url must point to a FeatureLayer.")
         self.name = get_name(self.metadata)
         self.fields = get_fields(self.metadata)

@@ -38,7 +38,7 @@ async def test_service_metadata_uses_getinfo_get_metadata_seam():
         result = await service_metadata(object(), "https://example.com/svc")
 
     assert mock_gm.await_count >= 1
-    assert result["layers"][0]["url"] == "https://example.com/svc/0"
+    assert result.layers[0].url == "https://example.com/svc/0"
 
 
 @pytest.mark.compat
@@ -66,7 +66,7 @@ async def test_service_metadata_uses_getinfo_get_feature_count_seam():
         )
 
     mock_gfc.assert_awaited()
-    assert result["layers"][0]["feature_count"] == 7
+    assert result.layers[0].feature_count == 7
 
 
 @pytest.mark.compat
