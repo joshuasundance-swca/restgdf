@@ -2,8 +2,9 @@
 requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["restgdf", "restgdf.directory", "restgdf.featurelayer", "restgdf.utils"]
+[tool.setuptools.packages.find]
+include = ["restgdf*"]
+exclude = ["tests*"]
 
 [project]
 name = "restgdf"
@@ -76,6 +77,7 @@ source = ["restgdf"]
 
 [tool.coverage.report]
 show_missing = true
+fail_under = 97
 # Regexes for lines to exclude from consideration
 exclude_also = [
     # Don't complain about missing debug-only code:
@@ -109,4 +111,6 @@ addopts = "--strict-markers"
 asyncio_mode = "strict"
 markers = [
     "network: tests that hit live external ArcGIS services",
+    "characterization: tests that pin current behavior to guard refactors",
+    "compat: backward-compatibility tests for preserved import/patch paths",
 ]
