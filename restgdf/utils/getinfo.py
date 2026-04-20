@@ -8,6 +8,7 @@ from re import compile, IGNORECASE
 from aiohttp import ClientSession
 from pandas import DataFrame, concat
 
+from restgdf._client.request import build_conservative_query_data
 from restgdf.utils.token import ArcGISTokenSession
 
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
@@ -45,12 +46,10 @@ async def get_feature_count(
     **kwargs,
 ) -> int:
     """Get the feature count for a layer."""
-    datadict: dict = {"where": "1=1", "returnCountOnly": True, "f": "json"}
-    request_data = kwargs.get("data") or {}
-    if request_data:
-        datadict["where"] = request_data.get("where", "1=1")
-        if "token" in request_data:
-            datadict["token"] = request_data["token"]
+    datadict = build_conservative_query_data(
+        {"where": "1=1", "returnCountOnly": True, "f": "json"},
+        kwargs.get("data"),
+    )
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
     response = await session.post(
         f"{url}/query",
@@ -137,12 +136,10 @@ async def get_object_ids(
     **kwargs,
 ) -> tuple[str, list[int]]:
     """Get the object id field name and matching object ids for a layer query."""
-    datadict: dict = {"where": "1=1", "returnIdsOnly": True, "f": "json"}
-    request_data = kwargs.get("data") or {}
-    if request_data:
-        datadict["where"] = request_data.get("where", "1=1")
-        if "token" in request_data:
-            datadict["token"] = request_data["token"]
+    datadict = build_conservative_query_data(
+        {"where": "1=1", "returnIdsOnly": True, "f": "json"},
+        kwargs.get("data"),
+    )
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
     response = await session.post(
         f"{url}/query",
@@ -193,18 +190,16 @@ async def getuniquevalues(
     **kwargs,
 ) -> list | DataFrame:
     """Get the unique values for a field."""
-    datadict: dict = {
-        "where": "1=1",
-        "f": "json",
-        "returnGeometry": False,
-        "returnDistinctValues": True,
-        "outFields": fields if isinstance(fields, str) else ",".join(fields),
-    }
-    request_data = kwargs.get("data") or {}
-    if request_data:
-        datadict["where"] = request_data.get("where", "1=1")
-        if "token" in request_data:
-            datadict["token"] = request_data["token"]
+    datadict = build_conservative_query_data(
+        {
+            "where": "1=1",
+            "f": "json",
+            "returnGeometry": False,
+            "returnDistinctValues": True,
+            "outFields": fields if isinstance(fields, str) else ",".join(fields),
+        },
+        kwargs.get("data"),
+    )
 
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
 
