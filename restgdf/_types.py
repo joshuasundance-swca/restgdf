@@ -140,8 +140,65 @@ class ErrorResponse(TypedDict):
     error: ErrorInfo
 
 
+class _CrawlErrorRequired(TypedDict):
+    stage: str
+    url: str
+    message: str
+
+
+class CrawlError(_CrawlErrorRequired, total=False):
+    """A single failure captured during :func:`restgdf.utils.crawl.safe_crawl`.
+
+    ``stage`` identifies where the failure occurred: ``"base_metadata"``
+    for the root ``get_metadata`` call, ``"folder_metadata"`` for a
+    per-folder ``get_metadata`` call, and ``"service_metadata"`` for a
+    per-service ``service_metadata`` call. ``url`` is the URL whose
+    request failed and ``message`` is ``str(exception)`` so the report
+    stays JSON-serializable. The original exception is preserved under
+    the optional ``exception`` key for callers that want to re-raise.
+    """
+
+    exception: BaseException
+
+
+class _CrawlServiceEntryRequired(TypedDict):
+    name: str
+    url: str
+
+
+class CrawlServiceEntry(_CrawlServiceEntryRequired, total=False):
+    """A service entry in :attr:`CrawlReport.services`.
+
+    ``metadata`` is the :class:`LayerMetadata` returned by
+    ``service_metadata`` for this service. It is absent when the
+    ``service_metadata`` call failed; in that case a corresponding
+    :class:`CrawlError` is recorded in :attr:`CrawlReport.errors`.
+    """
+
+    metadata: LayerMetadata
+
+
+class _CrawlReportRequired(TypedDict):
+    services: list[CrawlServiceEntry]
+    errors: list[CrawlError]
+
+
+class CrawlReport(_CrawlReportRequired, total=False):
+    """Aggregated result of a directory crawl.
+
+    Unlike the legacy ``fetch_all_data`` return shape (which short-circuits
+    to ``{"error": exc}`` on the first failure), :class:`CrawlReport`
+    always returns partial successes alongside captured errors.
+    """
+
+    metadata: LayerMetadata
+
+
 __all__ = [
     "CountResponse",
+    "CrawlError",
+    "CrawlReport",
+    "CrawlServiceEntry",
     "ErrorInfo",
     "ErrorResponse",
     "Feature",
