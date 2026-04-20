@@ -25,6 +25,8 @@ from restgdf.utils._http import (
 )
 from restgdf.utils._metadata import (
     FIELDDOESNOTEXIST,
+    get_fields,
+    get_fields_frame,
     get_max_record_count,
     get_name,
     get_object_id_field,
@@ -34,7 +36,14 @@ from restgdf.utils._metadata import (
 )
 from restgdf._types import LayerMetadata
 from restgdf.utils._query import get_feature_count, get_metadata, get_object_ids
-from restgdf.utils._stats import getuniquevalues, getvaluecounts, nestedcount
+from restgdf.utils._stats import (
+    get_unique_values,
+    get_value_counts,
+    getuniquevalues,
+    getvaluecounts,
+    nested_count,
+    nestedcount,
+)
 from restgdf.utils.token import ArcGISTokenSession
 
 __all__ = [
@@ -45,16 +54,21 @@ __all__ = [
     "default_data",
     "default_headers",
     "get_feature_count",
+    "get_fields",
+    "get_fields_frame",
     "get_max_record_count",
     "get_metadata",
     "get_name",
     "get_object_id_field",
     "get_object_ids",
     "get_offset_range",
+    "get_unique_values",
+    "get_value_counts",
     "getfields",
     "getfields_df",
     "getuniquevalues",
     "getvaluecounts",
+    "nested_count",
     "nestedcount",
     "service_metadata",
     "supports_pagination",

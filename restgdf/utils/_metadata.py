@@ -11,6 +11,7 @@ from re import IGNORECASE, compile
 from pandas import DataFrame
 
 from restgdf._types import FieldSpec, LayerMetadata
+from restgdf.utils._deprecations import deprecated_alias
 
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
 
@@ -58,7 +59,7 @@ def get_name(metadata: LayerMetadata) -> str:
     return metadata[key_list[0]]  # type: ignore[literal-required]
 
 
-def getfields(layer_metadata: LayerMetadata, types: bool = False):
+def get_fields(layer_metadata: LayerMetadata, types: bool = False):
     """Get the fields of a layer."""
     if types:
         return {
@@ -69,10 +70,16 @@ def getfields(layer_metadata: LayerMetadata, types: bool = False):
         return [f["name"] for f in layer_metadata["fields"]]
 
 
-def getfields_df(layer_metadata: LayerMetadata) -> DataFrame:
+def get_fields_frame(layer_metadata: LayerMetadata) -> DataFrame:
     """Get the fields of a layer as a DataFrame."""
     fields: list[FieldSpec] = layer_metadata["fields"]
     return DataFrame(
         [(f["name"], f["type"].replace("esriFieldType", "")) for f in fields],
         columns=["name", "type"],
     )
+
+
+# Deprecated legacy aliases (Phase 6). Emit DeprecationWarning when called;
+# delegate to the canonical snake_case functions.
+getfields = deprecated_alias(get_fields, "getfields", "get_fields")
+getfields_df = deprecated_alias(get_fields_frame, "getfields_df", "get_fields_frame")

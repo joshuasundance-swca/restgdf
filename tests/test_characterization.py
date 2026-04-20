@@ -269,16 +269,16 @@ async def test_featurelayer_getuniquevalues_caches_per_key(feature_layer_metadat
 
     call_count = {"n": 0}
 
-    async def fake_getuniquevalues(url, fields, session, sortby=None, **kwargs):
+    async def fake_get_unique_values(url, fields, session, sortby=None, **kwargs):
         call_count["n"] += 1
         return ["A", "B"]
 
     with patch(
-        "restgdf.featurelayer.featurelayer.getuniquevalues",
-        side_effect=fake_getuniquevalues,
+        "restgdf.featurelayer.featurelayer.get_unique_values",
+        side_effect=fake_get_unique_values,
     ):
-        first = await layer.getuniquevalues("CITY")
-        second = await layer.getuniquevalues("CITY")
+        first = await layer.get_unique_values("CITY")
+        second = await layer.get_unique_values("CITY")
 
     assert first == second == ["A", "B"]
     # Second call must be served from the cache (no extra network call).

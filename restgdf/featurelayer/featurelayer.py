@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+import warnings
 from collections.abc import AsyncIterable
 
 from aiohttp import ClientSession
@@ -13,16 +14,39 @@ from restgdf.utils.getgdf import get_gdf, row_dict_generator
 from restgdf.utils.getinfo import (
     default_data,
     get_feature_count,
+    get_fields,
+    get_fields_frame,
     get_metadata,
     get_name,
     get_object_id_field,
-    getfields,
-    getfields_df,
+    get_unique_values,
+    get_value_counts,
+    nested_count,
+    FIELDDOESNOTEXIST,
+)
+
+# Deprecated names re-imported at module scope so callers can still patch
+# them via ``unittest.mock.patch("restgdf.featurelayer.featurelayer.<old>")``.
+# These look unused to linters but are required by backward-compat tests
+# (see ``tests/test_compat.py::test_featurelayer_patch_targets``).
+# Do NOT remove — emit DeprecationWarning via the shim, not by deletion.
+from restgdf.utils.getinfo import (  # noqa: F401
     getuniquevalues,
     getvaluecounts,
     nestedcount,
-    FIELDDOESNOTEXIST,
 )
+
+# Keep the deprecated names reachable via ``__all__`` so static-analysis tools
+# that respect ``__all__`` treat them as public re-exports.
+__all__ = [
+    "FeatureLayer",
+    "get_unique_values",
+    "get_value_counts",
+    "nested_count",
+    "getuniquevalues",
+    "getvaluecounts",
+    "nestedcount",
+]
 from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list, ends_with_num
 
@@ -88,8 +112,8 @@ class FeatureLayer:
         except KeyError:
             raise ValueError("The url must point to a FeatureLayer.")
         self.name = get_name(self.metadata)
-        self.fields = getfields(self.metadata)
-        self.fieldtypes = getfields_df(self.metadata)
+        self.fields = get_fields(self.metadata)
+        self.fieldtypes = get_fields_frame(self.metadata)
         self.object_id_field = get_object_id_field(self.metadata)
         self.count = await get_feature_count(self.url, self.session, **self.kwargs)
 
@@ -100,14 +124,14 @@ class FeatureLayer:
         await self.prep()
         return self
 
-    async def getoids(self) -> list[int]:
+    async def get_oids(self) -> list[int]:
         """Get the object ids for the Rest object."""
         object_id_field = getattr(self, "object_id_field", "OBJECTID")
-        return await self.getuniquevalues(object_id_field)
+        return await self.get_unique_values(object_id_field)
 
-    async def samplegdf(self, n: int = 10) -> GeoDataFrame:
+    async def sample_gdf(self, n: int = 10) -> GeoDataFrame:
         """Get n random features as a GeoDataFrame."""
-        oids = await getuniquevalues(
+        oids = await get_unique_values(
             self.url,
             self.object_id_field,
             self.session,
@@ -116,11 +140,11 @@ class FeatureLayer:
         sample_oids = random.sample(oids, min(n, len(oids)))
         wherestr = where_var_in_list(self.object_id_field, sample_oids)
         new_rest = await self.where(wherestr)
-        return await new_rest.getgdf()
+        return await new_rest.get_gdf()
 
-    async def headgdf(self, n: int = 10) -> GeoDataFrame:
+    async def head_gdf(self, n: int = 10) -> GeoDataFrame:
         """Get the n first features as a GeoDataFrame."""
-        oids = await getuniquevalues(
+        oids = await get_unique_values(
             self.url,
             self.object_id_field,
             self.session,
@@ -129,9 +153,9 @@ class FeatureLayer:
         head_oids = oids[:n]
         wherestr = where_var_in_list(self.object_id_field, head_oids)
         new_rest = await self.where(wherestr)
-        return await new_rest.getgdf()
+        return await new_rest.get_gdf()
 
-    async def getgdf(self) -> GeoDataFrame:
+    async def get_gdf(self) -> GeoDataFrame:
         """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
         if self.gdf is None:
             self.gdf = await get_gdf(self.url, self.session, **self.kwargs)
@@ -152,7 +176,7 @@ class FeatureLayer:
         async for row in _gen:
             yield row
 
-    async def getuniquevalues(
+    async def get_unique_values(
         self,
         fields: tuple | str,
         sortby: str | None = None,
@@ -165,7 +189,7 @@ class FeatureLayer:
                 and any(field not in self.fields for field in fields)
             ):
                 raise FIELDDOESNOTEXIST
-            self.uniquevalues[cache_key] = await getuniquevalues(
+            self.uniquevalues[cache_key] = await get_unique_values(
                 self.url,
                 fields,
                 self.session,
@@ -174,12 +198,12 @@ class FeatureLayer:
             )
         return self.uniquevalues[cache_key]
 
-    async def getvaluecounts(self, field: str) -> DataFrame:
+    async def get_value_counts(self, field: str) -> DataFrame:
         """Get the value counts for a field."""
         if field not in self.valuecounts:
             if field not in self.fields:
                 raise FIELDDOESNOTEXIST
-            self.valuecounts[field] = await getvaluecounts(
+            self.valuecounts[field] = await get_value_counts(
                 self.url,
                 field,
                 self.session,
@@ -187,18 +211,93 @@ class FeatureLayer:
             )
         return self.valuecounts[field]
 
-    async def getnestedcount(self, fields: tuple) -> DataFrame:
+    async def get_nested_count(self, fields: tuple) -> DataFrame:
         """Get the nested value counts for a field."""
         if fields not in self.nestedcount:
             if any(field not in self.fields for field in fields):
                 raise FIELDDOESNOTEXIST
-            self.nestedcount[fields] = await nestedcount(
+            self.nestedcount[fields] = await nested_count(
                 self.url,
                 fields,
                 self.session,
                 **self.kwargs,
             )
         return self.nestedcount[fields]
+
+    # -----------------------------------------------------------------
+    # Deprecated legacy method names (Phase 6). Emit DeprecationWarning
+    # and delegate to the canonical implementation. Kept for backward
+    # compatibility; will be removed in a future release.
+    # -----------------------------------------------------------------
+    async def getoids(self) -> list[int]:
+        """Deprecated alias for :meth:`get_oids`."""
+        warnings.warn(
+            "`FeatureLayer.getoids` is deprecated; use `get_oids` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.get_oids()
+
+    async def samplegdf(self, n: int = 10) -> GeoDataFrame:
+        """Deprecated alias for :meth:`sample_gdf`."""
+        warnings.warn(
+            "`FeatureLayer.samplegdf` is deprecated; use `sample_gdf` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.sample_gdf(n)
+
+    async def headgdf(self, n: int = 10) -> GeoDataFrame:
+        """Deprecated alias for :meth:`head_gdf`."""
+        warnings.warn(
+            "`FeatureLayer.headgdf` is deprecated; use `head_gdf` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.head_gdf(n)
+
+    async def getgdf(self) -> GeoDataFrame:
+        """Deprecated alias for :meth:`get_gdf`."""
+        warnings.warn(
+            "`FeatureLayer.getgdf` is deprecated; use `get_gdf` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.get_gdf()
+
+    async def getuniquevalues(
+        self,
+        fields: tuple | str,
+        sortby: str | None = None,
+    ) -> list | DataFrame:
+        """Deprecated alias for :meth:`get_unique_values`."""
+        warnings.warn(
+            "`FeatureLayer.getuniquevalues` is deprecated; use "
+            "`get_unique_values` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.get_unique_values(fields, sortby)
+
+    async def getvaluecounts(self, field: str) -> DataFrame:
+        """Deprecated alias for :meth:`get_value_counts`."""
+        warnings.warn(
+            "`FeatureLayer.getvaluecounts` is deprecated; use "
+            "`get_value_counts` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.get_value_counts(field)
+
+    async def getnestedcount(self, fields: tuple) -> DataFrame:
+        """Deprecated alias for :meth:`get_nested_count`."""
+        warnings.warn(
+            "`FeatureLayer.getnestedcount` is deprecated; use "
+            "`get_nested_count` instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self.get_nested_count(fields)
 
     async def where(self, wherestr: str) -> FeatureLayer:
         """Create a new Rest object with a where clause."""

@@ -10,11 +10,12 @@ from aiohttp import ClientSession
 from pandas import DataFrame, concat
 
 from restgdf._client.request import build_conservative_query_data
+from restgdf.utils._deprecations import deprecated_alias
 from restgdf.utils._http import default_headers
 from restgdf.utils.token import ArcGISTokenSession
 
 
-async def getuniquevalues(
+async def get_unique_values(
     url: str,
     fields: tuple | str,
     session: ClientSession | ArcGISTokenSession,
@@ -64,7 +65,7 @@ async def getuniquevalues(
     return res_l or res_df
 
 
-async def getvaluecounts(
+async def get_value_counts(
     url: str,
     field: str,
     session: ClientSession | ArcGISTokenSession,
@@ -97,7 +98,7 @@ async def getvaluecounts(
     return cc.sort_values(f"{field}_count", ascending=False).reset_index(drop=True)
 
 
-async def nestedcount(
+async def nested_count(
     url: str,
     fields,
     session: ClientSession | ArcGISTokenSession,
@@ -144,3 +145,17 @@ async def nestedcount(
         .sort_values([fields[0], "Count"], ascending=[True, False])
         .reset_index(drop=True)
     )
+
+
+# Deprecated legacy aliases (Phase 6). See `_deprecations.deprecated_alias`.
+getuniquevalues = deprecated_alias(
+    get_unique_values,
+    "getuniquevalues",
+    "get_unique_values",
+)
+getvaluecounts = deprecated_alias(
+    get_value_counts,
+    "getvaluecounts",
+    "get_value_counts",
+)
+nestedcount = deprecated_alias(nested_count, "nestedcount", "nested_count")
