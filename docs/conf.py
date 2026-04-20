@@ -27,7 +27,7 @@ napoleon_use_ivar = True
 project = 'restgdf'
 copyright = '2023, Joshua Sundance Bailey'
 author = 'Joshua Sundance Bailey'
-release = '1.0.0'
+release = '2.0.0'
 # Package supports Python 3.9+; repo tooling/CI/docs build targets Python 3.14.
 
 # -- General configuration ---------------------------------------------------

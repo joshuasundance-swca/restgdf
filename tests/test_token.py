@@ -105,7 +105,7 @@ def test_token_needs_update_branching():
 
     token_session = ArcGISTokenSession(
         session=RecordingTokenSession(),
-        credentials=AGOLUserPass("user", "password"),
+        credentials=AGOLUserPass(username="user", password="password"),
     )
     assert token_session.token_needs_update() is True
 
@@ -127,7 +127,7 @@ def test_token_needs_update_branching():
 async def test_update_token_if_needed_only_refreshes_when_required():
     token_session = ArcGISTokenSession(
         session=RecordingTokenSession(),
-        credentials=AGOLUserPass("user", "password"),
+        credentials=AGOLUserPass(username="user", password="password"),
         token="abc123",
         expires=32503680000000,
     )
@@ -175,7 +175,7 @@ async def test_arcgistokensession_refreshes_and_injects_auth():
 async def test_arcgistokensession_context_manager_updates_token():
     token_session = ArcGISTokenSession(
         session=RecordingTokenSession(),
-        credentials=AGOLUserPass("user", "password"),
+        credentials=AGOLUserPass(username="user", password="password"),
     )
 
     async with token_session as active_session:
@@ -190,7 +190,7 @@ async def test_arcgistokensession_respects_explicit_token_in_request():
     session = RecordingTokenSession()
     token_session = ArcGISTokenSession(
         session=session,
-        credentials=AGOLUserPass("user", "password"),
+        credentials=AGOLUserPass(username="user", password="password"),
     )
 
     await token_session.post(

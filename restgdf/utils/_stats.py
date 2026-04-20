@@ -10,6 +10,8 @@ from aiohttp import ClientSession
 from pandas import DataFrame, concat
 
 from restgdf._client.request import build_conservative_query_data
+from restgdf._models._drift import _parse_response
+from restgdf._models.responses import FeaturesResponse
 from restgdf.utils._deprecations import deprecated_alias
 from restgdf.utils._http import default_headers
 from restgdf.utils.token import ArcGISTokenSession
@@ -42,22 +44,24 @@ async def get_unique_values(
         headers=default_headers(xkwargs.pop("headers", None)),
         **xkwargs,
     )
-    metadata = await response.json(content_type=None)
+    raw = await response.json(content_type=None)
+    envelope = _parse_response(FeaturesResponse, raw, context=f"{url}/query")
+    features = envelope.features or []
 
     res_l: list | None = None
     res_df: DataFrame | None = None
 
     if isinstance(fields, str):
-        res_l = [x["attributes"][fields] for x in metadata["features"]]
+        res_l = [x["attributes"][fields] for x in features]
         if sortby and sortby == fields:
             res_l = sorted(res_l)
     elif len(fields) == 1:
-        res_l = [x["attributes"][fields[0]] for x in metadata["features"]]
+        res_l = [x["attributes"][fields[0]] for x in features]
         if sortby and sortby == fields[0]:
             res_l = sorted(res_l)
     else:
         res_df = concat(
-            [DataFrame(x).T.reset_index(drop=True) for x in metadata["features"]],
+            [DataFrame(x).T.reset_index(drop=True) for x in features],
             ignore_index=True,
         )
         if sortby:
@@ -89,8 +93,9 @@ async def get_value_counts(
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )
-    metadata = await response.json(content_type=None)
-    features = metadata["features"]
+    raw = await response.json(content_type=None)
+    envelope = _parse_response(FeaturesResponse, raw, context=f"{url}/query")
+    features = envelope.features or []
     cc = concat(
         [DataFrame(x["attributes"], index=[0]) for x in features],
         ignore_index=True,
@@ -131,8 +136,9 @@ async def nested_count(
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )
-    metadata = await response.json(content_type=None)
-    features = metadata["features"]
+    raw = await response.json(content_type=None)
+    envelope = _parse_response(FeaturesResponse, raw, context=f"{url}/query")
+    features = envelope.features or []
     cc = concat(
         [DataFrame(x).T.reset_index(drop=True) for x in features],
         ignore_index=True,

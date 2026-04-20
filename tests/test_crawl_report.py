@@ -1,4 +1,4 @@
-"""Phase 4 TDD tests for :func:`restgdf.utils.crawl.safe_crawl`.
+"""S-4 TDD tests for :func:`restgdf.utils.crawl.safe_crawl`.
 
 Unlike the legacy ``fetch_all_data`` which short-circuits the whole
 crawl to ``{"error": exc}`` on the first failure, ``safe_crawl`` must
@@ -14,11 +14,17 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from restgdf._types import CrawlError, CrawlReport
+from restgdf._models import CrawlError, CrawlReport, CrawlServiceEntry
+from restgdf._models._drift import reset_drift_cache
 from restgdf.utils.crawl import safe_crawl
 
 
 BASE_URL = "https://example.com/arcgis/rest/services"
+
+
+@pytest.fixture(autouse=True)
+def _reset_drift_cache() -> None:
+    reset_drift_cache()
 
 
 def _metadata_by_url(mapping):
@@ -32,7 +38,7 @@ def _metadata_by_url(mapping):
 
 
 @pytest.mark.asyncio
-async def test_safe_crawl_returns_crawl_report_shape():
+async def test_safe_crawl_returns_crawl_report_model():
     async def fake_get_metadata(url, session, token=None):
         return {"services": [], "folders": []}
 
@@ -42,9 +48,9 @@ async def test_safe_crawl_returns_crawl_report_shape():
     ):
         report = await safe_crawl(object(), BASE_URL)
 
-    assert set(report.keys()) >= {"services", "errors"}
-    assert isinstance(report["services"], list)
-    assert isinstance(report["errors"], list)
+    assert isinstance(report, CrawlReport)
+    assert report.services == []
+    assert report.errors == []
 
 
 @pytest.mark.asyncio
@@ -60,7 +66,7 @@ async def test_safe_crawl_happy_path_collects_services_and_metadata():
     }
 
     async def fake_service_metadata(session, service_url, token, **kwargs):
-        return {"service_url": service_url}
+        return {"name": service_url}
 
     with patch(
         "restgdf.utils.crawl.get_metadata",
@@ -71,13 +77,15 @@ async def test_safe_crawl_happy_path_collects_services_and_metadata():
     ):
         report = await safe_crawl(object(), BASE_URL, token="abc")
 
-    assert report["errors"] == []
-    assert report["metadata"]["url"] == BASE_URL
-    assert [svc["name"] for svc in report["services"]] == [
+    assert report.errors == []
+    assert report.metadata is not None
+    assert report.metadata.url == BASE_URL
+    assert [svc.name for svc in report.services] == [
         "Root/Parcels",
         "Utilities/Storm",
     ]
-    assert all("metadata" in svc for svc in report["services"])
+    assert all(svc.metadata is not None for svc in report.services)
+    assert all(isinstance(svc, CrawlServiceEntry) for svc in report.services)
 
 
 @pytest.mark.asyncio
@@ -90,13 +98,14 @@ async def test_safe_crawl_records_base_metadata_error_without_raising():
     ):
         report = await safe_crawl(object(), BASE_URL)
 
-    assert report["services"] == []
-    assert len(report["errors"]) == 1
-    error = report["errors"][0]
-    assert error["stage"] == "base_metadata"
-    assert error["url"] == BASE_URL
-    assert error["message"] == "base boom"
-    assert error["exception"] is boom
+    assert report.services == []
+    assert len(report.errors) == 1
+    error = report.errors[0]
+    assert isinstance(error, CrawlError)
+    assert error.stage == "base_metadata"
+    assert error.url == BASE_URL
+    assert error.message == "base boom"
+    assert error.exception is boom
 
 
 @pytest.mark.asyncio
@@ -111,7 +120,7 @@ async def test_safe_crawl_records_folder_error_and_keeps_base_services():
     }
 
     async def fake_service_metadata(session, service_url, token, **kwargs):
-        return {"service_url": service_url}
+        return {"name": service_url}
 
     with patch(
         "restgdf.utils.crawl.get_metadata",
@@ -122,13 +131,13 @@ async def test_safe_crawl_records_folder_error_and_keeps_base_services():
     ):
         report = await safe_crawl(object(), BASE_URL)
 
-    assert [svc["name"] for svc in report["services"]] == ["Root/Parcels"]
-    assert all("metadata" in svc for svc in report["services"])
-    assert len(report["errors"]) == 1
-    error = report["errors"][0]
-    assert error["stage"] == "folder_metadata"
-    assert error["url"] == f"{BASE_URL}/Utilities"
-    assert error["exception"] is folder_boom
+    assert [svc.name for svc in report.services] == ["Root/Parcels"]
+    assert all(svc.metadata is not None for svc in report.services)
+    assert len(report.errors) == 1
+    error = report.errors[0]
+    assert error.stage == "folder_metadata"
+    assert error.url == f"{BASE_URL}/Utilities"
+    assert error.exception is folder_boom
 
 
 @pytest.mark.asyncio
@@ -149,7 +158,7 @@ async def test_safe_crawl_records_service_metadata_errors_per_service():
     async def fake_service_metadata(session, service_url, token, **kwargs):
         if service_url == bad_url:
             raise svc_boom
-        return {"service_url": service_url}
+        return {"name": service_url}
 
     with patch(
         "restgdf.utils.crawl.get_metadata",
@@ -160,16 +169,16 @@ async def test_safe_crawl_records_service_metadata_errors_per_service():
     ):
         report = await safe_crawl(object(), BASE_URL)
 
-    by_name = {svc["name"]: svc for svc in report["services"]}
-    assert "metadata" in by_name["Root/OK"]
-    assert "metadata" not in by_name["Root/Bad"]
-    assert len(report["errors"]) == 1
-    error = report["errors"][0]
-    assert error["stage"] == "service_metadata"
-    assert error["url"] == bad_url
-    assert error["exception"] is svc_boom
+    by_name = {svc.name: svc for svc in report.services}
+    assert by_name["Root/OK"].metadata is not None
+    assert by_name["Root/Bad"].metadata is None
+    assert len(report.errors) == 1
+    error = report.errors[0]
+    assert error.stage == "service_metadata"
+    assert error.url == bad_url
+    assert error.exception is svc_boom
     # ok service still fetched
-    assert by_name["Root/OK"]["metadata"]["service_url"] == ok_url
+    assert by_name["Root/OK"].metadata.name == ok_url
 
 
 @pytest.mark.asyncio
@@ -198,13 +207,8 @@ async def test_safe_crawl_return_feature_count_propagated_to_service_metadata():
     assert seen["return_feature_count"] is True
 
 
-def test_crawl_error_and_report_types_are_plain_dicts():
-    err: CrawlError = {
-        "stage": "base_metadata",
-        "url": "https://example.com",
-        "message": "boom",
-    }
-    report: CrawlReport = {"services": [], "errors": [err]}
-    assert isinstance(err, dict)
-    assert isinstance(report, dict)
-    assert report["errors"][0]["stage"] == "base_metadata"
+def test_crawl_error_and_report_models_expose_expected_fields():
+    err = CrawlError(stage="base_metadata", url="https://example.com", message="boom")
+    report = CrawlReport(errors=[err])
+    assert report.errors[0].stage == "base_metadata"
+    assert report.services == []

@@ -24,6 +24,35 @@ improved esri rest io for geopandas
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 ![Known Vulnerabilities](https://snyk.io/test/github/joshuasundance-swca/restgdf/badge.svg)
 
+## What's new in 2.0
+
+restgdf 2.0 is a **major release** built on [pydantic 2.13](https://docs.pydantic.dev/).
+See [`MIGRATION.md`](./MIGRATION.md) for the full breaking-changes table and
+code-rewrite recipes.
+
+- **Typed responses.** `FeatureLayer.metadata`, `Directory.metadata` /
+  `.services` / `.report`, and helpers like `get_metadata`, `safe_crawl`
+  now return pydantic models instead of raw dicts.
+- **Validated envelopes.** `get_feature_count`, `get_object_ids`, and
+  token refresh surface malformed ArcGIS payloads as a typed
+  `RestgdfResponseError` (with `model_name`, `context`, `raw`).
+- **Schema-drift observability.** Vendor variance in permissive payloads
+  (metadata, crawl) is logged through the opt-in `restgdf.schema_drift`
+  logger instead of silently `KeyError`-ing.
+- **Redacted credentials.** `AGOLUserPass.password` is a
+  `pydantic.SecretStr` so passwords are never in `repr()` or logs.
+- **Centralized settings.** `Settings` / `get_settings()` reads
+  `RESTGDF_*` environment variables (chunk size, timeout, user agent,
+  token URL, refresh threshold, etc.).
+- **Migration helpers.** `restgdf.compat.as_dict` and `as_json_dict`
+  convert any returned model back to a plain dict during a transitional
+  upgrade window.
+- **Deprecated shim.** `restgdf._types.*` still imports the legacy
+  `TypedDict` names, but they now re-export the pydantic classes and
+  emit `DeprecationWarning`. The shim will be removed in 3.x.
+- **Dependency bump.** `pydantic>=2.13.3,<3` is a new required
+  dependency.
+
 `gpd.read_file(url, driver="ESRIJSON")` does not account for max record count limitations
 
 so if you read a service with 100000 features but there's a limit of 1000 records per query, then your gdf will only have 1000 features
@@ -108,6 +137,34 @@ secured_gdf = asyncio.run(main())
 ```
 
 If you already have a token, you can pass it with `token="..."` or `data={"token": "..."}`.
+
+## Typed responses
+
+Every response is a pydantic model. Attribute access replaces dict
+indexing, and `model_dump(by_alias=True)` round-trips back to ArcGIS
+camelCase:
+
+```python
+import asyncio
+
+from aiohttp import ClientSession
+
+from restgdf import FeatureLayer
+
+
+async def main():
+    async with ClientSession() as session:
+        fl = await FeatureLayer.from_url(beaches_url, session=session)
+        md = fl.metadata                      # restgdf.LayerMetadata
+        return md.name, md.max_record_count, md.model_dump(by_alias=True)
+
+
+name, max_record_count, arcgis_dict = asyncio.run(main())
+```
+
+Need a plain dict during a transitional migration? Use
+`restgdf.compat.as_dict(md)`. See [`MIGRATION.md`](./MIGRATION.md) for
+the full 1.x → 2.0 rewrite table.
 
 # Documentation
 

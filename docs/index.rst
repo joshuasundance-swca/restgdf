@@ -11,8 +11,10 @@ Welcome to restgdf's documentation!
    :caption: Contents:
 
    restgdf
+   models
    authentication
    utils
+   migration
 
 Indices and tables
 ==================

@@ -14,8 +14,10 @@ The ``from aiohttp import ClientSession`` line is PUBLIC API: tests patch
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 
 from aiohttp import ClientSession
+from pydantic import BaseModel
 
 from restgdf.utils._http import (
     DEFAULT_METADATA_HEADERS,
@@ -34,7 +36,8 @@ from restgdf.utils._metadata import (
     getfields_df,
     supports_pagination,
 )
-from restgdf._types import LayerMetadata
+from restgdf._models._drift import _parse_response
+from restgdf._models.responses import LayerMetadata
 from restgdf.utils._query import get_feature_count, get_metadata, get_object_ids
 from restgdf.utils._stats import (
     get_unique_values,
@@ -104,13 +107,24 @@ async def service_metadata(
     Orchestrator: resolves ``get_metadata`` and ``get_feature_count`` through
     this module's namespace so that
     ``unittest.mock.patch("restgdf.utils.getinfo.<helper>")`` intercepts.
+    The aggregated payload is validated against :class:`LayerMetadata` via
+    the drift adapter before being returned, so vendor-variance extras are
+    logged (not raised) and callers get a typed envelope.
     """
-    _service_metadata = await get_metadata(service_url, session, token=token)
+    _raw = await get_metadata(service_url, session, token=token)
+    _service_metadata: dict[str, Any] = (
+        _raw.model_dump(by_alias=True) if isinstance(_raw, BaseModel) else dict(_raw)
+    )
 
-    async def _comprehensive_metadata(layer_url: str) -> LayerMetadata:
-        metadata = await get_metadata(layer_url, session, token=token)
+    async def _comprehensive_metadata(layer_url: str) -> dict[str, Any]:
+        layer_raw = await get_metadata(layer_url, session, token=token)
+        metadata: dict[str, Any] = (
+            layer_raw.model_dump(by_alias=True)
+            if isinstance(layer_raw, BaseModel)
+            else dict(layer_raw)
+        )
         metadata["url"] = layer_url
-        if return_feature_count and metadata["type"] == "Feature Layer":
+        if return_feature_count and metadata.get("type") == "Feature Layer":
             try:
                 feature_count = await get_feature_count(
                     layer_url,
@@ -119,7 +133,7 @@ async def service_metadata(
                 )
             except KeyError:
                 feature_count = None
-            metadata["feature_count"] = feature_count  # type: ignore
+            metadata["feature_count"] = feature_count
         return metadata
 
     tasks = [
@@ -128,4 +142,4 @@ async def service_metadata(
     ]
     results = await asyncio.gather(*tasks)
     _service_metadata["layers"] = results
-    return _service_metadata
+    return _parse_response(LayerMetadata, _service_metadata, context=service_url)

@@ -8,7 +8,7 @@ exclude = ["tests*"]
 
 [project]
 name = "restgdf"
-version = "1.0.0"
+version = "2.0.0"
 description = "improved esri rest io for geopandas"
 authors = [{ name = "Joshua Sundance Bailey" }]
 readme = "README.md"
@@ -16,6 +16,7 @@ dependencies = [
     "aiohttp",
     "geopandas",
     "pandas",
+    "pydantic>=2.13.3,<3",
     "pyogrio",
     "requests",
 ]
@@ -54,7 +55,7 @@ doc = [
 ]
 
 [tool.bumpver]
-current_version = "1.0.0"
+current_version = "2.0.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "Bump version {old_version} -> {new_version}"
 commit = true
@@ -118,7 +119,7 @@ markers = [
 [tool.mypy]
 
 [[tool.mypy.overrides]]
-module = ["restgdf._types", "restgdf._client.*"]
+module = ["restgdf._client.*", "restgdf._models.*", "restgdf.compat"]
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_calls = true
