@@ -1,6 +1,10 @@
+from __future__ import annotations
+
 import pytest
 import pytest_asyncio
 from aiohttp import ClientSession
+from geopandas import GeoDataFrame
+from shapely.geometry import Point
 
 
 def pytest_addoption(parser):
@@ -28,3 +32,30 @@ def pytest_collection_modifyitems(config, items):
 async def client_session():
     async with ClientSession() as session:
         yield session
+
+
+@pytest.fixture
+def feature_layer_metadata():
+    return {
+        "name": "Test Layer",
+        "type": "Feature Layer",
+        "fields": [
+            {"name": "OBJECTID", "type": "esriFieldTypeOID"},
+            {"name": "CITY", "type": "esriFieldTypeString"},
+            {"name": "STATUS", "type": "esriFieldTypeString"},
+        ],
+        "maxRecordCount": 2,
+        "advancedQueryCapabilities": {"supportsPagination": True},
+    }
+
+
+@pytest.fixture
+def sample_feature_gdf():
+    return GeoDataFrame(
+        {
+            "OBJECTID": [1, 2],
+            "CITY": ["DAYTONA", "ORMOND"],
+            "geometry": [Point(0, 0), Point(1, 1)],
+        },
+        crs="EPSG:4326",
+    )

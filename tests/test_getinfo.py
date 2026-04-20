@@ -1,5 +1,5 @@
 import asyncio
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from pandas import DataFrame
@@ -7,8 +7,11 @@ from pandas import DataFrame
 from restgdf.utils.utils import ends_with_num, where_var_in_list
 from restgdf.utils.getinfo import (
     DEFAULTDICT,
+    default_headers,
     default_data,
     get_feature_count,
+    get_object_id_field,
+    get_object_ids,
     getuniquevalues,
     get_metadata,
     get_max_record_count,
@@ -16,6 +19,9 @@ from restgdf.utils.getinfo import (
     get_offset_range,
     getfields,
     getfields_df,
+    nestedcount,
+    service_metadata,
+    supports_pagination,
     getvaluecounts,
 )
 
@@ -180,6 +186,47 @@ def test_default_data():
         assert default_data(indict) == outdict
 
 
+def test_default_headers():
+    assert default_headers({"X-Test": "yes"}) == {
+        "Accept": "application/json,text/plain,*/*",
+        "User-Agent": "Mozilla/5.0",
+        "X-Test": "yes",
+    }
+
+
+def test_supports_pagination_prefers_advanced_query_capabilities():
+    assert (
+        supports_pagination(
+            {"advancedQueryCapabilities": {"supportsPagination": False}},
+        )
+        is False
+    )
+    assert supports_pagination({"supportsPagination": False}) is False
+    assert supports_pagination({}) is True
+
+
+def test_get_object_id_field():
+    assert (
+        get_object_id_field(
+            {"fields": [{"name": "OBJECTID", "type": "esriFieldTypeOID"}]},
+        )
+        == "OBJECTID"
+    )
+
+    with pytest.raises(IndexError):
+        get_object_id_field({"fields": []})
+
+    with pytest.raises(IndexError):
+        get_object_id_field(
+            {
+                "fields": [
+                    {"name": "OBJECTID", "type": "esriFieldTypeOID"},
+                    {"name": "ALTID", "type": "esriFieldTypeOID"},
+                ],
+            },
+        )
+
+
 # ---------------------------------------------------------------------------
 # Pure-function regression tests (upgrade baseline)
 # These cover functions previously only exercised by live-network tests.
@@ -314,6 +361,26 @@ async def test_getuniquevalues_multi_field(mock_response, client_session):
 @pytest.mark.asyncio
 @patch(
     "restgdf.utils.getinfo.ClientSession.post",
+    side_effect=_make_mock_post(FEATURES_MULTI_JSON),
+)
+async def test_getuniquevalues_multi_field_sorts_dataframe(
+    mock_response,
+    client_session,
+):
+    result = await getuniquevalues(
+        "test",
+        ("City", "Status"),
+        session=client_session,
+        sortby="City",
+    )
+
+    assert result.iloc[0]["City"] == "DAYTONA"
+    assert result.iloc[1]["City"] == "ORMOND"
+
+
+@pytest.mark.asyncio
+@patch(
+    "restgdf.utils.getinfo.ClientSession.post",
     side_effect=_make_mock_post(VALUECOUNTS_JSON),
 )
 async def test_getvaluecounts_mock(mock_response, client_session):
@@ -325,3 +392,139 @@ async def test_getvaluecounts_mock(mock_response, client_session):
     # sorted descending by count
     assert result.iloc[0]["City"] == "DAYTONA"
     assert result.iloc[0]["City_count"] == 5
+
+
+@pytest.mark.asyncio
+@patch(
+    "restgdf.utils.getinfo.ClientSession.post",
+    side_effect=_make_mock_post(
+        {
+            "objectIdFieldName": "OBJECTID",
+            "objectIds": [1, 2, 3],
+        },
+    ),
+)
+async def test_get_object_ids_passes_through_where_and_token(
+    mock_response,
+    client_session,
+):
+    field_name, object_ids = await get_object_ids(
+        "test",
+        client_session,
+        data={"where": "CITY = 'DAYTONA'", "token": "abc123"},
+        headers={"X-Test": "yes"},
+    )
+
+    assert field_name == "OBJECTID"
+    assert object_ids == [1, 2, 3]
+
+
+@pytest.mark.asyncio
+@patch(
+    "restgdf.utils.getinfo.ClientSession.post",
+    side_effect=_make_mock_post(
+        {
+            "features": [
+                {
+                    "attributes": {
+                        "City": "DAYTONA",
+                        "Status": "Open",
+                        "City_count": 2,
+                        "Status_count": 2,
+                    },
+                },
+                {
+                    "attributes": {
+                        "City": "DAYTONA",
+                        "Status": "Closed",
+                        "City_count": 1,
+                        "Status_count": 1,
+                    },
+                },
+                {
+                    "attributes": {
+                        "City": "ORMOND",
+                        "Status": "Closed",
+                        "City_count": 1,
+                        "Status_count": 1,
+                    },
+                },
+            ],
+        },
+    ),
+)
+async def test_nestedcount_shapes_output(mock_response, client_session):
+    result = await nestedcount(
+        "test",
+        ("City", "Status"),
+        client_session,
+    )
+
+    assert list(result.columns) == ["City", "Status", "Count"]
+    assert result.iloc[0]["City"] == "DAYTONA"
+    assert result.iloc[0]["Count"] >= result.iloc[1]["Count"]
+
+
+@pytest.mark.asyncio
+async def test_service_metadata_fetches_layers_and_feature_counts():
+    metadata_by_url = {
+        "https://example.com/service": {
+            "layers": [{"id": 0}, {"id": 1}],
+        },
+        "https://example.com/service/0": {
+            "type": "Feature Layer",
+            "name": "Parcels",
+        },
+        "https://example.com/service/1": {
+            "type": "Raster Layer",
+            "name": "Imagery",
+        },
+    }
+
+    async def fake_get_metadata(url, session, token=None):
+        return dict(metadata_by_url[url])
+
+    async def fake_get_feature_count(url, session, **kwargs):
+        return 12
+
+    with patch(
+        "restgdf.utils.getinfo.get_metadata",
+        side_effect=fake_get_metadata,
+    ), patch(
+        "restgdf.utils.getinfo.get_feature_count",
+        side_effect=fake_get_feature_count,
+    ) as mock_get_feature_count:
+        result = await service_metadata(
+            object(),
+            "https://example.com/service",
+            token="abc123",
+            return_feature_count=True,
+        )
+
+    assert result["layers"][0]["url"] == "https://example.com/service/0"
+    assert result["layers"][0]["feature_count"] == 12
+    assert "feature_count" not in result["layers"][1]
+    mock_get_feature_count.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_service_metadata_sets_feature_count_none_when_count_lookup_fails():
+    async def fake_get_metadata(url, session, token=None):
+        if url.endswith("/0"):
+            return {"type": "Feature Layer"}
+        return {"layers": [{"id": 0}]}
+
+    with patch(
+        "restgdf.utils.getinfo.get_metadata",
+        side_effect=fake_get_metadata,
+    ), patch(
+        "restgdf.utils.getinfo.get_feature_count",
+        new=AsyncMock(side_effect=KeyError("count")),
+    ):
+        result = await service_metadata(
+            object(),
+            "https://example.com/service",
+            return_feature_count=True,
+        )
+
+    assert result["layers"][0]["feature_count"] is None
