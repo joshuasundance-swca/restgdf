@@ -13,6 +13,7 @@ from __future__ import annotations
 from aiohttp import ClientSession
 
 from restgdf._client.request import build_conservative_query_data
+from restgdf._types import CountResponse, LayerMetadata, ObjectIdsResponse
 from restgdf.utils._http import default_headers
 from restgdf.utils.token import ArcGISTokenSession
 
@@ -34,7 +35,7 @@ async def get_feature_count(
         headers=default_headers(xkwargs.pop("headers", None)),
         **xkwargs,
     )
-    response_json = await response.json(content_type=None)
+    response_json: CountResponse = await response.json(content_type=None)
     try:
         return response_json["count"]
     except KeyError as e:
@@ -45,7 +46,7 @@ async def get_metadata(
     url: str,
     session: ClientSession | ArcGISTokenSession,
     token: str | None = None,
-) -> dict:
+) -> LayerMetadata:
     """Get the JSON dict for a layer."""
     data = {"f": "json"}
     if token is not None:
@@ -71,5 +72,5 @@ async def get_object_ids(
         headers=default_headers(xkwargs.pop("headers", None)),
         **xkwargs,
     )
-    response_json = await response.json(content_type=None)
+    response_json: ObjectIdsResponse = await response.json(content_type=None)
     return response_json["objectIdFieldName"], response_json["objectIds"]

@@ -10,10 +10,12 @@ from re import IGNORECASE, compile
 
 from pandas import DataFrame
 
+from restgdf._types import FieldSpec, LayerMetadata
+
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
 
 
-def supports_pagination(metadata: dict) -> bool:
+def supports_pagination(metadata: LayerMetadata) -> bool:
     """Return whether the layer supports resultOffset/resultRecordCount pagination."""
     advanced_query_capabilities = metadata.get("advancedQueryCapabilities") or {}
     if "supportsPagination" in advanced_query_capabilities:
@@ -23,7 +25,7 @@ def supports_pagination(metadata: dict) -> bool:
     return True
 
 
-def get_object_id_field(metadata: dict) -> str:
+def get_object_id_field(metadata: LayerMetadata) -> str:
     """Get the object id field name for a layer."""
     oid_fields = [
         field["name"]
@@ -35,7 +37,7 @@ def get_object_id_field(metadata: dict) -> str:
     return oid_fields[0]
 
 
-def get_max_record_count(metadata: dict) -> int:
+def get_max_record_count(metadata: LayerMetadata) -> int:
     """Get the maximum record count for a layer."""
     key_pattern = compile(
         r"max(imum)?(\s|_)?record(\s|_)?count$",
@@ -44,19 +46,19 @@ def get_max_record_count(metadata: dict) -> int:
     key_list = [key for key in metadata.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
         raise FIELDDOESNOTEXIST
-    return metadata[key_list[0]]
+    return metadata[key_list[0]]  # type: ignore[literal-required]
 
 
-def get_name(metadata: dict) -> str:
+def get_name(metadata: LayerMetadata) -> str:
     """Get the name of a layer."""
     key_pattern = compile("name", flags=IGNORECASE)
     key_list = [key for key in metadata.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
         raise FIELDDOESNOTEXIST
-    return metadata[key_list[0]]
+    return metadata[key_list[0]]  # type: ignore[literal-required]
 
 
-def getfields(layer_metadata: dict, types: bool = False):
+def getfields(layer_metadata: LayerMetadata, types: bool = False):
     """Get the fields of a layer."""
     if types:
         return {
@@ -67,12 +69,10 @@ def getfields(layer_metadata: dict, types: bool = False):
         return [f["name"] for f in layer_metadata["fields"]]
 
 
-def getfields_df(layer_metadata: dict) -> DataFrame:
+def getfields_df(layer_metadata: LayerMetadata) -> DataFrame:
     """Get the fields of a layer as a DataFrame."""
+    fields: list[FieldSpec] = layer_metadata["fields"]
     return DataFrame(
-        [
-            (f["name"], f["type"].replace("esriFieldType", ""))
-            for f in layer_metadata["fields"]
-        ],
+        [(f["name"], f["type"].replace("esriFieldType", "")) for f in fields],
         columns=["name", "type"],
     )

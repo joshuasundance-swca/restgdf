@@ -114,3 +114,15 @@ markers = [
     "characterization: tests that pin current behavior to guard refactors",
     "compat: backward-compatibility tests for preserved import/patch paths",
 ]
+
+[tool.mypy]
+
+[[tool.mypy.overrides]]
+module = ["restgdf._types", "restgdf._client.*"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_calls = true
+warn_return_any = true
+warn_unused_ignores = true
+no_implicit_optional = true
+strict_equality = true

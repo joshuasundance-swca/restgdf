@@ -32,6 +32,7 @@ from restgdf.utils._metadata import (
     getfields_df,
     supports_pagination,
 )
+from restgdf._types import LayerMetadata
 from restgdf.utils._query import get_feature_count, get_metadata, get_object_ids
 from restgdf.utils._stats import getuniquevalues, getvaluecounts, nestedcount
 from restgdf.utils.token import ArcGISTokenSession
@@ -83,7 +84,7 @@ async def service_metadata(
     service_url: str,
     token: str | None = None,
     return_feature_count: bool = False,
-) -> dict:
+) -> LayerMetadata:
     """Asynchronously retrieve layers for a single service.
 
     Orchestrator: resolves ``get_metadata`` and ``get_feature_count`` through
@@ -92,7 +93,7 @@ async def service_metadata(
     """
     _service_metadata = await get_metadata(service_url, session, token=token)
 
-    async def _comprehensive_metadata(layer_url: str) -> dict:
+    async def _comprehensive_metadata(layer_url: str) -> LayerMetadata:
         metadata = await get_metadata(layer_url, session, token=token)
         metadata["url"] = layer_url
         if return_feature_count and metadata["type"] == "Feature Layer":
