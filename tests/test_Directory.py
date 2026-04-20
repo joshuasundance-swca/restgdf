@@ -1,18 +1,18 @@
-import pytest
-from aiohttp import ClientSession
 from unittest.mock import AsyncMock, patch
+
+import pytest
 
 from restgdf.directory.directory import Directory
 
 
 @pytest.mark.asyncio
-async def test_directory():
-    async with ClientSession() as s:
-        directory = await Directory.from_url(
-            "https://maps1.vcgov.org/arcgis/rest/services",
-            session=s,
-        )
-        services = await directory.crawl()
+@pytest.mark.network
+async def test_directory(client_session):
+    directory = await Directory.from_url(
+        "https://maps1.vcgov.org/arcgis/rest/services",
+        session=client_session,
+    )
+    services = await directory.crawl()
     assert directory.services == services
     first_service_with_layers = None
     for service in services:
