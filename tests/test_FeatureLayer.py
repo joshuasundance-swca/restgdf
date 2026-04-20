@@ -1,6 +1,6 @@
 import json
 from typing import Optional
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from geopandas import GeoDataFrame
@@ -135,6 +135,14 @@ async def test_arcgistokensession():
     assert session.get_calls[0][1]["params"]["token"] == "generated-token"
 
 
+def test_featurelayer_requires_url_to_end_with_numeric_layer_id():
+    with pytest.raises(ValueError, match="must end with a number"):
+        FeatureLayer(
+            "https://example.com/arcgis/rest/services/Secured/FeatureServer",
+            session=MockArcGISSession(),
+        )
+
+
 def test_featurelayer_accepts_legacy_token_kwarg():
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
@@ -171,6 +179,125 @@ async def test_getoids_uses_objectid_field():
     layer.getuniquevalues = fake_getuniquevalues
 
     assert await layer.getoids() == [1, 2, 3]
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_prep_populates_metadata_fields(feature_layer_metadata):
+    session = MockFeatureLayerSession(metadata=feature_layer_metadata, count=7)
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=session,
+        token="saved-token",
+    )
+
+    await layer.prep()
+
+    assert layer.metadata == feature_layer_metadata
+    assert layer.name == "Test Layer"
+    assert layer.fields == ["OBJECTID", "CITY", "STATUS"]
+    assert layer.object_id_field == "OBJECTID"
+    assert layer.count == 7
+    assert session.get_calls[0][1]["params"]["token"] == "saved-token"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("metadata", [{"type": "Map Server"}, {}])
+async def test_featurelayer_prep_rejects_non_feature_layers(metadata):
+    session = MockFeatureLayerSession(metadata=metadata, count=0)
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=session,
+    )
+
+    with pytest.raises(ValueError, match="FeatureLayer"):
+        await layer.prep()
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_from_url_calls_prep():
+    with patch.object(FeatureLayer, "prep", new=AsyncMock()) as mock_prep:
+        layer = await FeatureLayer.from_url(
+            "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+            session=MockArcGISSession(),
+        )
+
+    assert isinstance(layer, FeatureLayer)
+    mock_prep.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_samplegdf_uses_random_subset():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.object_id_field = "OBJECTID"
+    layer.fields = ("OBJECTID",)
+
+    sampled_layer = AsyncMock()
+    sampled_layer.getgdf = AsyncMock(return_value="sampled-gdf")
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.getuniquevalues",
+        new=AsyncMock(return_value=[1, 2, 3]),
+    ), patch(
+        "restgdf.featurelayer.featurelayer.random.sample",
+        return_value=[3, 1],
+    ) as mock_sample, patch.object(
+        layer,
+        "where",
+        new=AsyncMock(return_value=sampled_layer),
+    ) as mock_where:
+        result = await layer.samplegdf(10)
+
+    assert result == "sampled-gdf"
+    mock_sample.assert_called_once_with([1, 2, 3], 3)
+    mock_where.assert_awaited_once_with(where_var_in_list("OBJECTID", [3, 1]))
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_headgdf_uses_first_ids():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.object_id_field = "OBJECTID"
+    layer.fields = ("OBJECTID",)
+
+    head_layer = AsyncMock()
+    head_layer.getgdf = AsyncMock(return_value="head-gdf")
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.getuniquevalues",
+        new=AsyncMock(return_value=[1, 2, 3, 4]),
+    ), patch.object(
+        layer,
+        "where",
+        new=AsyncMock(return_value=head_layer),
+    ) as mock_where:
+        result = await layer.headgdf(2)
+
+    assert result == "head-gdf"
+    mock_where.assert_awaited_once_with(where_var_in_list("OBJECTID", [1, 2]))
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_getgdf_caches_result(sample_feature_gdf):
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_gdf",
+        new=AsyncMock(return_value=sample_feature_gdf),
+    ) as mock_get_gdf:
+        first = await layer.getgdf()
+        second = await layer.getgdf()
+
+    assert first.equals(sample_feature_gdf)
+    assert second.equals(sample_feature_gdf)
+    mock_get_gdf.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -220,6 +347,129 @@ async def test_getuniquevalues_cache_includes_sortby():
     assert first == ["CITY"]
     assert second == ["STATE"]
     assert mock_getuniquevalues.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_getuniquevalues_rejects_unknown_fields():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ("CITY", "STATE")
+
+    with pytest.raises(IndexError):
+        await layer.getuniquevalues("ZIP")
+
+    with pytest.raises(IndexError):
+        await layer.getuniquevalues(("CITY", "ZIP"))
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_getvaluecounts_caches_and_validates_fields():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ("CITY", "STATE")
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.getvaluecounts",
+        new=AsyncMock(return_value="counts"),
+    ) as mock_getvaluecounts:
+        first = await layer.getvaluecounts("CITY")
+        second = await layer.getvaluecounts("CITY")
+
+    assert first == second == "counts"
+    mock_getvaluecounts.assert_awaited_once()
+
+    with pytest.raises(IndexError):
+        await layer.getvaluecounts("ZIP")
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_getnestedcount_caches_and_validates_fields():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ("CITY", "STATE")
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.nestedcount",
+        new=AsyncMock(return_value="nested"),
+    ) as mock_nestedcount:
+        first = await layer.getnestedcount(("CITY", "STATE"))
+        second = await layer.getnestedcount(("CITY", "STATE"))
+
+    assert first == second == "nested"
+    mock_nestedcount.assert_awaited_once()
+
+    with pytest.raises(IndexError):
+        await layer.getnestedcount(("CITY", "ZIP"))
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_where_combines_filters_and_preserves_kwargs():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+        where="CITY = 'DAYTONA'",
+        token="saved-token",
+    )
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.FeatureLayer.from_url",
+        new=AsyncMock(return_value="filtered-layer"),
+    ) as mock_from_url:
+        result = await layer.where("STATUS = 'Open'")
+
+    assert result == "filtered-layer"
+    mock_from_url.assert_awaited_once_with(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=layer.session,
+        where="CITY = 'DAYTONA' AND STATUS = 'Open'",
+        data=layer.kwargs["data"],
+    )
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_where_leaves_default_where_unwrapped():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.FeatureLayer.from_url",
+        new=AsyncMock(return_value="filtered-layer"),
+    ) as mock_from_url:
+        await layer.where("STATUS = 'Open'")
+
+    mock_from_url.assert_awaited_once_with(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=layer.session,
+        where="STATUS = 'Open'",
+        data=layer.kwargs["data"],
+    )
+
+
+def test_featurelayer_repr_and_str():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+        where="CITY = 'DAYTONA'",
+        token="saved-token",
+    )
+    layer.name = "Beach Access Points"
+
+    representation = repr(layer)
+
+    assert "Rest(" in representation
+    assert "CITY = 'DAYTONA'" in representation
+    assert str(layer) == (
+        "Beach Access Points "
+        "(https://example.com/arcgis/rest/services/Secured/FeatureServer/0)"
+    )
 
 
 @pytest.mark.asyncio
