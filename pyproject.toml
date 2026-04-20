@@ -17,6 +17,7 @@ dependencies = [
     "geopandas",
     "pandas",
     "pydantic>=2.13.3,<3",
+    "eval_type_backport; python_version < '3.10'",
     "pyogrio",
     "requests",
 ]
