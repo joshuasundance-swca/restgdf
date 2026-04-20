@@ -105,4 +105,8 @@ title = "restgdf coverage report"
 [tool.pytest.ini_options]
 pythonpath = "."
 testpaths = "tests"
+addopts = "--strict-markers"
 asyncio_mode = "strict"
+markers = [
+    "network: tests that hit live external ArcGIS services",
+]

@@ -3,7 +3,6 @@ from typing import Optional
 from unittest.mock import patch
 
 import pytest
-from aiohttp import ClientSession
 from geopandas import GeoDataFrame
 from pytest import raises
 from shapely.geometry import Point
@@ -304,63 +303,65 @@ async def test_getgdf_falls_back_to_objectid_chunks_without_pagination():
 
 
 @pytest.mark.asyncio
-async def test_featurelayer():
-    async with ClientSession() as s:
-        # print("testing workflow")
-        with pytest.raises(ValueError):
-            await FeatureLayer.from_url(
-                "https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer",
-                session=s,
-            )
-        with pytest.raises(ValueError):
-            await FeatureLayer.from_url(
-                "https://maps1.vcgov.org/arcgis/rest/services/Aerials/MapServer/4",
-                session=s,
-            )
-        beachurl = r"https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer/6"
-        beaches = await FeatureLayer.from_url(
-            beachurl,
-            session=s,
-            where="City <> 'fgsfds'",
+@pytest.mark.network
+async def test_featurelayer(client_session):
+    with pytest.raises(ValueError):
+        await FeatureLayer.from_url(
+            "https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer",
+            session=client_session,
         )
-        beaches_gdf = await beaches.getgdf()
-        assert len(await beaches.samplegdf(2)) == 2
-        assert len(await beaches.headgdf(2)) == 2
-        assert len(beaches_gdf) > 0
-
-        # test row_dict_generator
-        row_gen = beaches.row_dict_generator()
-        beaches_row_gen_count = 0
-        async for row in row_gen:
-            assert isinstance(row, dict)
-            beaches_row_gen_count += 1
-        assert beaches_row_gen_count == len(beaches_gdf)
-
-        assert all(
-            "fgsfds" in s for s in (beaches.wherestr, beaches.kwargs["data"]["where"])
+    with pytest.raises(ValueError):
+        await FeatureLayer.from_url(
+            "https://maps1.vcgov.org/arcgis/rest/services/Aerials/MapServer/4",
+            session=client_session,
         )
-        assert len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 1
-        daytona = await beaches.where("City LIKE 'DAYTONA%'")
-        assert "Status" in daytona.fields
-        assert str(beaches) == f"Beach Access Points ({beachurl})"
+    beachurl = r"https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer/6"
+    beaches = await FeatureLayer.from_url(
+        beachurl,
+        session=client_session,
+        where="City <> 'fgsfds'",
+    )
+    beaches_gdf = await beaches.getgdf()
+    assert len(await beaches.samplegdf(2)) == 2
+    assert len(await beaches.headgdf(2)) == 2
+    assert len(beaches_gdf) > 0
 
-        zipurl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_ZIP_Codes_2016/FeatureServer/0"
-        ziprest = await FeatureLayer.from_url(zipurl, where="STATE = 'OH'", session=s)
-        testkwargs = {k: v for k, v in ziprest.kwargs.items()}
-        assert "Cincinnati" in await ziprest.getuniquevalues("PO_NAME")
-        assert await ziprest.getuniquevalues(
-            "PO_NAME",
-        ) == await ziprest.getuniquevalues(
-            "PO_NAME",
-        )
-        assert (await ziprest.getvaluecounts("PO_NAME")).set_index("PO_NAME").to_dict()[
-            "PO_NAME_count"
-        ]["Cincinnati"] > 40
-        with raises(IndexError):
-            assert "Cincinnati" in await ziprest.getuniquevalues("zzzzzz")
-        with raises(IndexError):
-            assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP"))) > 900
-        assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP_CODE"))) > 900
-        assert ziprest.count > ziprest.metadata["maxRecordCount"]
-        assert len(await ziprest.getgdf()) > ziprest.metadata["maxRecordCount"]
-        assert ziprest.kwargs == testkwargs  # make sure nothing is altering kwargs
+    row_gen = beaches.row_dict_generator()
+    beaches_row_gen_count = 0
+    async for row in row_gen:
+        assert isinstance(row, dict)
+        beaches_row_gen_count += 1
+    assert beaches_row_gen_count == len(beaches_gdf)
+
+    assert all(
+        "fgsfds" in s for s in (beaches.wherestr, beaches.kwargs["data"]["where"])
+    )
+    assert len(await beaches.getuniquevalues(("City", "Status"), sortby="City")) > 1
+    daytona = await beaches.where("City LIKE 'DAYTONA%'")
+    assert "Status" in daytona.fields
+    assert str(beaches) == f"Beach Access Points ({beachurl})"
+
+    zipurl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_ZIP_Codes_2016/FeatureServer/0"
+    ziprest = await FeatureLayer.from_url(
+        zipurl,
+        where="STATE = 'OH'",
+        session=client_session,
+    )
+    testkwargs = {k: v for k, v in ziprest.kwargs.items()}
+    assert "Cincinnati" in await ziprest.getuniquevalues("PO_NAME")
+    assert await ziprest.getuniquevalues(
+        "PO_NAME",
+    ) == await ziprest.getuniquevalues(
+        "PO_NAME",
+    )
+    assert (await ziprest.getvaluecounts("PO_NAME")).set_index("PO_NAME").to_dict()[
+        "PO_NAME_count"
+    ]["Cincinnati"] > 40
+    with raises(IndexError):
+        assert "Cincinnati" in await ziprest.getuniquevalues("zzzzzz")
+    with raises(IndexError):
+        assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP"))) > 900
+    assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP_CODE"))) > 900
+    assert ziprest.count > ziprest.metadata["maxRecordCount"]
+    assert len(await ziprest.getgdf()) > ziprest.metadata["maxRecordCount"]
+    assert ziprest.kwargs == testkwargs  # make sure nothing is altering kwargs

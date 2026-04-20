@@ -54,18 +54,35 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e .[dev]
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q -m "not network"
+
+  network:
+    name: pytest-network
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package with dev extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e .[dev]
+      - name: Run live network tests
+        run: python -m pytest -q -m network --run-network
 
   ci:
     name: ci
     if: always()
-    needs: [lint, test]
+    needs: [lint, test, network]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate job results
         run: |
-          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
-            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} network=${{ needs.network.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."

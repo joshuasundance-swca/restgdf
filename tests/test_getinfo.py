@@ -2,7 +2,6 @@ import asyncio
 from unittest.mock import patch
 
 import pytest
-from aiohttp import ClientSession
 from pandas import DataFrame
 
 from restgdf.utils.utils import ends_with_num, where_var_in_list
@@ -102,9 +101,8 @@ def mock_uniquevalues_post(*args, **kwargs):
     "restgdf.utils.getinfo.ClientSession.get",
     side_effect=mock_session_get,
 )
-async def test_get_json_dict(mock_response):
-    async with ClientSession() as s:
-        assert await get_metadata("test", session=s) == TESTJSON
+async def test_get_json_dict(mock_response, client_session):
+    assert await get_metadata("test", session=client_session) == TESTJSON
 
 
 @pytest.mark.asyncio
@@ -112,12 +110,19 @@ async def test_get_json_dict(mock_response):
     "restgdf.utils.getinfo.ClientSession.post",
     side_effect=mock_session_post,
 )
-async def test_get_feature_count(mock_response):
-    async with ClientSession() as s:
-        assert await get_feature_count("test", session=s) == TESTJSON["count"]
-        assert await get_feature_count("test", session=s, data={"where": "test"})
-        assert await get_feature_count("test", session=s, data={"token": "test"})
-        assert await get_feature_count("test", session=s, data=None)
+async def test_get_feature_count(mock_response, client_session):
+    assert await get_feature_count("test", session=client_session) == TESTJSON["count"]
+    assert await get_feature_count(
+        "test",
+        session=client_session,
+        data={"where": "test"},
+    )
+    assert await get_feature_count(
+        "test",
+        session=client_session,
+        data={"token": "test"},
+    )
+    assert await get_feature_count("test", session=client_session, data=None)
 
 
 @patch(
@@ -137,13 +142,12 @@ def test_get_max_record_count(mock_response):
     "restgdf.utils.getinfo.ClientSession.post",
     side_effect=mock_session_post,
 )
-async def test_get_offset_range(mock_post, mock_get):
-    async with ClientSession() as s:
-        assert await get_offset_range("test", session=s) == range(
-            0,
-            TESTJSON["count"],
-            TESTJSON["maxRecordCount"],
-        )
+async def test_get_offset_range(mock_post, mock_get, client_session):
+    assert await get_offset_range("test", session=client_session) == range(
+        0,
+        TESTJSON["count"],
+        TESTJSON["maxRecordCount"],
+    )
 
 
 @pytest.mark.asyncio
@@ -151,13 +155,13 @@ async def test_get_offset_range(mock_post, mock_get):
     "restgdf.utils.getinfo.ClientSession.post",
     side_effect=mock_uniquevalues_post,
 )
-async def test_getuniquevalues_sorts_single_field(mock_response):
-    async with ClientSession() as s:
-        assert await getuniquevalues("test", "CITY", s, sortby="CITY") == [
-            "A",
-            "B",
-            "C",
-        ]
+async def test_getuniquevalues_sorts_single_field(mock_response, client_session):
+    assert await getuniquevalues(
+        "test",
+        "CITY",
+        client_session,
+        sortby="CITY",
+    ) == ["A", "B", "C"]
 
 
 def test_default_data():
@@ -273,9 +277,8 @@ def _make_mock_post(json_data):
     "restgdf.utils.getinfo.ClientSession.post",
     side_effect=_make_mock_post(FEATURES_SINGLE_JSON),
 )
-async def test_getuniquevalues_single_field(mock_response):
-    async with ClientSession() as s:
-        result = await getuniquevalues("test", "City", session=s)
+async def test_getuniquevalues_single_field(mock_response, client_session):
+    result = await getuniquevalues("test", "City", session=client_session)
     assert result == ["DAYTONA", "ORMOND"]
 
 
@@ -284,9 +287,8 @@ async def test_getuniquevalues_single_field(mock_response):
     "restgdf.utils.getinfo.ClientSession.post",
     side_effect=_make_mock_post(FEATURES_SINGLE_JSON),
 )
-async def test_getuniquevalues_single_element_tuple(mock_response):
-    async with ClientSession() as s:
-        result = await getuniquevalues("test", ("City",), session=s)
+async def test_getuniquevalues_single_element_tuple(mock_response, client_session):
+    result = await getuniquevalues("test", ("City",), session=client_session)
     assert result == ["DAYTONA", "ORMOND"]
 
 
@@ -295,10 +297,13 @@ async def test_getuniquevalues_single_element_tuple(mock_response):
     "restgdf.utils.getinfo.ClientSession.post",
     side_effect=_make_mock_post(FEATURES_MULTI_JSON),
 )
-async def test_getuniquevalues_multi_field(mock_response):
+async def test_getuniquevalues_multi_field(mock_response, client_session):
     """Protect the DataFrame(x).T pattern used for multi-field unique values."""
-    async with ClientSession() as s:
-        result = await getuniquevalues("test", ("City", "Status"), session=s)
+    result = await getuniquevalues(
+        "test",
+        ("City", "Status"),
+        session=client_session,
+    )
     assert isinstance(result, DataFrame)
     assert list(result.columns) == ["City", "Status"]
     assert len(result) == 2
@@ -311,10 +316,9 @@ async def test_getuniquevalues_multi_field(mock_response):
     "restgdf.utils.getinfo.ClientSession.post",
     side_effect=_make_mock_post(VALUECOUNTS_JSON),
 )
-async def test_getvaluecounts_mock(mock_response):
+async def test_getvaluecounts_mock(mock_response, client_session):
     """Protect the concat(DataFrame(x['attributes'], index=[0])...) pattern."""
-    async with ClientSession() as s:
-        result = await getvaluecounts("test", "City", session=s)
+    result = await getvaluecounts("test", "City", session=client_session)
     assert isinstance(result, DataFrame)
     assert "City" in result.columns
     assert "City_count" in result.columns
