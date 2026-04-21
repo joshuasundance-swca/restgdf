@@ -1,4 +1,4 @@
-name: Publish PyPI
+name: Publish GitHub Release Assets
 
 on:
   pull_request:
@@ -8,26 +8,26 @@ on:
       - restgdf/**
       - .github/workflows/publish_on_pypi.yml
       - .github/workflows/publish_github_release.yml
-  workflow_dispatch:
-    inputs:
-      release_tag:
-        description: Existing semver tag to build from manually (for example 2.0.0 or v2.0.0).
-        required: false
-        type: string
   push:
     tags:
       - "*.*.*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing semver tag to build and attach to a GitHub Release (for example 2.0.0 or v2.0.0).
+        required: true
+        type: string
 
 permissions: {}
 
 concurrency:
-  group: publish-pypi-${{ inputs.release_tag || github.ref_name || github.run_id }}
+  group: github-release-assets-${{ inputs.release_tag || github.ref_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  build-distributions:
+  build-release-assets:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     outputs:
       release-tag: ${{ steps.release_meta.outputs.raw }}
       normalized-version: ${{ steps.release_meta.outputs.version }}
@@ -94,31 +94,67 @@ jobs:
       - name: Validate distribution metadata
         run: python -m twine check --strict dist/*
 
-      - name: Upload built distributions
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd dist
+            sha256sum -- * > SHA256SUMS
+          )
+
+      - name: Upload release assets
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: python-package-distributions
-          path: dist/
+          name: github-release-assets
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+            dist/SHA256SUMS
           if-no-files-found: error
 
-  publish-pypi:
-    if: github.event_name != 'pull_request' && needs.build-distributions.outputs.release-tag != ''
+  publish-release:
+    if: github.event_name != 'pull_request' && needs.build-release-assets.outputs.release-tag != ''
     needs:
-      - build-distributions
+      - build-release-assets
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    environment:
-      name: release
-      url: https://pypi.org/project/restgdf/
     permissions:
-      contents: read
+      contents: write
       id-token: write
     steps:
-      - name: Download built distributions
+      - name: Download release assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          name: python-package-distributions
+          name: github-release-assets
           path: dist/
 
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+      - name: Sign the distributions with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.3.0
+        with:
+          inputs: >-
+            ./dist/*.tar.gz
+            ./dist/*.whl
+
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.build-release-assets.outputs.release-tag }}
+          RELEASE_VERSION: ${{ needs.build-release-assets.outputs.normalized-version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" > /dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; uploading refreshed assets."
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GH_REPO" \
+              --draft \
+              --verify-tag \
+              --title "restgdf v${RELEASE_VERSION}" \
+              --generate-notes
+          fi
+
+          gh release upload "$RELEASE_TAG" dist/* --repo "$GH_REPO" --clobber
