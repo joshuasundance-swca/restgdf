@@ -1,5 +1,9 @@
-restgdf.utils
--------------
+Utilities
+=========
+
+Low-level helpers used by :class:`~restgdf.FeatureLayer` and
+:class:`~restgdf.Directory`. Most users will never call these directly, but
+they are public API and safe to use.
 
 restgdf.utils.crawl
 -------------------

@@ -2,115 +2,84 @@ Pydantic models
 ===============
 
 restgdf 2.0 exposes every ArcGIS response and config object as a
-pydantic ``BaseModel``. These classes are the single source of truth
-for payload shape and are re-exported from ``restgdf`` directly.
+pydantic :class:`~pydantic.BaseModel`. These classes are the single source of
+truth for payload shape and are re-exported from ``restgdf`` directly. Use
+:func:`restgdf.compat.as_dict` if you need a plain dict during a migration.
 
 Response envelopes
 ------------------
 
-.. autoclass:: restgdf.LayerMetadata
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.LayerMetadata
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.ServiceInfo
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.ServiceInfo
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.FieldSpec
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.FieldSpec
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.Feature
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.Feature
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.FeaturesResponse
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.FeaturesResponse
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.CountResponse
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.CountResponse
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.ObjectIdsResponse
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.ObjectIdsResponse
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.TokenResponse
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.TokenResponse
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.ErrorInfo
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.ErrorInfo
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.ErrorResponse
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.ErrorResponse
+   :model-show-json: false
+   :model-show-config-summary: false
 
 Crawl models
 ------------
 
-.. autoclass:: restgdf.CrawlReport
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.CrawlReport
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.CrawlServiceEntry
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.CrawlServiceEntry
+   :model-show-json: false
+   :model-show-config-summary: false
 
-.. autoclass:: restgdf.CrawlError
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.CrawlError
+   :model-show-json: false
+   :model-show-config-summary: false
 
 Credentials and session config
 ------------------------------
 
-.. autoclass:: restgdf.AGOLUserPass
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.AGOLUserPass
+   :model-show-json: false
+   :model-show-config-summary: false
+   :noindex:
 
-.. autoclass:: restgdf.TokenSessionConfig
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.TokenSessionConfig
+   :model-show-json: false
+   :model-show-config-summary: false
+   :noindex:
 
 Runtime settings
 ----------------
 
-.. autoclass:: restgdf.Settings
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-.. autofunction:: restgdf.get_settings
-
-Errors
-------
-
-.. autoclass:: restgdf.RestgdfResponseError
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Migration helpers
------------------
-
-.. automodule:: restgdf.compat
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autopydantic_model:: restgdf.Settings
+   :model-show-json: false
+   :model-show-config-summary: false
