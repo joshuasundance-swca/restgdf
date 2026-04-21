@@ -1,86 +1,183 @@
-name: Publish to PyPI
+name: Publish release
 
 on:
+  pull_request:
+    paths:
+      - pyproject.toml
+      - README.md
+      - restgdf/**
+      - .github/workflows/publish_on_pypi.yml
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing semver tag to build from manually (for example 2.0.0 or v2.0.0).
+        required: true
+        type: string
   push:
     tags:
-      - '*.*.*'
+      - "*.*.*"
+
+permissions: {}
+
+concurrency:
+  group: publish-release-${{ inputs.release_tag || github.ref_name || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build
+  build-distributions:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags')
-
+    timeout-minutes: 15
+    outputs:
+      release-tag: ${{ steps.release_meta.outputs.raw }}
+      normalized-version: ${{ steps.release_meta.outputs.version }}
+    permissions:
+      contents: read
     steps:
-    - uses: actions/checkout@v6
-    - name: Set up Python
-      uses: actions/setup-python@v6
-      with:
-        python-version: "3.14"
-    - name: Install pypa/build
-      run: >-
-        python3 -m
-        pip install
-        build
-        --user
-    - name: Build a binary wheel and a source tarball
-      run: python3 -m build
-    - name: Store the distribution packages
-      uses: actions/upload-artifact@v7
-      with:
-        name: python-package-distributions
-        path: dist/
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          ref: ${{ inputs.release_tag || github.ref }}
 
-  publish-to-pypi:
-    name: >-
-      Publish
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Resolve release metadata
+        id: release_meta
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          project_version="$(python -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text(encoding="utf-8"))["project"]["version"])')"
+
+          raw_tag=""
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            raw_tag="${INPUT_RELEASE_TAG}"
+          elif [ "${GITHUB_EVENT_NAME}" = "push" ] && [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            raw_tag="${GITHUB_REF_NAME}"
+          fi
+
+          if [ -n "$raw_tag" ]; then
+            if [[ ! "$raw_tag" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z][0-9A-Za-z.-]*)?(\+[0-9A-Za-z][0-9A-Za-z.-]*)?$ ]]; then
+              echo "Release tag must be semver-compatible (for example 2.0.0 or v2.0.0)."
+              exit 1
+            fi
+
+            normalized="${raw_tag#v}"
+            if [ "$normalized" != "$project_version" ]; then
+              echo "Release tag ($normalized) must match pyproject.toml version ($project_version)."
+              exit 1
+            fi
+          fi
+
+          {
+            echo "raw=${raw_tag}"
+            echo "version=${project_version}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install build twine
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Validate distribution metadata
+        run: python -m twine check --strict dist/*
+
+      - name: Upload built distributions
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: python-package-distributions
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  publish-pypi:
+    if: github.event_name != 'pull_request' && needs.build-distributions.outputs.release-tag != ''
     needs:
-    - build
+      - build-distributions
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment:
       name: release
-      url: https://pypi.org/p/restgdf
+      url: https://pypi.org/project/restgdf/
     permissions:
-      id-token: write  # IMPORTANT: mandatory for trusted publishing
-
+      contents: read
+      id-token: write
     steps:
-    - name: Download all the dists
-      uses: actions/download-artifact@v8
-      with:
-        name: python-package-distributions
-        path: dist/
-    - name: Publish distribution 📦 to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Download built distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-package-distributions
+          path: dist/
 
-  github-release:
-    name: Release
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@cef221092ed1bacb1cc03d23a2d87d1d172e277b # release/v1
+        with:
+          attestations: true
+
+  publish-github-release:
+    if: github.event_name != 'pull_request' && needs.build-distributions.outputs.release-tag != ''
     needs:
-    - publish-to-pypi
+      - build-distributions
+      - publish-pypi
     runs-on: ubuntu-latest
-
+    timeout-minutes: 15
     permissions:
-      contents: write  # IMPORTANT: mandatory for making GitHub Releases
-      id-token: write  # IMPORTANT: mandatory for sigstore
-
+      contents: write
+      id-token: write
     steps:
-    - uses: actions/checkout@v6
-    - name: Download all the dists
-      uses: actions/download-artifact@v8
-      with:
-        name: python-package-distributions
-        path: dist/
-    - name: Sign the dists with Sigstore
-      uses: sigstore/gh-action-sigstore-python@v3.3.0
-      with:
-        inputs: >-
-          ./dist/*.tar.gz
-          ./dist/*.whl
-    - name: Upload artifact signatures to GitHub Release
-      env:
-        GITHUB_TOKEN: ${{ github.token }}
-      # Upload to GitHub Release using the `gh` CLI.
-      # `dist/` contains the built packages, and the
-      # sigstore-produced signatures and certificates.
-      run: |
-        gh release create '${{ github.ref_name }}' --repo '${{ github.repository }}'
-        gh release upload '${{ github.ref_name }}' dist/** --repo '${{ github.repository }}'
+      - name: Download built distributions
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Generate SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd dist
+            sha256sum -- * > SHA256SUMS
+          )
+
+      - name: Sign distributions with Sigstore
+        uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc # v3.3.0
+        with:
+          inputs: >-
+            ./dist/*.tar.gz
+            ./dist/*.whl
+
+      - name: Create or update draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.build-distributions.outputs.release-tag }}
+          RELEASE_VERSION: ${{ needs.build-distributions.outputs.normalized-version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if gh release view "$RELEASE_TAG" --repo "$GH_REPO" > /dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; uploading refreshed assets."
+          else
+            gh release create "$RELEASE_TAG" \
+              --repo "$GH_REPO" \
+              --draft \
+              --verify-tag \
+              --title "restgdf v${RELEASE_VERSION}" \
+              --generate-notes
+          fi
+
+          gh release upload "$RELEASE_TAG" dist/* --repo "$GH_REPO" --clobber
