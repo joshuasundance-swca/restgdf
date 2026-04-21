@@ -99,6 +99,11 @@ nitpick_ignore_regex = [
 # auto-generated field summary (see ``nitpick_ignore_regex`` above).
 suppress_warnings = [
     "autosectionlabel.*",
+    # CHANGELOG.md and MIGRATION.md are included from the repo root via MyST
+    # ``{include}`` directives. Their relative links (e.g. ``./MIGRATION.md``)
+    # target the GitHub rendering; when included into the docs they become
+    # dangling xrefs. Silence just those rather than rewriting repo-level docs.
+    "myst.xref_missing",
 ]
 
 # -- Autodoc / napoleon / autodoc-pydantic -----------------------------------
