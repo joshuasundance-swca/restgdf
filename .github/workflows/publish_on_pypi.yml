@@ -33,6 +33,7 @@ jobs:
       normalized-version: ${{ steps.release_meta.outputs.version }}
     permissions:
       contents: read
+      id-token: write
     steps:
       - name: Check out repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -94,11 +95,21 @@ jobs:
       - name: Validate distribution metadata
         run: python -m twine check --strict dist/*
 
+      - name: Sign distributions with Sigstore
+        if: github.event_name != 'pull_request' && steps.release_meta.outputs.raw != ''
+        uses: sigstore/gh-action-sigstore-python@04cffa1d795717b140764e8b640de88853c92acc # v3.3.0
+        with:
+          inputs: >-
+            ./dist/*.tar.gz
+            ./dist/*.whl
+
       - name: Upload built distributions
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: python-package-distributions
-          path: dist/
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
           if-no-files-found: error
 
   publish-pypi:

@@ -2,9 +2,6 @@
 requires = ["setuptools>=61.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-license-files = []
-
 [tool.setuptools.packages.find]
 include = ["restgdf*"]
 exclude = ["tests*"]
@@ -24,7 +21,8 @@ dependencies = [
     "eval_type_backport; python_version < '3.10'",
     "requests",
 ]
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Framework :: AsyncIO",
