@@ -80,7 +80,7 @@ dev = [
     "pre-commit",
     "pytest",
     "pytest-asyncio",
-    "setuptools>=61.0.0",
+    "setuptools>=82.0.1",
 ]
 
 doc = [
