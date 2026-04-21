@@ -36,13 +36,16 @@ async def test_fetch_all_data_collects_services_and_folder_services():
             "token": token,
         }
 
-    with patch(
-        "restgdf.utils.crawl.get_metadata",
-        side_effect=fake_get_metadata,
-    ) as mock_get_metadata, patch(
-        "restgdf.utils.crawl.service_metadata",
-        side_effect=fake_service_metadata,
-    ) as mock_service_metadata:
+    with (
+        patch(
+            "restgdf.utils.crawl.get_metadata",
+            side_effect=fake_get_metadata,
+        ) as mock_get_metadata,
+        patch(
+            "restgdf.utils.crawl.service_metadata",
+            side_effect=fake_service_metadata,
+        ) as mock_service_metadata,
+    ):
         result = await fetch_all_data(
             session,
             base_url,
@@ -114,19 +117,22 @@ async def test_fetch_all_data_returns_folder_metadata_error():
 async def test_fetch_all_data_wraps_service_metadata_failures():
     base_url = "https://example.com/arcgis/rest/services"
 
-    with patch(
-        "restgdf.utils.crawl.get_metadata",
-        new=AsyncMock(
-            side_effect=[
-                {
-                    "services": [{"name": "Root/Parcels", "type": "FeatureServer"}],
-                    "folders": [],
-                },
-            ],
+    with (
+        patch(
+            "restgdf.utils.crawl.get_metadata",
+            new=AsyncMock(
+                side_effect=[
+                    {
+                        "services": [{"name": "Root/Parcels", "type": "FeatureServer"}],
+                        "folders": [],
+                    },
+                ],
+            ),
         ),
-    ), patch(
-        "restgdf.utils.crawl.service_metadata",
-        new=AsyncMock(side_effect=KeyError("missing")),
+        patch(
+            "restgdf.utils.crawl.service_metadata",
+            new=AsyncMock(side_effect=KeyError("missing")),
+        ),
     ):
         result = await fetch_all_data(object(), base_url)
 

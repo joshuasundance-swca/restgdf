@@ -163,3 +163,13 @@ warn_return_any = true
 warn_unused_ignores = true
 no_implicit_optional = true
 strict_equality = true
+
+[tool.ruff]
+target-version = "py39"
+
+[tool.ruff.lint]
+ignore = ["E501"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = ["B311"]

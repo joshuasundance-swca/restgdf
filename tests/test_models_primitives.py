@@ -177,9 +177,9 @@ def test_parse_response_dedupes_drift_logs(
     _parse_response(FieldSpec, payload, context="ctx")
     _parse_response(FieldSpec, payload, context="ctx")
     weird_records = [r for r in caplog.records if "weirdKey" in r.getMessage()]
-    assert (
-        len(weird_records) == 1
-    ), f"expected deduped drift log, got {len(weird_records)}"
+    assert len(weird_records) == 1, (
+        f"expected deduped drift log, got {len(weird_records)}"
+    )
 
 
 def test_parse_response_passes_through_valid_permissive_model() -> None:

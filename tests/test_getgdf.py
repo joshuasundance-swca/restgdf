@@ -58,12 +58,15 @@ def test_chunk_values_splits_evenly():
 
 @pytest.mark.asyncio
 async def test_get_query_data_batches_returns_single_request_when_under_limit():
-    with patch(
-        "restgdf.utils.getgdf.get_feature_count",
-        new=AsyncMock(return_value=2),
-    ), patch(
-        "restgdf.utils.getgdf.get_metadata",
-        new=AsyncMock(return_value={"maxRecordCount": 5}),
+    with (
+        patch(
+            "restgdf.utils.getgdf.get_feature_count",
+            new=AsyncMock(return_value=2),
+        ),
+        patch(
+            "restgdf.utils.getgdf.get_metadata",
+            new=AsyncMock(return_value={"maxRecordCount": 5}),
+        ),
     ):
         result = await get_query_data_batches(
             "https://example.com/layer/0",
@@ -76,16 +79,19 @@ async def test_get_query_data_batches_returns_single_request_when_under_limit():
 
 @pytest.mark.asyncio
 async def test_get_query_data_batches_uses_result_offsets_when_supported():
-    with patch(
-        "restgdf.utils.getgdf.get_feature_count",
-        new=AsyncMock(return_value=5),
-    ), patch(
-        "restgdf.utils.getgdf.get_metadata",
-        new=AsyncMock(
-            return_value={
-                "maxRecordCount": 2,
-                "advancedQueryCapabilities": {"supportsPagination": True},
-            },
+    with (
+        patch(
+            "restgdf.utils.getgdf.get_feature_count",
+            new=AsyncMock(return_value=5),
+        ),
+        patch(
+            "restgdf.utils.getgdf.get_metadata",
+            new=AsyncMock(
+                return_value={
+                    "maxRecordCount": 2,
+                    "advancedQueryCapabilities": {"supportsPagination": True},
+                },
+            ),
         ),
     ):
         result = await get_query_data_batches(
@@ -103,20 +109,24 @@ async def test_get_query_data_batches_uses_result_offsets_when_supported():
 
 @pytest.mark.asyncio
 async def test_get_query_data_batches_chunks_object_ids_when_pagination_disabled():
-    with patch(
-        "restgdf.utils.getgdf.get_feature_count",
-        new=AsyncMock(return_value=5),
-    ), patch(
-        "restgdf.utils.getgdf.get_metadata",
-        new=AsyncMock(
-            return_value={
-                "maxRecordCount": 2,
-                "advancedQueryCapabilities": {"supportsPagination": False},
-            },
+    with (
+        patch(
+            "restgdf.utils.getgdf.get_feature_count",
+            new=AsyncMock(return_value=5),
         ),
-    ), patch(
-        "restgdf.utils.getgdf.get_object_ids",
-        new=AsyncMock(return_value=("OBJECTID", [1, 2, 3, 4, 5])),
+        patch(
+            "restgdf.utils.getgdf.get_metadata",
+            new=AsyncMock(
+                return_value={
+                    "maxRecordCount": 2,
+                    "advancedQueryCapabilities": {"supportsPagination": False},
+                },
+            ),
+        ),
+        patch(
+            "restgdf.utils.getgdf.get_object_ids",
+            new=AsyncMock(return_value=("OBJECTID", [1, 2, 3, 4, 5])),
+        ),
     ):
         result = await get_query_data_batches(
             "https://example.com/layer/0",
@@ -137,13 +147,16 @@ async def test_get_sub_gdf_uses_geojson_driver_when_esrijson_missing(
 ):
     session = RecordingSession(response_text='{"features": []}')
 
-    with patch(
-        "restgdf.utils.getgdf.supported_drivers",
-        new={"GeoJSON": "rw"},
-    ), patch(
-        "restgdf.utils.getgdf.read_file",
-        return_value=sample_feature_gdf,
-    ) as mock_read_file:
+    with (
+        patch(
+            "restgdf.utils.getgdf.supported_drivers",
+            new={"GeoJSON": "rw"},
+        ),
+        patch(
+            "restgdf.utils.getgdf.read_file",
+            return_value=sample_feature_gdf,
+        ) as mock_read_file,
+    ):
         result = await get_sub_gdf(
             "https://example.com/layer/0",
             session,
@@ -174,13 +187,18 @@ async def test_get_sub_gdf_uses_geojson_driver_when_esrijson_missing(
 @pytest.mark.asyncio
 async def test_get_gdf_list_builds_tasks_from_batches(sample_feature_gdf):
     session = object()
-    with patch(
-        "restgdf.utils.getgdf.get_query_data_batches",
-        new=AsyncMock(return_value=[{"where": "1=1"}, {"where": "OBJECTID > 5"}]),
-    ), patch(
-        "restgdf.utils.getgdf.get_sub_gdf",
-        new=AsyncMock(side_effect=[sample_feature_gdf, sample_feature_gdf.iloc[[0]]]),
-    ) as mock_get_sub_gdf:
+    with (
+        patch(
+            "restgdf.utils.getgdf.get_query_data_batches",
+            new=AsyncMock(return_value=[{"where": "1=1"}, {"where": "OBJECTID > 5"}]),
+        ),
+        patch(
+            "restgdf.utils.getgdf.get_sub_gdf",
+            new=AsyncMock(
+                side_effect=[sample_feature_gdf, sample_feature_gdf.iloc[[0]]]
+            ),
+        ) as mock_get_sub_gdf,
+    ):
         result = await get_gdf_list("https://example.com/layer/0", session)
 
     assert len(result) == 2
@@ -200,12 +218,17 @@ async def test_get_gdf_list_builds_tasks_from_batches(sample_feature_gdf):
 
 @pytest.mark.asyncio
 async def test_chunk_generator_yields_each_chunk(sample_feature_gdf):
-    with patch(
-        "restgdf.utils.getgdf.get_query_data_batches",
-        new=AsyncMock(return_value=[{"where": "1=1"}, {"where": "OBJECTID > 5"}]),
-    ), patch(
-        "restgdf.utils.getgdf.get_sub_gdf",
-        new=AsyncMock(side_effect=[sample_feature_gdf, sample_feature_gdf.iloc[[0]]]),
+    with (
+        patch(
+            "restgdf.utils.getgdf.get_query_data_batches",
+            new=AsyncMock(return_value=[{"where": "1=1"}, {"where": "OBJECTID > 5"}]),
+        ),
+        patch(
+            "restgdf.utils.getgdf.get_sub_gdf",
+            new=AsyncMock(
+                side_effect=[sample_feature_gdf, sample_feature_gdf.iloc[[0]]]
+            ),
+        ),
     ):
         chunks = [
             chunk

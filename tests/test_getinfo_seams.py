@@ -52,13 +52,16 @@ async def test_service_metadata_uses_getinfo_get_feature_count_seam():
             return {"type": "Feature Layer"}
         return {"layers": [{"id": 0}]}
 
-    with patch(
-        "restgdf.utils.getinfo.get_metadata",
-        side_effect=fake_get_metadata,
-    ), patch(
-        "restgdf.utils.getinfo.get_feature_count",
-        new=AsyncMock(return_value=7),
-    ) as mock_gfc:
+    with (
+        patch(
+            "restgdf.utils.getinfo.get_metadata",
+            side_effect=fake_get_metadata,
+        ),
+        patch(
+            "restgdf.utils.getinfo.get_feature_count",
+            new=AsyncMock(return_value=7),
+        ) as mock_gfc,
+    ):
         result = await service_metadata(
             object(),
             "https://example.com/svc",
@@ -75,12 +78,15 @@ async def test_get_offset_range_uses_getinfo_get_feature_count_seam():
     """Patching ``restgdf.utils.getinfo.get_feature_count`` must intercept
     calls made from ``get_offset_range``."""
 
-    with patch(
-        "restgdf.utils.getinfo.get_feature_count",
-        new=AsyncMock(return_value=250),
-    ) as mock_gfc, patch(
-        "restgdf.utils.getinfo.get_metadata",
-        new=AsyncMock(return_value={"maxRecordCount": 100}),
+    with (
+        patch(
+            "restgdf.utils.getinfo.get_feature_count",
+            new=AsyncMock(return_value=250),
+        ) as mock_gfc,
+        patch(
+            "restgdf.utils.getinfo.get_metadata",
+            new=AsyncMock(return_value={"maxRecordCount": 100}),
+        ),
     ):
         result = await get_offset_range("https://example.com/svc/0", object())
 
@@ -94,13 +100,16 @@ async def test_get_offset_range_uses_getinfo_get_metadata_seam():
     """Patching ``restgdf.utils.getinfo.get_metadata`` must intercept calls
     made from ``get_offset_range``."""
 
-    with patch(
-        "restgdf.utils.getinfo.get_feature_count",
-        new=AsyncMock(return_value=10),
-    ), patch(
-        "restgdf.utils.getinfo.get_metadata",
-        new=AsyncMock(return_value={"maxRecordCount": 5}),
-    ) as mock_gm:
+    with (
+        patch(
+            "restgdf.utils.getinfo.get_feature_count",
+            new=AsyncMock(return_value=10),
+        ),
+        patch(
+            "restgdf.utils.getinfo.get_metadata",
+            new=AsyncMock(return_value={"maxRecordCount": 5}),
+        ) as mock_gm,
+    ):
         result = await get_offset_range("https://example.com/svc/0", object())
 
     mock_gm.assert_awaited_once()
@@ -113,16 +122,20 @@ async def test_get_offset_range_uses_getinfo_get_max_record_count_seam():
     """Patching ``restgdf.utils.getinfo.get_max_record_count`` must intercept
     calls made from ``get_offset_range``."""
 
-    with patch(
-        "restgdf.utils.getinfo.get_feature_count",
-        new=AsyncMock(return_value=30),
-    ), patch(
-        "restgdf.utils.getinfo.get_metadata",
-        new=AsyncMock(return_value={}),
-    ), patch(
-        "restgdf.utils.getinfo.get_max_record_count",
-        return_value=10,
-    ) as mock_gmrc:
+    with (
+        patch(
+            "restgdf.utils.getinfo.get_feature_count",
+            new=AsyncMock(return_value=30),
+        ),
+        patch(
+            "restgdf.utils.getinfo.get_metadata",
+            new=AsyncMock(return_value={}),
+        ),
+        patch(
+            "restgdf.utils.getinfo.get_max_record_count",
+            return_value=10,
+        ) as mock_gmrc,
+    ):
         result = await get_offset_range("https://example.com/svc/0", object())
 
     mock_gmrc.assert_called_once()

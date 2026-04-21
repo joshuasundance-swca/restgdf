@@ -68,12 +68,15 @@ async def test_safe_crawl_happy_path_collects_services_and_metadata():
     async def fake_service_metadata(session, service_url, token, **kwargs):
         return {"name": service_url}
 
-    with patch(
-        "restgdf.utils.crawl.get_metadata",
-        side_effect=_metadata_by_url(mapping),
-    ), patch(
-        "restgdf.utils.crawl.service_metadata",
-        side_effect=fake_service_metadata,
+    with (
+        patch(
+            "restgdf.utils.crawl.get_metadata",
+            side_effect=_metadata_by_url(mapping),
+        ),
+        patch(
+            "restgdf.utils.crawl.service_metadata",
+            side_effect=fake_service_metadata,
+        ),
     ):
         report = await safe_crawl(object(), BASE_URL, token="abc")
 
@@ -122,12 +125,15 @@ async def test_safe_crawl_records_folder_error_and_keeps_base_services():
     async def fake_service_metadata(session, service_url, token, **kwargs):
         return {"name": service_url}
 
-    with patch(
-        "restgdf.utils.crawl.get_metadata",
-        side_effect=_metadata_by_url(mapping),
-    ), patch(
-        "restgdf.utils.crawl.service_metadata",
-        side_effect=fake_service_metadata,
+    with (
+        patch(
+            "restgdf.utils.crawl.get_metadata",
+            side_effect=_metadata_by_url(mapping),
+        ),
+        patch(
+            "restgdf.utils.crawl.service_metadata",
+            side_effect=fake_service_metadata,
+        ),
     ):
         report = await safe_crawl(object(), BASE_URL)
 
@@ -160,12 +166,15 @@ async def test_safe_crawl_records_service_metadata_errors_per_service():
             raise svc_boom
         return {"name": service_url}
 
-    with patch(
-        "restgdf.utils.crawl.get_metadata",
-        side_effect=_metadata_by_url(mapping),
-    ), patch(
-        "restgdf.utils.crawl.service_metadata",
-        side_effect=fake_service_metadata,
+    with (
+        patch(
+            "restgdf.utils.crawl.get_metadata",
+            side_effect=_metadata_by_url(mapping),
+        ),
+        patch(
+            "restgdf.utils.crawl.service_metadata",
+            side_effect=fake_service_metadata,
+        ),
     ):
         report = await safe_crawl(object(), BASE_URL)
 
@@ -195,12 +204,15 @@ async def test_safe_crawl_return_feature_count_propagated_to_service_metadata():
         seen["return_feature_count"] = kwargs.get("return_feature_count")
         return {}
 
-    with patch(
-        "restgdf.utils.crawl.get_metadata",
-        side_effect=_metadata_by_url(mapping),
-    ), patch(
-        "restgdf.utils.crawl.service_metadata",
-        side_effect=fake_service_metadata,
+    with (
+        patch(
+            "restgdf.utils.crawl.get_metadata",
+            side_effect=_metadata_by_url(mapping),
+        ),
+        patch(
+            "restgdf.utils.crawl.service_metadata",
+            side_effect=fake_service_metadata,
+        ),
     ):
         await safe_crawl(object(), BASE_URL, return_feature_count=True)
 

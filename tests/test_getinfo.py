@@ -488,13 +488,16 @@ async def test_service_metadata_fetches_layers_and_feature_counts():
     async def fake_get_feature_count(url, session, **kwargs):
         return 12
 
-    with patch(
-        "restgdf.utils.getinfo.get_metadata",
-        side_effect=fake_get_metadata,
-    ), patch(
-        "restgdf.utils.getinfo.get_feature_count",
-        side_effect=fake_get_feature_count,
-    ) as mock_get_feature_count:
+    with (
+        patch(
+            "restgdf.utils.getinfo.get_metadata",
+            side_effect=fake_get_metadata,
+        ),
+        patch(
+            "restgdf.utils.getinfo.get_feature_count",
+            side_effect=fake_get_feature_count,
+        ) as mock_get_feature_count,
+    ):
         result = await service_metadata(
             object(),
             "https://example.com/service",
@@ -515,12 +518,15 @@ async def test_service_metadata_sets_feature_count_none_when_count_lookup_fails(
             return {"type": "Feature Layer"}
         return {"layers": [{"id": 0}]}
 
-    with patch(
-        "restgdf.utils.getinfo.get_metadata",
-        side_effect=fake_get_metadata,
-    ), patch(
-        "restgdf.utils.getinfo.get_feature_count",
-        new=AsyncMock(side_effect=KeyError("count")),
+    with (
+        patch(
+            "restgdf.utils.getinfo.get_metadata",
+            side_effect=fake_get_metadata,
+        ),
+        patch(
+            "restgdf.utils.getinfo.get_feature_count",
+            new=AsyncMock(side_effect=KeyError("count")),
+        ),
     ):
         result = await service_metadata(
             object(),

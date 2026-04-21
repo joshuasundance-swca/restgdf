@@ -79,7 +79,10 @@ nitpick_ignore_regex = [
     # ``py:obj``/``py:attr`` targets that aren't registered (fields render as
     # pydantic-specific directives). Harmless noise.
     (r"py:(obj|attr|func|class|meth|mod)", r"restgdf\._models\..*"),
-    (r"py:(attr|class|func)", r"^(Crawl|Count|Layer|ObjectIds|Features|Token|Error|Service|Field|Feature|Settings)[A-Za-z]*(\.[A-Za-z_]+)?$"),
+    (
+        r"py:(attr|class|func)",
+        r"^(Crawl|Count|Layer|ObjectIds|Features|Token|Error|Service|Field|Feature|Settings)[A-Za-z]*(\.[A-Za-z_]+)?$",
+    ),
     (r"py:func", r"^(safe_crawl|reset_settings_cache|_parse_response|__post_init__)$"),
     (r"py:meth", r"^__post_init__$"),
     # aiohttp/asyncio internals aren't in the aiohttp intersphinx inventory.
