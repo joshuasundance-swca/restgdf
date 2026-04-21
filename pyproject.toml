@@ -21,9 +21,9 @@ dependencies = [
     "pyogrio",
     "requests",
 ]
-license = { file = "LICENSE" }
+license = "MIT"
+license-files = ["LICENSE"]
 classifiers = [
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -51,8 +51,13 @@ dev = [
 ]
 
 doc = [
-    "sphinx",
-    "sphinx-rtd-theme",
+    "sphinx>=8.0,<10",
+    "furo>=2024.8.6",
+    "autodoc-pydantic>=2.2,<3",
+    "myst-parser[linkify]>=5.0",
+    "sphinx-copybutton>=0.5.2",
+    "sphinx-design>=0.7",
+    "sphinx-llm>=0.4",
 ]
 
 [tool.bumpver]
@@ -68,7 +73,6 @@ push = true
 [tool.bumpver.file_patterns]
 "pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
 "restgdf/__init__.py" = ['__version__ = "{version}"']
-"docs/conf.py" = ["release = '{version}'"]
 
 
 [tool.coverage.run]
