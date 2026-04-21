@@ -110,6 +110,8 @@ jobs:
           path: |
             dist/*.whl
             dist/*.tar.gz
+            dist/*.sig
+            dist/*.sigstore.json
           if-no-files-found: error
 
   publish-pypi:
