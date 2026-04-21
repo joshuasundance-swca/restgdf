@@ -47,17 +47,44 @@ def supports_pagination(metadata: LayerMetadataLike) -> bool:
     return True
 
 
+def supports_pagination_explicitly(metadata: LayerMetadataLike) -> bool:
+    """Return whether pagination support is explicitly advertised."""
+    metadata = _as_dict(metadata)
+    advanced_query_capabilities = metadata.get("advancedQueryCapabilities") or {}
+    if "supportsPagination" in advanced_query_capabilities:
+        return advanced_query_capabilities["supportsPagination"] is True
+    return metadata.get("supportsPagination") is True
+
+
 def get_object_id_field(metadata: LayerMetadataLike) -> str:
     """Get the object id field name for a layer."""
     metadata = _as_dict(metadata)
-    oid_fields = [
-        field["name"]
-        for field in metadata.get("fields", [])
-        if field.get("type") == "esriFieldTypeOID"
+    fields = metadata.get("fields") or []
+    field_names = [
+        field["name"] for field in fields if isinstance(field.get("name"), str)
     ]
-    if len(oid_fields) != 1:
+    field_name_lookup = {name.lower(): name for name in field_names}
+
+    oid_fields = [
+        field["name"] for field in fields if field.get("type") == "esriFieldTypeOID"
+    ]
+    if len(oid_fields) == 1:
+        return oid_fields[0]
+    if len(oid_fields) > 1:
         raise FIELDDOESNOTEXIST
-    return oid_fields[0]
+
+    for key, value in metadata.items():
+        if key.lower() not in {"objectidfield", "objectidfieldname"}:
+            continue
+        if isinstance(value, str):
+            return field_name_lookup.get(value.lower(), value)
+
+    unique_id_info = metadata.get("uniqueIdInfo") or {}
+    unique_id_name = unique_id_info.get("name")
+    if isinstance(unique_id_name, str):
+        return field_name_lookup.get(unique_id_name.lower(), unique_id_name)
+
+    raise FIELDDOESNOTEXIST
 
 
 def get_max_record_count(metadata: LayerMetadataLike) -> int:

@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pandas import DataFrame
 
+from tests.id_schema_fixtures import load_id_schema_fixture
 from restgdf.utils.utils import ends_with_num, where_var_in_list
 from restgdf.utils.getinfo import (
     DEFAULTDICT,
@@ -242,6 +243,18 @@ def test_get_object_id_field():
                 ],
             },
         )
+
+
+def test_get_object_id_field_accepts_lowercase_objectid_metadata_fixture():
+    payload = load_id_schema_fixture("object-id-key-variants")
+
+    assert get_object_id_field(payload["metadata"]["lowercase-objectid"]) == "objectid"
+
+
+def test_get_object_id_field_falls_back_to_unique_id_info_when_oid_field_missing():
+    payload = load_id_schema_fixture("unique-id-info-no-oid")
+
+    assert get_object_id_field(payload) == "GLOBALID"
 
 
 # ---------------------------------------------------------------------------

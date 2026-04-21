@@ -6,6 +6,9 @@ from unittest.mock import AsyncMock, call, patch
 import pytest
 from geopandas import GeoDataFrame
 
+from restgdf._models import RestgdfResponseError
+from tests.pagination_fixtures import load_pagination_fixture
+
 from restgdf.utils.getgdf import (
     chunk_generator,
     chunk_values,
@@ -13,6 +16,7 @@ from restgdf.utils.getgdf import (
     get_gdf,
     get_gdf_list,
     get_query_data_batches,
+    get_sub_features,
     get_sub_gdf,
     row_dict_generator,
 )
@@ -34,6 +38,24 @@ class RecordingSession:
                 return self._text_payload
 
         return Response(self.response_text)
+
+
+class JsonSession:
+    def __init__(self, payloads: list[dict]):
+        self.payloads = list(payloads)
+        self.post_calls: list[tuple[str, dict]] = []
+
+    async def post(self, url: str, **kwargs):
+        self.post_calls.append((url, kwargs))
+
+        class Response:
+            def __init__(self, payload: dict):
+                self._payload = payload
+
+            async def json(self, content_type=None):
+                return self._payload
+
+        return Response(self.payloads.pop(0))
 
 
 def _missing_optional_import(target: str):
@@ -107,9 +129,9 @@ async def test_get_query_data_batches_uses_result_offsets_when_supported():
         )
 
     assert result == [
-        {"where": "CITY = 'DAYTONA'", "resultOffset": 0},
-        {"where": "CITY = 'DAYTONA'", "resultOffset": 2},
-        {"where": "CITY = 'DAYTONA'", "resultOffset": 4},
+        {"where": "CITY = 'DAYTONA'", "resultOffset": 0, "resultRecordCount": 2},
+        {"where": "CITY = 'DAYTONA'", "resultOffset": 2, "resultRecordCount": 2},
+        {"where": "CITY = 'DAYTONA'", "resultOffset": 4, "resultRecordCount": 1},
     ]
 
 
@@ -141,6 +163,83 @@ async def test_get_query_data_batches_chunks_object_ids_when_pagination_disabled
         {"where": "(CITY = 'DAYTONA') AND (OBJECTID In (3, 4))"},
         {"where": "(CITY = 'DAYTONA') AND (OBJECTID In (5))"},
     ]
+
+
+@pytest.mark.asyncio
+async def test_get_query_data_batches_uses_object_id_chunks_for_missing_pagination_flag_fixture():
+    metadata = load_pagination_fixture("metadata_missing_supports_pagination.json")
+
+    with patch(
+        "restgdf.utils.getgdf.get_feature_count",
+        new=AsyncMock(return_value=2001),
+    ), patch(
+        "restgdf.utils.getgdf.get_metadata",
+        new=AsyncMock(return_value=metadata),
+    ), patch(
+        "restgdf.utils.getgdf.get_object_ids",
+        new=AsyncMock(return_value=("OBJECTID", list(range(1, 2002)))),
+    ):
+        result = await get_query_data_batches(
+            "https://example.com/layer/0",
+            object(),
+            data={"where": "CITY = 'DAYTONA'"},
+        )
+
+    assert len(result) == 3
+    assert all("resultOffset" not in batch for batch in result)
+    assert result[0]["where"].startswith("(CITY = 'DAYTONA') AND (OBJECTID In (1, 2, 3")
+
+
+@pytest.mark.asyncio
+async def test_get_query_data_batches_should_not_assume_offsets_when_paging_flag_is_missing():
+    metadata = load_pagination_fixture("metadata_missing_supports_pagination.json")
+
+    with patch(
+        "restgdf.utils.getgdf.get_feature_count",
+        new=AsyncMock(return_value=2001),
+    ), patch(
+        "restgdf.utils.getgdf.get_metadata",
+        new=AsyncMock(return_value=metadata),
+    ), patch(
+        "restgdf.utils.getgdf.get_object_ids",
+        new=AsyncMock(return_value=("OBJECTID", list(range(1, 2002)))),
+    ) as mock_get_object_ids:
+        result = await get_query_data_batches(
+            "https://example.com/layer/0",
+            object(),
+            data={"where": "CITY = 'DAYTONA'"},
+        )
+
+    mock_get_object_ids.assert_awaited_once()
+    assert len(result) == 3
+    assert all("resultOffset" not in batch for batch in result)
+    assert result[0]["where"].startswith("(CITY = 'DAYTONA') AND (OBJECTID In (1, 2, 3")
+
+
+@pytest.mark.asyncio
+async def test_get_query_data_batches_uses_object_id_chunks_for_pagination_false_fixture():
+    metadata = load_pagination_fixture("metadata_supports_pagination_false.json")
+
+    with patch(
+        "restgdf.utils.getgdf.get_feature_count",
+        new=AsyncMock(return_value=2001),
+    ), patch(
+        "restgdf.utils.getgdf.get_metadata",
+        new=AsyncMock(return_value=metadata),
+    ), patch(
+        "restgdf.utils.getgdf.get_object_ids",
+        new=AsyncMock(return_value=("OBJECTID", list(range(1, 2002)))),
+    ):
+        result = await get_query_data_batches(
+            "https://example.com/layer/0",
+            object(),
+            data={"where": "CITY = 'DAYTONA'"},
+        )
+
+    assert len(result) == 3
+    assert all("resultOffset" not in batch for batch in result)
+    assert result[0]["where"].startswith("(CITY = 'DAYTONA') AND (OBJECTID In (1, 2, 3")
+    assert result[-1]["where"].endswith("2001))")
 
 
 @pytest.mark.asyncio
@@ -277,6 +376,56 @@ async def test_row_dict_generator_yields_rows(sample_feature_gdf):
     assert [row["CITY"] for row in rows] == ["DAYTONA", "ORMOND"]
     assert rows[0]["geometry"] == {"x": 0, "y": 0}
     mock_chunk_generator.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_get_sub_features_should_reject_truncated_empty_feature_page():
+    session = JsonSession(
+        [load_pagination_fixture("query_exceeded_transfer_limit_empty_features.json")],
+    )
+
+    with pytest.raises(RuntimeError, match="exceededTransferLimit"):
+        await get_sub_features(
+            "https://example.com/layer/0",
+            session,
+            query_data={"where": "1=1"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_sub_features_should_reject_truncated_short_feature_page():
+    session = JsonSession(
+        [load_pagination_fixture("query_exceeded_transfer_limit_short_page.json")],
+    )
+
+    with pytest.raises(RuntimeError, match="exceededTransferLimit"):
+        await get_sub_features(
+            "https://example.com/layer/0",
+            session,
+            query_data={"where": "1=1"},
+        )
+
+
+@pytest.mark.asyncio
+async def test_get_sub_features_raises_on_arcgis_error_envelope():
+    session = JsonSession(
+        [
+            {
+                "error": {
+                    "code": 400,
+                    "message": "Unable to perform query.",
+                    "details": ["where clause is invalid"],
+                },
+            },
+        ],
+    )
+
+    with pytest.raises(RestgdfResponseError, match="ArcGIS error envelope"):
+        await get_sub_features(
+            "https://example.com/layer/0",
+            session,
+            query_data={"where": "CITY = 'DAYTONA'"},
+        )
 
 
 @pytest.mark.asyncio

@@ -240,12 +240,21 @@ except RestgdfResponseError as exc:
     raise
 ```
 
+Permissive payloads still log ordinary vendor drift, but they no longer treat a
+top-level ArcGIS JSON error envelope (`{"error": {...}}`) as harmless metadata
+variance. If a metadata/query/crawl helper decodes JSON successfully and the
+payload is an ArcGIS error envelope, restgdf now raises
+`RestgdfResponseError` immediately with the original `raw` body attached.
+
 ### Schema-drift observability
 
-Permissive models never raise on vendor variance; instead they log one
+Permissive models never raise on *ordinary vendor variance* (unknown extras,
+missing optional fields, bad optional field types); instead they log one
 record per `(model_name, path, kind, value_type)` tuple through
 `restgdf.schema_drift`. The logger is installed with a `NullHandler` by
-default — opt in by attaching a handler (see below).
+default — opt in by attaching a handler (see below). Top-level ArcGIS error
+envelopes remain fail-fast and are surfaced as `RestgdfResponseError` rather
+than schema drift.
 
 ### Pydantic round-trip
 

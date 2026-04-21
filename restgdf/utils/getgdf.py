@@ -21,6 +21,7 @@ from restgdf.utils.getinfo import (
     get_object_ids,
     supports_pagination,
 )
+from restgdf.utils._metadata import supports_pagination_explicitly
 from restgdf.utils._optional import (
     require_geo_stack,
     require_geodataframe,
@@ -71,6 +72,11 @@ async def _get_sub_features(
     )
     raw = await response.json(content_type=None)
     envelope = _parse_response(FeaturesResponse, raw, context=f"{url}/query")
+    if envelope.exceeded_transfer_limit:
+        raise RuntimeError(
+            f"{url}/query returned exceededTransferLimit=true; query batching missed "
+            "records and the response page is incomplete.",
+        )
     return envelope.features or []
 
 
@@ -130,14 +136,23 @@ async def get_query_data_batches(
     token = request_data.get("token")
     metadata = await get_metadata(url, session, token=token)
     max_record_count = get_max_record_count(metadata)
+    requested_page_size = request_data.get("resultRecordCount")
+    if isinstance(requested_page_size, int) and requested_page_size > 0:
+        page_size = min(requested_page_size, max_record_count)
+    else:
+        page_size = max_record_count
 
     if feature_count <= max_record_count:
         return [request_data]
 
-    if supports_pagination(metadata):
+    if supports_pagination(metadata) and supports_pagination_explicitly(metadata):
         return [
-            {**request_data, "resultOffset": offset}
-            for offset in range(0, feature_count, max_record_count)
+            {
+                **request_data,
+                "resultOffset": offset,
+                "resultRecordCount": min(page_size, feature_count - offset),
+            }
+            for offset in range(0, feature_count, page_size)
         ]
 
     object_id_field_name, object_ids = await get_object_ids(url, session, **kwargs)

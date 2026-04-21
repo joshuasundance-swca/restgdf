@@ -220,9 +220,9 @@ async def test_batches_use_pagination_offsets_when_supported():
         )
 
     assert batches == [
-        {"resultOffset": 0},
-        {"resultOffset": 10},
-        {"resultOffset": 20},
+        {"resultOffset": 0, "resultRecordCount": 10},
+        {"resultOffset": 10, "resultRecordCount": 10},
+        {"resultOffset": 20, "resultRecordCount": 5},
     ]
 
 

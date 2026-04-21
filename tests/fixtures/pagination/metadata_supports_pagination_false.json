@@ -1,0 +1,19 @@
+{
+  "currentVersion": 10.81,
+  "id": 0,
+  "name": "Legacy layer without offset paging",
+  "type": "Feature Layer",
+  "objectIdField": "OBJECTID",
+  "fields": [
+    {
+      "name": "OBJECTID",
+      "type": "esriFieldTypeOID"
+    }
+  ],
+  "maxRecordCount": 1000,
+  "supportsPagination": false,
+  "advancedQueryCapabilities": {
+    "supportsPagination": false,
+    "supportsOrderBy": true
+  }
+}

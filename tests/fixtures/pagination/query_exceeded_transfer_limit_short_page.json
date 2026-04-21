@@ -1,0 +1,30 @@
+{
+  "objectIdFieldName": "OBJECTID",
+  "geometryType": "esriGeometryPoint",
+  "spatialReference": {
+    "wkid": 4326
+  },
+  "features": [
+    {
+      "attributes": {
+        "OBJECTID": 101,
+        "NAME": "Alpha"
+      },
+      "geometry": {
+        "x": -117.1956,
+        "y": 34.0561
+      }
+    },
+    {
+      "attributes": {
+        "OBJECTID": 102,
+        "NAME": "Beta"
+      },
+      "geometry": {
+        "x": -117.1841,
+        "y": 34.0513
+      }
+    }
+  ],
+  "exceededTransferLimit": true
+}
