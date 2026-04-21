@@ -1,3 +1,51 @@
+# Upcoming: restgdf 2.x to 3.x optional Geo extras
+
+restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This
+new top section documents the next planned breaking change: GeoPandas-backed
+and pandas-backed workflows move behind the `restgdf[geo]` extra instead of
+coming along for the ride in a default install.
+
+A plain `pip install restgdf` will continue to cover the async REST client,
+typed pydantic models, raw-row iteration, directory crawling, and token/session
+helpers. Install `restgdf[geo]` when you want `geopandas`, `pandas`,
+`pyogrio`, or the GeoDataFrame/tabular helpers that depend on them.
+
+## Why 3.x is making this split
+
+- **Keep the default install light.** Many users only need typed metadata,
+  count/object-id helpers, raw feature rows, crawl utilities, or token auth.
+- **Avoid heavy compiled dependencies when they are not needed.** CI jobs,
+  serverless deployments, and minimal containers should not need the geo stack
+  unless they actually materialize GeoDataFrames.
+- **Make dependency intent explicit.** Geo workflows stay fully supported, but
+  they become an opt-in install choice rather than an implicit one.
+
+## Install changes
+
+| Workflow | Install command |
+|---|---|
+| Typed metadata/models, count/object-id helpers, raw row dictionaries, directory crawl, and token/session helpers | `pip install restgdf` |
+| `FeatureLayer.get_gdf()`, `sample_gdf()`, `head_gdf()`, `fieldtypes`, `get_fields_frame()`, multi-field `get_unique_values()`, `get_value_counts()`, `get_nested_count()`, and `restgdf.utils.getgdf` helpers | `pip install "restgdf[geo]"` |
+
+If you manage dependencies in `requirements.txt`, `pyproject.toml`, lockfiles,
+or deployment manifests, update geo-enabled environments to request
+`restgdf[geo]` explicitly instead of assuming `geopandas`, `pandas`, or
+`pyogrio` arrive transitively.
+
+## Breaking changes
+
+- `pip install restgdf` no longer guarantees that `geopandas`, `pandas`, or
+  `pyogrio` are importable.
+- GeoDataFrame and pandas-backed helpers now require `restgdf[geo]` and raise
+  `ModuleNotFoundError` with an install hint when the optional stack is
+  missing.
+- Light-core workflows keep working without the geo stack: typed response
+  models, `FeatureLayer.from_url`, `.metadata`, `.count`, `.get_oids()`,
+  `row_dict_generator()`, single-field `get_unique_values()`, directory
+  crawling, and token helpers remain part of the base install.
+
+The preserved 1.x → 2.0 migration guide starts here.
+
 # Migrating from restgdf 1.x to 2.0
 
 restgdf 2.0 replaces the dict / `TypedDict` public surface with

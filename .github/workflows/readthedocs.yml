@@ -8,6 +8,8 @@ on:
       - "restgdf/**"
       - "tests/**"
       - "docs/**"
+      - "readthedocs.yaml"
+      - "pyproject.toml"
 
 jobs:
   readthedocs:
@@ -29,7 +31,8 @@ jobs:
         cache: pip
     - name: Install Python libraries
       run: |
-        pip install --user -r requirements.txt
+        python -m pip install --upgrade pip
+        python -m pip install --user -e . -r docs/requirements.txt
     - name: "Update docs"
       working-directory: docs
       run: |

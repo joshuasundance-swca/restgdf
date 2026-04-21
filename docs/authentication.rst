@@ -6,6 +6,10 @@ restgdf supports secured ArcGIS services in two common ways:
 1. Pass an existing ArcGIS token in the request ``data`` payload.
 2. Wrap an ``aiohttp.ClientSession`` in ``ArcGISTokenSession`` so tokens are requested and refreshed automatically.
 
+These auth helpers are part of the base ``pip install restgdf`` contract.
+Install ``restgdf[geo]`` only when you want the authenticated response as a
+GeoDataFrame via :meth:`restgdf.FeatureLayer.get_gdf`.
+
 Direct token usage
 ------------------
 
@@ -27,7 +31,7 @@ If you already have a valid token, pass it directly when you create the layer:
                session=session,
                token="my-token",
            )
-           return await layer.getgdf()
+           return await layer.get_gdf()
 
 
    secured_gdf = asyncio.run(main())
@@ -61,7 +65,7 @@ Use ``ArcGISTokenSession`` when you want the session to mint and refresh ArcGIS 
                "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
                session=token_session,
            )
-           return await layer.getgdf()
+           return await layer.get_gdf()
 
 
    secured_gdf = asyncio.run(main())
