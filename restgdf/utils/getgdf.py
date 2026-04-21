@@ -62,6 +62,7 @@ async def _get_sub_features(
     **kwargs,
 ) -> list[dict[str, Any]]:
     """Fetch a single query batch as raw ArcGIS feature dicts."""
+    kwargs = {k: v for k, v in kwargs.items() if k != "data"}
     response = await session.post(
         f"{url}/query",
         data=dict(query_data),

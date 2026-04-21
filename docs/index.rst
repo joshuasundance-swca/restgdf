@@ -52,6 +52,11 @@ Install ``restgdf[geo]`` when you want :class:`geopandas.GeoDataFrame` and
    pip install restgdf
    pip install "restgdf[geo]"
 
+Planning a 2.x → 3.x rollout? Treat the split above as the stable dependency
+boundary: geo-enabled environments should depend on ``restgdf[geo]``
+explicitly. See :doc:`migration` for the upcoming optional-dependency notes
+and the preserved 1.x → 2.0 guide.
+
 GeoDataFrame workflow (requires ``restgdf[geo]``):
 
 .. code-block:: python
@@ -107,11 +112,11 @@ Explore the docs
 
       Low-level crawl, HTTP, token, raw-record, and GeoDataFrame helpers.
 
-   .. grid-item-card:: 🔁 Migration 1.x → 2.0
+   .. grid-item-card:: 🔁 Migration notes
       :link: migration
       :link-type: doc
 
-      Upgrading from restgdf 1.x? The breaking-changes table and rewrite recipes live here.
+      The upcoming 3.x geo-extra change and the preserved 1.x → 2.0 rewrite table live here.
 
    .. grid-item-card:: 🤖 Docs for LLMs
       :link: https://restgdf.readthedocs.io/en/latest/llms.txt

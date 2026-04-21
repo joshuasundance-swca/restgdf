@@ -96,6 +96,12 @@ pip install "restgdf[geo]"
 - pandas-backed helpers like `get_value_counts()` and `get_nested_count()`
 - low-level `restgdf.utils.getgdf` helpers
 
+Planning a 2.x → 3.x rollout? Treat the split above as the stable dependency
+boundary: geo-enabled environments should depend on `restgdf[geo]`
+explicitly. [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md)
+now starts with the upcoming optional-dependency notes and keeps the full
+1.x → 2.0 rewrite table below.
+
 ## Light-core usage
 
 ```python
