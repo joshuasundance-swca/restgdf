@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+message: "If you use restgdf in academic or research work, please cite it as below."
+type: software
+title: restgdf
+abstract: >-
+  Async-first Python library for reading ArcGIS/Esri REST FeatureServer and
+  MapServer layers into GeoPandas GeoDataFrames, with pydantic-validated
+  response models and automatic pagination past the server maxRecordCount.
+authors:
+  - family-names: Bailey
+    given-names: Joshua Sundance
+repository-code: "https://github.com/joshuasundance-swca/restgdf"
+url: "https://restgdf.readthedocs.io/"
+license: MIT
+version: 2.0.0
+date-released: "2026-04-20"
+keywords:
+  - geopandas
+  - esri
+  - arcgis
+  - async
+  - aiohttp
+  - pydantic
+  - rest
+  - gis
+  - featureserver
+  - mapserver

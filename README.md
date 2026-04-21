@@ -3,31 +3,34 @@
 improved esri rest io for geopandas
 
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/license/bsd-3-clause/)
-[![python](https://img.shields.io/badge/Python-3.9+-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
-[![dev python](https://img.shields.io/badge/Dev%2FCI%20Python-3.14-3776AB.svg?style=flat&logo=python&logoColor=white)](https://www.python.org)
+<!-- Package -->
+[![PyPI version](https://img.shields.io/pypi/v/restgdf.svg)](https://pypi.org/project/restgdf/)
+[![Python versions](https://img.shields.io/pypi/pyversions/restgdf.svg)](https://pypi.org/project/restgdf/)
+[![Downloads](https://static.pepy.tech/badge/restgdf/month)](https://pepy.tech/project/restgdf)
+[![License](https://img.shields.io/github/license/joshuasundance-swca/restgdf.svg)](https://github.com/joshuasundance-swca/restgdf/blob/main/LICENSE)
 
+<!-- Build & coverage -->
+[![CI](https://img.shields.io/github/actions/workflow/status/joshuasundance-swca/restgdf/pytest.yml?event=pull_request&label=CI&logo=github)](https://github.com/joshuasundance-swca/restgdf/actions/workflows/pytest.yml)
 [![Publish to PyPI](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml/badge.svg)](https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml)
-![GitHub tag (with filter)](https://img.shields.io/github/v/tag/joshuasundance-swca/restgdf)
+[![coverage](https://raw.githubusercontent.com/joshuasundance-swca/restgdf/main/coverage.svg)](https://github.com/joshuasundance-swca/restgdf/blob/main/COVERAGE.md)
+
+<!-- Docs & discovery -->
 [![Read the Docs](https://img.shields.io/readthedocs/restgdf)](https://restgdf.readthedocs.io/en/latest/)
+[![llms.txt](https://img.shields.io/badge/llms.txt-green)](https://restgdf.readthedocs.io/en/latest/llms.txt)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/joshuasundance-swca/restgdf)
 
-![Code Climate maintainability](https://img.shields.io/codeclimate/maintainability/joshuasundance-swca/restgdf)
-![Code Climate issues](https://img.shields.io/codeclimate/issues/joshuasundance-swca/restgdf)
-![Code Climate technical debt](https://img.shields.io/codeclimate/tech-debt/joshuasundance-swca/restgdf)
-[![coverage](coverage.svg)](./COVERAGE.md)
-
+<!-- Built with & code quality -->
+[![Pydantic v2](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json)](https://docs.pydantic.dev/latest/contributing/#badges)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit&logoColor=white)](https://github.com/pre-commit/pre-commit)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/charliermarsh/ruff/main/assets/badge/v1.json)](https://github.com/charliermarsh/ruff)
-[![Checked with mypy](http://www.mypy-lang.org/static/mypy_badge.svg)](http://mypy-lang.org/)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v1.json)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](https://www.mypy-lang.org/static/mypy_badge.svg)](https://mypy-lang.org/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
-![Known Vulnerabilities](https://snyk.io/test/github/joshuasundance-swca/restgdf/badge.svg)
 
 ## What's new in 2.0
 
 restgdf 2.0 is a **major release** built on [pydantic 2.13](https://docs.pydantic.dev/).
-See [`MIGRATION.md`](./MIGRATION.md) for the full breaking-changes table and
+See [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md) for the full breaking-changes table and
 code-rewrite recipes.
 
 - **Typed responses.** `FeatureLayer.metadata`, `Directory.metadata` /
@@ -163,12 +166,31 @@ name, max_record_count, arcgis_dict = asyncio.run(main())
 ```
 
 Need a plain dict during a transitional migration? Use
-`restgdf.compat.as_dict(md)`. See [`MIGRATION.md`](./MIGRATION.md) for
+`restgdf.compat.as_dict(md)`. See [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md) for
 the full 1.x → 2.0 rewrite table.
 
 # Documentation
 
-https://restgdf.readthedocs.io/
+Full docs live at **<https://restgdf.readthedocs.io/>** (hosted by Read the Docs).
+
+## Docs for humans *and* LLMs
+
+Every page is published in three formats so you can feed it to a teammate
+*or* to a language model without any preprocessing:
+
+| Format                  | URL                                                                                                      |
+| ----------------------- | -------------------------------------------------------------------------------------------------------- |
+| Rendered HTML           | <https://restgdf.readthedocs.io/en/latest/>                                                              |
+| Plain Markdown (per page) | append `.md` to any page — e.g. <https://restgdf.readthedocs.io/en/latest/quickstart.html.md>            |
+| [llms.txt][llmstxt] index | <https://restgdf.readthedocs.io/en/latest/llms.txt>                                                      |
+| llms-full.txt (all pages) | <https://restgdf.readthedocs.io/en/latest/llms-full.txt>                                                 |
+| Ask DeepWiki           | <https://deepwiki.com/joshuasundance-swca/restgdf>                                                       |
+
+[llmstxt]: https://llmstxt.org/
+
+Point your coding agent or RAG pipeline at `llms-full.txt` for the entire
+reference in a single file, or at `llms.txt` for a concise table of
+contents.
 
 # Uses
 
