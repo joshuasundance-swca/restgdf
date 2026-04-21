@@ -6,6 +6,9 @@ build-backend = "setuptools.build_meta"
 include = ["restgdf*"]
 exclude = ["tests*"]
 
+[tool.setuptools.package-data]
+restgdf = ["py.typed"]
+
 [project]
 name = "restgdf"
 version = "2.0.0"
@@ -24,6 +27,12 @@ dependencies = [
 license = "MIT"
 license-files = ["LICENSE"]
 classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Framework :: AsyncIO",
+    "Framework :: Pydantic",
+    "Framework :: Pydantic :: 2",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
     "Operating System :: OS Independent",
     "Programming Language :: Python",
     "Programming Language :: Python :: 3",
@@ -33,11 +42,32 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed",
 ]
-keywords = ["geopandas", "esri", "arcgis"]
+keywords = [
+    "geopandas",
+    "esri",
+    "arcgis",
+    "async",
+    "aiohttp",
+    "pydantic",
+    "rest",
+    "gis",
+    "featureserver",
+    "mapserver",
+]
 requires-python = ">=3.9"
 [project.urls]
 Homepage = "https://github.com/joshuasundance-swca/restgdf"
+Documentation = "https://restgdf.readthedocs.io/"
+Repository = "https://github.com/joshuasundance-swca/restgdf"
+Issues = "https://github.com/joshuasundance-swca/restgdf/issues"
+Changelog = "https://github.com/joshuasundance-swca/restgdf/blob/main/CHANGELOG.md"
+"Security Policy" = "https://github.com/joshuasundance-swca/restgdf/security/policy"
+"Ask DeepWiki" = "https://deepwiki.com/joshuasundance-swca/restgdf"
+"llms.txt" = "https://restgdf.readthedocs.io/en/latest/llms.txt"
 
 
 [project.optional-dependencies]
@@ -73,6 +103,7 @@ push = true
 [tool.bumpver.file_patterns]
 "pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
 "restgdf/__init__.py" = ['__version__ = "{version}"']
+"CITATION.cff" = ['version: {version}']
 
 
 [tool.coverage.run]

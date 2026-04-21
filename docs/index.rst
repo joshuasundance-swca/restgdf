@@ -3,15 +3,43 @@ restgdf
 
    *Improved Esri REST I/O for GeoPandas.*
 
+.. Package
 .. image:: https://img.shields.io/pypi/v/restgdf.svg
    :target: https://pypi.org/project/restgdf/
    :alt: PyPI version
-.. image:: https://img.shields.io/badge/Python-3.9+-3776AB.svg?style=flat&logo=python&logoColor=white
-   :target: https://www.python.org
+.. image:: https://img.shields.io/pypi/pyversions/restgdf.svg
+   :target: https://pypi.org/project/restgdf/
    :alt: Python versions
-.. image:: https://img.shields.io/readthedocs/restgdf
-   :target: https://restgdf.readthedocs.io/
-   :alt: Read the Docs
+.. image:: https://static.pepy.tech/badge/restgdf/month
+   :target: https://pepy.tech/project/restgdf
+   :alt: Downloads
+.. image:: https://img.shields.io/github/license/joshuasundance-swca/restgdf.svg
+   :target: https://github.com/joshuasundance-swca/restgdf/blob/main/LICENSE
+   :alt: License
+
+.. Build & coverage
+.. image:: https://img.shields.io/github/actions/workflow/status/joshuasundance-swca/restgdf/pytest.yml?event=pull_request&label=CI&logo=github
+   :target: https://github.com/joshuasundance-swca/restgdf/actions/workflows/pytest.yml
+   :alt: CI
+.. image:: https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml/badge.svg
+   :target: https://github.com/joshuasundance-swca/restgdf/actions/workflows/publish_on_pypi.yml
+   :alt: Publish to PyPI
+.. image:: https://raw.githubusercontent.com/joshuasundance-swca/restgdf/main/coverage.svg
+   :target: https://github.com/joshuasundance-swca/restgdf/blob/main/COVERAGE.md
+   :alt: coverage
+
+.. Docs & discovery (RTD badge omitted -- you're reading RTD)
+.. image:: https://img.shields.io/badge/llms.txt-green
+   :target: https://restgdf.readthedocs.io/en/latest/llms.txt
+   :alt: llms.txt
+.. image:: https://deepwiki.com/badge.svg
+   :target: https://deepwiki.com/joshuasundance-swca/restgdf
+   :alt: Ask DeepWiki
+
+.. Built with
+.. image:: https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/pydantic/pydantic/main/docs/badge/v2.json
+   :target: https://docs.pydantic.dev/latest/contributing/#badges
+   :alt: Pydantic v2
 
 ``restgdf`` is an async-first wrapper around Esri/ArcGIS REST Feature and Map
 services. It reads *all* features past the server's ``maxRecordCount``, returns
@@ -76,6 +104,13 @@ Explore the docs
       :link-type: doc
 
       Upgrading from restgdf 1.x? The breaking-changes table and rewrite recipes live here.
+
+   .. grid-item-card:: 🤖 Docs for LLMs
+      :link: https://restgdf.readthedocs.io/en/latest/llms.txt
+      :link-type: url
+
+      Every page is also published as plain Markdown (append ``.md`` to any URL),
+      plus ``llms.txt`` / ``llms-full.txt`` indexes for RAG pipelines and coding agents.
 
 .. toctree::
    :hidden:

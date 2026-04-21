@@ -3,7 +3,7 @@
 All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [2.0.0]
+## [2.0.0] - 2026-04-20
 
 **Major release — pydantic 2.13 integration.** See
 [`MIGRATION.md`](./MIGRATION.md) for a complete breaking-changes table and
@@ -52,7 +52,9 @@ migration recipes.
 
 - Added `pydantic>=2.13.3,<3`.
 
-## [1.x]
+## 1.x
 
-Earlier releases were not formally tracked here. See the Git tag history
-and PyPI release notes for pre-2.0 changes.
+Earlier releases were not formally tracked here. See the
+[Git tag history](https://github.com/joshuasundance-swca/restgdf/tags) and
+[PyPI release notes](https://pypi.org/project/restgdf/#history) for pre-2.0
+changes.
