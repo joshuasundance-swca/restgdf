@@ -7,6 +7,8 @@ import types
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+import pytest
+
 HEAVY_MODULE_PREFIXES = ("geopandas", "pandas", "pyogrio")
 
 
@@ -88,6 +90,38 @@ def test_utils_submodule_is_loaded_on_first_access() -> None:
 
         assert utils_mod.__name__ == "restgdf.utils.utils"
         assert "restgdf.utils.utils" in sys.modules
+
+
+def test_restgdf_dir_includes_lazy_exports() -> None:
+    with _fresh_modules("restgdf"):
+        module = importlib.import_module("restgdf")
+        exported = dir(module)
+
+        assert "FeatureLayer" in exported
+        assert exported == sorted(set(exported))
+
+
+def test_restgdf_unknown_attribute_raises_attribute_error() -> None:
+    with _fresh_modules("restgdf"):
+        module = importlib.import_module("restgdf")
+        with pytest.raises(AttributeError):
+            getattr(module, "not_a_real_export")
+
+
+def test_restgdf_utils_dir_includes_lazy_exports() -> None:
+    with _fresh_modules("restgdf"):
+        module = importlib.import_module("restgdf.utils")
+        exported = dir(module)
+
+        assert "utils" in exported
+        assert exported == sorted(set(exported))
+
+
+def test_restgdf_utils_unknown_attribute_raises_attribute_error() -> None:
+    with _fresh_modules("restgdf"):
+        module = importlib.import_module("restgdf.utils")
+        with pytest.raises(AttributeError):
+            getattr(module, "not_a_real_submodule")
 
 
 def test_settings_default_user_agent_does_not_depend_on_package_root(

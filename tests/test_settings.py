@@ -5,6 +5,7 @@ TDD-first: this file is authored before the module it exercises (S-7).
 
 from __future__ import annotations
 
+import restgdf._models._settings as settings_mod
 import pytest
 from pydantic import BaseModel, ValidationError
 
@@ -51,6 +52,27 @@ def test_default_values_are_sensible():
 
 def test_from_env_empty_mapping_equals_defaults():
     assert Settings.from_env({}).model_dump() == Settings().model_dump()
+
+
+def test_restgdf_version_falls_back_to_package_init_when_metadata_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_mod._restgdf_version.cache_clear()
+
+    def _raise_package_not_found(_: str) -> str:
+        raise settings_mod.PackageNotFoundError
+
+    monkeypatch.setattr(settings_mod, "package_version", _raise_package_not_found)
+    monkeypatch.setattr(
+        settings_mod.Path,
+        "read_text",
+        lambda self, encoding="utf-8": '__version__ = "9.9.9"\n',
+    )
+
+    try:
+        assert settings_mod._restgdf_version() == "9.9.9"
+    finally:
+        settings_mod._restgdf_version.cache_clear()
 
 
 # ---------------------------------------------------------------------------
