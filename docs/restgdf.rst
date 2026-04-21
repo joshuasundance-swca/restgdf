@@ -10,6 +10,12 @@ The pydantic response models (``LayerMetadata``, ``FeaturesResponse``,
 ``CrawlReport`` and friends) live on :doc:`models`. Internal utility modules
 are on :doc:`utils`.
 
+The base ``pip install restgdf`` surface covers metadata/query helpers,
+raw-row iteration, crawl/auth utilities, and all pydantic models. Install
+``restgdf[geo]`` for GeoDataFrame and pandas-backed APIs such as
+``FeatureLayer.get_gdf()``, ``sample_gdf()``, ``head_gdf()``, ``fieldtypes``,
+``get_value_counts()``, and ``get_nested_count()``.
+
 FeatureLayer
 ------------
 

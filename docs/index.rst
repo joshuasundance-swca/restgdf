@@ -1,7 +1,7 @@
 restgdf
 =======
 
-   *Improved Esri REST I/O for GeoPandas.*
+   *Lightweight async Esri REST client with optional GeoPandas extras.*
 
 .. Package
 .. image:: https://img.shields.io/pypi/v/restgdf.svg
@@ -42,9 +42,17 @@ restgdf
    :alt: Pydantic v2
 
 ``restgdf`` is an async-first wrapper around Esri/ArcGIS REST Feature and Map
-services. It reads *all* features past the server's ``maxRecordCount``, returns
-validated pydantic models for every response, and hands you a
-:class:`geopandas.GeoDataFrame` ready for analysis.
+services. The base install gives you typed metadata/query helpers, raw feature
+rows, crawl/auth utilities, and validated pydantic models for every response.
+Install ``restgdf[geo]`` when you want :class:`geopandas.GeoDataFrame` and
+``pandas``-backed helpers on top of that light-core surface.
+
+.. code-block:: bash
+
+   pip install restgdf
+   pip install "restgdf[geo]"
+
+GeoDataFrame workflow (requires ``restgdf[geo]``):
 
 .. code-block:: python
 
@@ -57,7 +65,7 @@ validated pydantic models for every response, and hands you a
    async def main():
        async with ClientSession() as session:
            layer = await FeatureLayer.from_url(url, session=session)
-           return await layer.getgdf()
+           return await layer.get_gdf()
 
    gdf = asyncio.run(main())
 
@@ -73,7 +81,7 @@ Explore the docs
       :link: quickstart
       :link-type: doc
 
-      Install, connect to a FeatureServer, and pull a GeoDataFrame in under ten lines.
+      Install, connect to a FeatureServer, and choose between raw-row and GeoDataFrame workflows.
 
    .. grid-item-card:: 🔐 Authentication
       :link: authentication
@@ -97,7 +105,7 @@ Explore the docs
       :link: utils
       :link-type: doc
 
-      Low-level crawl, HTTP, token, and GeoDataFrame helpers.
+      Low-level crawl, HTTP, token, raw-record, and GeoDataFrame helpers.
 
    .. grid-item-card:: 🔁 Migration 1.x → 2.0
       :link: migration

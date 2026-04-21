@@ -6,15 +6,18 @@ Private submodule; all public names are re-exported by
 
 from __future__ import annotations
 
-from re import IGNORECASE, compile
-from typing import Any, Union
 from collections.abc import Mapping
+from re import IGNORECASE, compile
+from typing import TYPE_CHECKING, Any, Union
 
-from pandas import DataFrame
 from pydantic import BaseModel
 
 from restgdf._models.responses import FieldSpec, LayerMetadata
 from restgdf.utils._deprecations import deprecated_alias
+from restgdf.utils._optional import require_pandas_dataframe
+
+if TYPE_CHECKING:
+    from pandas import DataFrame
 
 FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
 
@@ -89,12 +92,18 @@ def get_fields(layer_metadata: LayerMetadataLike, types: bool = False):
     return [f["name"] for f in fields]
 
 
-def get_fields_frame(layer_metadata: LayerMetadataLike) -> DataFrame:
-    """Get the fields of a layer as a DataFrame."""
+def _field_rows(layer_metadata: LayerMetadataLike) -> list[tuple[str, str]]:
+    """Return ``(name, type)`` rows for the layer fields."""
     layer_metadata = _as_dict(layer_metadata)
     fields: list[FieldSpec] = layer_metadata.get("fields") or []
+    return [(f["name"], f["type"].replace("esriFieldType", "")) for f in fields]
+
+
+def get_fields_frame(layer_metadata: LayerMetadataLike) -> DataFrame:
+    """Get the fields of a layer as a DataFrame."""
+    DataFrame = require_pandas_dataframe("get_fields_frame()")
     return DataFrame(
-        [(f["name"], f["type"].replace("esriFieldType", "")) for f in fields],
+        _field_rows(layer_metadata),
         columns=["name", "type"],
     )
 

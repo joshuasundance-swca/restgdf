@@ -225,8 +225,14 @@ def test_parse_response_crawl_service_entry_logs_unknown_extras_at_debug(
 
 
 def test_models_package_reexports_crawl_models() -> None:
-    import restgdf._models as m
+    import importlib
+    import sys
 
-    assert m.CrawlError is CrawlError
-    assert m.CrawlServiceEntry is CrawlServiceEntry
-    assert m.CrawlReport is CrawlReport
+    sys.modules.pop("restgdf._models.crawl", None)
+    sys.modules.pop("restgdf._models", None)
+    m = importlib.import_module("restgdf._models")
+    crawl_models = importlib.import_module("restgdf._models.crawl")
+
+    assert m.CrawlError is crawl_models.CrawlError
+    assert m.CrawlServiceEntry is crawl_models.CrawlServiceEntry
+    assert m.CrawlReport is crawl_models.CrawlReport

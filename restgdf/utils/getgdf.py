@@ -1,16 +1,17 @@
 """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
 
+from __future__ import annotations
+
 import asyncio
 from asyncio import gather
 from collections.abc import AsyncGenerator
 from functools import reduce
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Any
 
 from aiohttp import ClientSession
-from geopandas import GeoDataFrame, read_file
-from pandas import concat
-from pyogrio import list_drivers
 
+from restgdf._models._drift import _parse_response
+from restgdf._models.responses import FeaturesResponse
 from restgdf.utils.getinfo import (
     default_data,
     default_headers,
@@ -20,13 +21,92 @@ from restgdf.utils.getinfo import (
     get_object_ids,
     supports_pagination,
 )
+from restgdf.utils._optional import (
+    require_geo_stack,
+    require_geodataframe,
+    require_geopandas_read_file,
+    require_pandas_concat,
+    require_pyogrio_list_drivers,
+)
 from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list
 
-supported_drivers = list_drivers()
+if TYPE_CHECKING:
+    from geopandas import GeoDataFrame
+
+supported_drivers: dict[str, str] | None = None
 
 
-def combine_where_clauses(base_where: Optional[str], extra_where: str) -> str:
+def _require_geo_query_support(feature: str) -> None:
+    """Fail fast for GeoDataFrame entrypoints when the geo stack is missing."""
+    require_geo_stack(feature)
+
+
+def read_file(*args, **kwargs):
+    """Load a vector payload with geopandas only when geo support is needed."""
+    return require_geopandas_read_file("GeoDataFrame queries")(*args, **kwargs)
+
+
+def _get_supported_drivers() -> dict[str, str]:
+    """Load pyogrio drivers lazily so base installs can still import restgdf."""
+    global supported_drivers
+    if supported_drivers is None:
+        supported_drivers = require_pyogrio_list_drivers("GeoDataFrame queries")()
+    return supported_drivers
+
+
+async def _get_sub_features(
+    url: str,
+    session: ClientSession | ArcGISTokenSession,
+    query_data: dict,
+    **kwargs,
+) -> list[dict[str, Any]]:
+    """Fetch a single query batch as raw ArcGIS feature dicts."""
+    response = await session.post(
+        f"{url}/query",
+        data=dict(query_data),
+        headers=default_headers(kwargs.pop("headers", None)),
+        **kwargs,
+    )
+    raw = await response.json(content_type=None)
+    envelope = _parse_response(FeaturesResponse, raw, context=f"{url}/query")
+    return envelope.features or []
+
+
+async def _feature_batch_generator(
+    url: str,
+    session: ClientSession | ArcGISTokenSession,
+    **kwargs,
+) -> AsyncGenerator[list[dict[str, Any]], None]:
+    """Yield raw ArcGIS feature batches without requiring pandas/geopandas."""
+    query_data_batches = await get_query_data_batches(url, session, **kwargs)
+    tasks = {
+        asyncio.create_task(
+            get_sub_features(url, session, query_data=query_data, **kwargs),
+        )
+        for query_data in query_data_batches
+    }
+    for feature_batch_future in asyncio.as_completed(tasks):
+        yield await feature_batch_future
+
+
+def get_sub_features(*args, **kwargs):
+    """Compatibility wrapper for the raw feature query helper."""
+    return _get_sub_features(*args, **kwargs)
+
+
+def _feature_to_row_dict(feature: dict[str, Any]) -> dict[str, Any]:
+    """Flatten an ArcGIS feature into a row-shaped dictionary."""
+    row = dict(feature.get("attributes") or {})
+    if "geometry" in feature:
+        row["geometry"] = feature["geometry"]
+    for key, value in feature.items():
+        if key not in {"attributes", "geometry"} and key not in row:
+            row[key] = value
+    return row
+
+
+def combine_where_clauses(base_where: str | None, extra_where: str) -> str:
     """Combine where clauses without changing the default all-records predicate."""
     if base_where in (None, "", "1=1"):
         return extra_where
@@ -40,7 +120,7 @@ def chunk_values(values: list[int], chunk_size: int) -> list[list[int]]:
 
 async def get_query_data_batches(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> list[dict]:
     """Build query payloads for each request needed to read a layer."""
@@ -75,12 +155,13 @@ async def get_query_data_batches(
 
 async def get_sub_gdf(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     query_data: dict,
     **kwargs,
 ) -> GeoDataFrame:
+    _require_geo_query_support("get_sub_gdf()")
     data = dict(query_data)
-    gdfdriver = "ESRIJSON" if "ESRIJSON" in supported_drivers else "GeoJSON"
+    gdfdriver = "ESRIJSON" if "ESRIJSON" in _get_supported_drivers() else "GeoJSON"
     if gdfdriver == "GeoJSON":
         data["f"] = "GeoJSON"
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
@@ -101,9 +182,10 @@ async def get_sub_gdf(
 
 async def get_gdf_list(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> list[GeoDataFrame]:
+    _require_geo_query_support("get_gdf_list()")
     query_data_batches = await get_query_data_batches(url, session, **kwargs)
     tasks = [
         get_sub_gdf(url, session, query_data=query_data, **kwargs)
@@ -115,7 +197,7 @@ async def get_gdf_list(
 
 async def chunk_generator(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> AsyncGenerator[GeoDataFrame, None]:
     """
@@ -123,6 +205,7 @@ async def chunk_generator(
     This function retrieves GeoDataFrames in chunks based on the offset range
     and yields each GeoDataFrame as it is retrieved.
     """
+    _require_geo_query_support("chunk_generator()")
     query_data_batches = await get_query_data_batches(url, session, **kwargs)
     tasks = {
         asyncio.create_task(get_sub_gdf(url, session, query_data=query_data, **kwargs))
@@ -134,15 +217,17 @@ async def chunk_generator(
 
 async def row_dict_generator(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> AsyncGenerator[dict, None]:
-    async for sub_gdf in chunk_generator(url, session, **kwargs):
-        for _, row in sub_gdf.iterrows():
-            yield row.to_dict()
+    async for feature_batch in _feature_batch_generator(url, session, **kwargs):
+        for feature in feature_batch:
+            yield _feature_to_row_dict(feature)
 
 
 async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
+    GeoDataFrame = require_geodataframe("GeoDataFrame concatenation")
+    concat = require_pandas_concat("GeoDataFrame concatenation")
     crs = gdfs[0].crs
 
     if not all(gdf.crs == crs for gdf in gdfs):
@@ -159,20 +244,22 @@ async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
 
 async def gdf_by_concat(
     url: str,
-    session: Union[ClientSession, ArcGISTokenSession],
+    session: ClientSession | ArcGISTokenSession,
     **kwargs,
 ) -> GeoDataFrame:
+    _require_geo_query_support("gdf_by_concat()")
     gdfs = await get_gdf_list(url, session, **kwargs)
     return await concat_gdfs(gdfs)
 
 
 async def get_gdf(
     url: str,
-    session: Union[ClientSession, None] = None,
-    where: Union[str, None] = None,
-    token: Union[str, None] = None,
+    session: ClientSession | None = None,
+    where: str | None = None,
+    token: str | None = None,
     **kwargs,
 ) -> GeoDataFrame:
+    _require_geo_query_support("get_gdf()")
     session = session or ClientSession()
     datadict = default_data(kwargs.pop("data", None) or {})
     if where is not None:

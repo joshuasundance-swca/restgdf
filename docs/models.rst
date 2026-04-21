@@ -1,7 +1,7 @@
 Pydantic models
 ===============
 
-restgdf 2.0 exposes every ArcGIS response and config object as a
+The base ``pip install restgdf`` install exposes every ArcGIS response and config object as a
 pydantic :class:`~pydantic.BaseModel`. These classes are the single source of
 truth for payload shape and are re-exported from ``restgdf`` directly. Use
 :func:`restgdf.compat.as_dict` if you need a plain dict during a migration.

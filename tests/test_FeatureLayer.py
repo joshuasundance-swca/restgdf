@@ -1,4 +1,5 @@
 import json
+import importlib
 from typing import Optional
 from unittest.mock import AsyncMock, patch
 
@@ -110,6 +111,17 @@ def _mock_feature_gdf():
     )
 
 
+def _missing_optional_import(target: str):
+    def _side_effect(module_name: str):
+        if module_name == target:
+            exc = ModuleNotFoundError(f"No module named '{target}'")
+            exc.name = target
+            raise exc
+        return importlib.import_module(module_name)
+
+    return _side_effect
+
+
 @pytest.mark.asyncio
 async def test_arcgistokensession():
     session = MockArcGISSession()
@@ -201,6 +213,33 @@ async def test_featurelayer_prep_populates_metadata_fields(feature_layer_metadat
     assert layer.object_id_field == "OBJECTID"
     assert layer.count == 7
     assert session.get_calls[0][1]["params"]["token"] == "saved-token"
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_prep_defers_fieldtypes_until_requested(
+    feature_layer_metadata,
+):
+    session = MockFeatureLayerSession(metadata=feature_layer_metadata, count=7)
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=session,
+    )
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_fields_frame",
+        side_effect=AssertionError("fieldtypes should be lazy"),
+    ):
+        await layer.prep()
+
+    sentinel_frame = object()
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_fields_frame",
+        return_value=sentinel_frame,
+    ) as mock_get_fields_frame:
+        assert layer.fieldtypes is sentinel_frame
+        assert layer.fieldtypes is sentinel_frame
+
+    mock_get_fields_frame.assert_called_once_with(layer.metadata)
 
 
 @pytest.mark.asyncio
@@ -301,6 +340,57 @@ async def test_featurelayer_getgdf_caches_result(sample_feature_gdf):
     assert first.equals(sample_feature_gdf)
     assert second.equals(sample_feature_gdf)
     mock_get_gdf.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method_name", "args"),
+    [("sample_gdf", (10,)), ("head_gdf", (2,))],
+)
+async def test_featurelayer_geo_helpers_require_geo_extra_before_oid_queries(
+    method_name,
+    args,
+):
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.object_id_field = "OBJECTID"
+    layer.fields = ("OBJECTID",)
+
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_missing_optional_import("pyogrio"),
+    ), patch(
+        "restgdf.featurelayer.featurelayer.get_unique_values",
+        new=AsyncMock(side_effect=AssertionError("should fail before fetching ids")),
+    ):
+        with pytest.raises(
+            ModuleNotFoundError,
+            match=rf"FeatureLayer\.{method_name}\(\).*restgdf\[geo\]",
+        ):
+            await getattr(layer, method_name)(*args)
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_get_gdf_requires_geo_extra_before_query():
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_missing_optional_import("pyogrio"),
+    ), patch(
+        "restgdf.featurelayer.featurelayer.get_gdf",
+        new=AsyncMock(side_effect=AssertionError("should fail before querying")),
+    ):
+        with pytest.raises(
+            ModuleNotFoundError,
+            match=r"FeatureLayer\.get_gdf\(\).*restgdf\[geo\]",
+        ):
+            await layer.get_gdf()
 
 
 @pytest.mark.asyncio

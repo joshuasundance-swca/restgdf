@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -10,6 +11,7 @@ from restgdf.utils.getinfo import (
     default_headers,
     default_data,
     get_feature_count,
+    get_fields_frame,
     get_object_id_field,
     get_object_ids,
     getuniquevalues,
@@ -17,15 +19,29 @@ from restgdf.utils.getinfo import (
     get_max_record_count,
     get_name,
     get_offset_range,
+    get_unique_values,
+    get_value_counts,
     getfields,
     getfields_df,
     nestedcount,
+    nested_count,
     service_metadata,
     supports_pagination,
     getvaluecounts,
 )
 
 TESTJSON = {"count": 500, "maxRecordCount": 100}
+
+
+def _missing_optional_import(target: str):
+    def _side_effect(module_name: str):
+        if module_name == target:
+            exc = ModuleNotFoundError(f"No module named '{target}'")
+            exc.name = target
+            raise exc
+        return importlib.import_module(module_name)
+
+    return _side_effect
 
 
 def test_wherevarinlist():
@@ -275,6 +291,18 @@ def test_getfields_df():
     assert df.iloc[1]["type"] == "Integer"
 
 
+def test_getfields_df_requires_geo_extra_message():
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_missing_optional_import("pandas"),
+    ):
+        with pytest.raises(
+            ModuleNotFoundError,
+            match=r"get_fields_frame\(\).*pandas.*restgdf\[geo\]",
+        ):
+            get_fields_frame(SAMPLE_METADATA)
+
+
 # ---------------------------------------------------------------------------
 # Mocked async tests for pandas-heavy paths (upgrade-sensitive)
 # getuniquevalues/getvaluecounts use DataFrame construction patterns that
@@ -343,6 +371,27 @@ async def test_getuniquevalues_single_element_tuple(mock_response, client_sessio
 @pytest.mark.asyncio
 @patch(
     "restgdf.utils.getinfo.ClientSession.post",
+    side_effect=_make_mock_post(FEATURES_SINGLE_JSON),
+)
+async def test_getuniquevalues_single_field_does_not_require_pandas(
+    mock_response,
+    client_session,
+):
+    del mock_response
+    with patch(
+        "restgdf.utils._stats.require_pandas_dataframe",
+        side_effect=AssertionError(
+            "single-field unique values should stay pure-python",
+        ),
+    ):
+        result = await getuniquevalues("test", "City", session=client_session)
+
+    assert result == ["DAYTONA", "ORMOND"]
+
+
+@pytest.mark.asyncio
+@patch(
+    "restgdf.utils.getinfo.ClientSession.post",
     side_effect=_make_mock_post(FEATURES_MULTI_JSON),
 )
 async def test_getuniquevalues_multi_field(mock_response, client_session):
@@ -380,6 +429,27 @@ async def test_getuniquevalues_multi_field_sorts_dataframe(
 
 
 @pytest.mark.asyncio
+async def test_getuniquevalues_multi_field_requires_geo_extra_before_request():
+    class Session:
+        async def post(self, *args, **kwargs):
+            raise AssertionError("should fail before requesting")
+
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_missing_optional_import("pandas"),
+    ):
+        with pytest.raises(
+            ModuleNotFoundError,
+            match=r"get_unique_values\(\) with multiple fields.*restgdf\[geo\]",
+        ):
+            await get_unique_values(
+                "test",
+                ("City", "Status"),
+                session=Session(),
+            )
+
+
+@pytest.mark.asyncio
 @patch(
     "restgdf.utils.getinfo.ClientSession.post",
     side_effect=_make_mock_post(VALUECOUNTS_JSON),
@@ -393,6 +463,23 @@ async def test_getvaluecounts_mock(mock_response, client_session):
     # sorted descending by count
     assert result.iloc[0]["City"] == "DAYTONA"
     assert result.iloc[0]["City_count"] == 5
+
+
+@pytest.mark.asyncio
+async def test_getvaluecounts_requires_geo_extra_before_request():
+    class Session:
+        async def post(self, *args, **kwargs):
+            raise AssertionError("should fail before requesting")
+
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_missing_optional_import("pandas"),
+    ):
+        with pytest.raises(
+            ModuleNotFoundError,
+            match=r"get_value_counts\(\).*restgdf\[geo\]",
+        ):
+            await get_value_counts("test", "City", session=Session())
 
 
 @pytest.mark.asyncio
@@ -464,6 +551,23 @@ async def test_nestedcount_shapes_output(mock_response, client_session):
     assert list(result.columns) == ["City", "Status", "Count"]
     assert result.iloc[0]["City"] == "DAYTONA"
     assert result.iloc[0]["Count"] >= result.iloc[1]["Count"]
+
+
+@pytest.mark.asyncio
+async def test_nestedcount_requires_geo_extra_before_request():
+    class Session:
+        async def post(self, *args, **kwargs):
+            raise AssertionError("should fail before requesting")
+
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_missing_optional_import("pandas"),
+    ):
+        with pytest.raises(
+            ModuleNotFoundError,
+            match=r"nested_count\(\).*restgdf\[geo\]",
+        ):
+            await nested_count("test", ("City", "Status"), Session())
 
 
 @pytest.mark.asyncio
