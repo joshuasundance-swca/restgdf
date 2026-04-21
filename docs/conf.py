@@ -123,6 +123,8 @@ autodoc_default_options = {
 # Clean up rendered signatures for common aliases.
 autodoc_type_aliases = {
     "Mapping[str, Any]": "Mapping",
+    "DataFrame": "pandas.DataFrame",
+    "GeoDataFrame": "geopandas.GeoDataFrame",
 }
 
 napoleon_google_docstring = False
@@ -204,4 +206,4 @@ copybutton_remove_prompts = True
 
 # Generate llms.txt / llms-full.txt alongside HTML for LLM consumption
 # (https://llmstxt.org/). Can be disabled per-build via -D llms_txt_enabled=0.
-llms_txt_description = "improved esri rest io for geopandas"
+llms_txt_description = "lightweight async Esri REST client with optional GeoPandas extras"

@@ -5,6 +5,10 @@ Low-level helpers used by :class:`~restgdf.FeatureLayer` and
 :class:`~restgdf.Directory`. Most users will never call these directly, but
 they are public API and safe to use.
 
+``restgdf.utils.crawl``, ``getinfo``, ``token``, and ``utils`` work in the
+base ``pip install restgdf`` install. ``restgdf.utils.getgdf`` and other
+GeoDataFrame/pandas-backed helpers require ``pip install "restgdf[geo]"``.
+
 restgdf.utils.crawl
 -------------------
 

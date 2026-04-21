@@ -21,7 +21,10 @@ from __future__ import annotations
 
 import functools
 import os
+import re
 from collections.abc import Mapping
+from importlib.metadata import PackageNotFoundError, version as package_version
+from pathlib import Path
 from typing import Any, Callable
 
 from pydantic import (
@@ -35,11 +38,25 @@ from pydantic import (
 from restgdf._models._errors import RestgdfResponseError
 
 
+_VERSION_RE = re.compile(r"""^__version__\s*=\s*["']([^"']+)["']\s*$""", re.MULTILINE)
+
+
+@functools.lru_cache(maxsize=1)
+def _restgdf_version() -> str:
+    """Resolve the installed/package version without importing ``restgdf``."""
+    try:
+        return package_version("restgdf")
+    except PackageNotFoundError:
+        init_py = Path(__file__).resolve().parents[1] / "__init__.py"
+        match = _VERSION_RE.search(init_py.read_text(encoding="utf-8"))
+        if match is None:  # pragma: no cover - defensive fallback
+            raise RuntimeError("Could not determine restgdf version")
+        return match.group(1)
+
+
 def _default_user_agent() -> str:
     """Return ``"restgdf/<version>"`` without forcing ``restgdf`` at import."""
-    from restgdf import __version__
-
-    return f"restgdf/{__version__}"
+    return f"restgdf/{_restgdf_version()}"
 
 
 _VALID_LOG_LEVELS = frozenset(

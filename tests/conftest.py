@@ -6,8 +6,6 @@ from typing import Any
 import pytest
 import pytest_asyncio
 from aiohttp import ClientSession
-from geopandas import GeoDataFrame
-from shapely.geometry import Point
 
 
 def pytest_addoption(parser):
@@ -54,6 +52,9 @@ def feature_layer_metadata():
 
 @pytest.fixture
 def sample_feature_gdf():
+    from geopandas import GeoDataFrame
+    from shapely.geometry import Point
+
     return GeoDataFrame(
         {
             "OBJECTID": [1, 2],

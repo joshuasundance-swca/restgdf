@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from unittest.mock import AsyncMock, call, patch
 
 import pytest
@@ -33,6 +34,17 @@ class RecordingSession:
                 return self._text_payload
 
         return Response(self.response_text)
+
+
+def _missing_optional_import(target: str):
+    def _side_effect(module_name: str):
+        if module_name == target:
+            exc = ModuleNotFoundError(f"No module named '{target}'")
+            exc.name = target
+            raise exc
+        return importlib.import_module(module_name)
+
+    return _side_effect
 
 
 @pytest.mark.parametrize(
@@ -241,22 +253,53 @@ async def test_chunk_generator_yields_each_chunk(sample_feature_gdf):
 
 @pytest.mark.asyncio
 async def test_row_dict_generator_yields_rows(sample_feature_gdf):
+    del sample_feature_gdf
     with patch(
         "restgdf.utils.getgdf.chunk_generator",
         return_value=None,
-    ) as mock_chunk_generator:
+    ) as mock_chunk_generator, patch(
+        "restgdf.utils.getgdf.get_query_data_batches",
+        new=AsyncMock(return_value=[{"where": "1=1"}, {"where": "OBJECTID > 5"}]),
+    ), patch(
+        "restgdf.utils.getgdf.get_sub_gdf",
+        side_effect=AssertionError("row_dict_generator should not require geopandas"),
+    ):
 
-        async def fake_chunk_generator(*args, **kwargs):
-            yield sample_feature_gdf.iloc[[0]]
-            yield sample_feature_gdf.iloc[[1]]
+        class Session:
+            def __init__(self):
+                self.responses = [
+                    {
+                        "features": [
+                            {
+                                "attributes": {"CITY": "DAYTONA"},
+                                "geometry": {"x": 0, "y": 0},
+                            },
+                        ],
+                    },
+                    {"features": [{"attributes": {"CITY": "ORMOND"}}]},
+                ]
 
-        mock_chunk_generator.side_effect = fake_chunk_generator
+            async def post(self, url: str, **kwargs):
+                class Response:
+                    def __init__(self, payload):
+                        self._payload = payload
+
+                    async def json(self, content_type=None):
+                        return self._payload
+
+                return Response(self.responses.pop(0))
+
         rows = [
             row
-            async for row in row_dict_generator("https://example.com/layer/0", object())
+            async for row in row_dict_generator(
+                "https://example.com/layer/0",
+                Session(),
+            )
         ]
 
     assert [row["CITY"] for row in rows] == ["DAYTONA", "ORMOND"]
+    assert rows[0]["geometry"] == {"x": 0, "y": 0}
+    mock_chunk_generator.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -294,3 +337,40 @@ async def test_get_gdf_forwards_token_and_detects_conflicts():
             token="abc",
             data={"token": "different"},
         )
+
+
+@pytest.mark.asyncio
+async def test_get_gdf_requires_geo_extra_before_batch_queries():
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_missing_optional_import("pyogrio"),
+    ), patch(
+        "restgdf.utils.getgdf.gdf_by_concat",
+        new=AsyncMock(side_effect=AssertionError("should fail before querying")),
+    ):
+        with pytest.raises(
+            ModuleNotFoundError,
+            match=r"get_gdf\(\).*restgdf\[geo\]",
+        ):
+            await get_gdf("https://example.com/layer/0", session=object())
+
+
+@pytest.mark.asyncio
+async def test_get_sub_gdf_requires_geo_dependencies_on_demand():
+    session = RecordingSession(response_text='{"features": []}')
+
+    with patch("restgdf.utils.getgdf.supported_drivers", new=None), patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_missing_optional_import("pyogrio"),
+    ):
+        with pytest.raises(
+            ModuleNotFoundError,
+            match=r"get_sub_gdf\(\).*pyogrio.*restgdf\[geo\]",
+        ):
+            await get_sub_gdf(
+                "https://example.com/layer/0",
+                session,
+                query_data={"where": "1=1"},
+            )
+
+    assert session.post_calls == []
