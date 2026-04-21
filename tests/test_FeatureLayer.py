@@ -279,21 +279,17 @@ async def test_featurelayer_samplegdf_uses_random_subset():
     sampled_layer = AsyncMock()
     sampled_layer.get_gdf = AsyncMock(return_value="sampled-gdf")
 
-    with (
-        patch(
-            "restgdf.featurelayer.featurelayer.get_unique_values",
-            new=AsyncMock(return_value=[1, 2, 3]),
-        ),
-        patch(
-            "restgdf.featurelayer.featurelayer.random.sample",
-            return_value=[3, 1],
-        ) as mock_sample,
-        patch.object(
-            layer,
-            "where",
-            new=AsyncMock(return_value=sampled_layer),
-        ) as mock_where,
-    ):
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_unique_values",
+        new=AsyncMock(return_value=[1, 2, 3]),
+    ), patch(
+        "restgdf.featurelayer.featurelayer.random.sample",
+        return_value=[3, 1],
+    ) as mock_sample, patch.object(
+        layer,
+        "where",
+        new=AsyncMock(return_value=sampled_layer),
+    ) as mock_where:
         result = await layer.sample_gdf(10)
 
     assert result == "sampled-gdf"
@@ -313,17 +309,14 @@ async def test_featurelayer_headgdf_uses_first_ids():
     head_layer = AsyncMock()
     head_layer.get_gdf = AsyncMock(return_value="head-gdf")
 
-    with (
-        patch(
-            "restgdf.featurelayer.featurelayer.get_unique_values",
-            new=AsyncMock(return_value=[1, 2, 3, 4]),
-        ),
-        patch.object(
-            layer,
-            "where",
-            new=AsyncMock(return_value=head_layer),
-        ) as mock_where,
-    ):
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_unique_values",
+        new=AsyncMock(return_value=[1, 2, 3, 4]),
+    ), patch.object(
+        layer,
+        "where",
+        new=AsyncMock(return_value=head_layer),
+    ) as mock_where:
         result = await layer.head_gdf(2)
 
     assert result == "head-gdf"

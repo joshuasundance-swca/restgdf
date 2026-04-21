@@ -10,6 +10,7 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
         types_or: [text]
+        exclude: \.bat$
       - id: end-of-file-fixer
         types_or: [text]
       - id: trailing-whitespace
@@ -19,7 +20,6 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.11
     hooks:
-      - id: ruff-format
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
 
@@ -37,6 +37,7 @@ repos:
       - id: check-added-large-files
         args: [--maxkb=1000]
       - id: check-merge-conflict
+      - id: check-symlinks
       - id: detect-private-key
       - id: check-json
         types_or: [json]
@@ -53,6 +54,8 @@ repos:
         types: [python]
       - id: debug-statements
         types: [python]
+      - id: check-executables-have-shebangs
+      - id: requirements-txt-fixer
       - id: check-xml
         types_or: [xml]
 
@@ -103,3 +106,24 @@ repos:
       - id: bandit
         args: [-c, pyproject.toml]
         additional_dependencies: [".[toml]"]
+
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.15.0
+    hooks:
+      - id: pyupgrade
+        args: [--py39-plus]
+
+  - repo: https://github.com/dannysepler/rm_unneeded_f_str
+    rev: v0.2.0
+    hooks:
+      - id: rm-unneeded-f-str
+
+  - repo: https://github.com/psf/black
+    rev: 23.11.0
+    hooks:
+      - id: black
+
+  - repo: https://github.com/asottile/add-trailing-comma
+    rev: v3.1.0
+    hooks:
+      - id: add-trailing-comma

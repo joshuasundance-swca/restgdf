@@ -132,17 +132,14 @@ async def test_update_token_if_needed_only_refreshes_when_required():
         expires=32503680000000,
     )
 
-    with (
-        patch.object(
-            token_session,
-            "update_token",
-            new=AsyncMock(),
-        ) as mock_update_token,
-        patch.object(
-            token_session,
-            "token_needs_update",
-            return_value=False,
-        ),
+    with patch.object(
+        token_session,
+        "update_token",
+        new=AsyncMock(),
+    ) as mock_update_token, patch.object(
+        token_session,
+        "token_needs_update",
+        return_value=False,
     ):
         await token_session.update_token_if_needed()
 

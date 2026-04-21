@@ -206,4 +206,6 @@ copybutton_remove_prompts = True
 
 # Generate llms.txt / llms-full.txt alongside HTML for LLM consumption
 # (https://llmstxt.org/). Can be disabled per-build via -D llms_txt_enabled=0.
-llms_txt_description = "lightweight async Esri REST client with optional GeoPandas extras"
+llms_txt_description = (
+    "lightweight async Esri REST client with optional GeoPandas extras"
+)

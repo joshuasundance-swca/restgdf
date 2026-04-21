@@ -185,15 +185,12 @@ async def test_getvaluecounts_builds_statistics_payload(fake_session):
 
 @pytest.mark.asyncio
 async def test_batches_single_when_count_within_max_record():
-    with (
-        patch(
-            "restgdf.utils.getgdf.get_feature_count",
-            new=AsyncMock(return_value=5),
-        ),
-        patch(
-            "restgdf.utils.getgdf.get_metadata",
-            new=AsyncMock(return_value={"maxRecordCount": 10}),
-        ),
+    with patch(
+        "restgdf.utils.getgdf.get_feature_count",
+        new=AsyncMock(return_value=5),
+    ), patch(
+        "restgdf.utils.getgdf.get_metadata",
+        new=AsyncMock(return_value={"maxRecordCount": 10}),
     ):
         batches = await getgdf_mod.get_query_data_batches(
             "https://example.com/0",
@@ -205,19 +202,16 @@ async def test_batches_single_when_count_within_max_record():
 
 @pytest.mark.asyncio
 async def test_batches_use_pagination_offsets_when_supported():
-    with (
-        patch(
-            "restgdf.utils.getgdf.get_feature_count",
-            new=AsyncMock(return_value=25),
-        ),
-        patch(
-            "restgdf.utils.getgdf.get_metadata",
-            new=AsyncMock(
-                return_value={
-                    "maxRecordCount": 10,
-                    "advancedQueryCapabilities": {"supportsPagination": True},
-                },
-            ),
+    with patch(
+        "restgdf.utils.getgdf.get_feature_count",
+        new=AsyncMock(return_value=25),
+    ), patch(
+        "restgdf.utils.getgdf.get_metadata",
+        new=AsyncMock(
+            return_value={
+                "maxRecordCount": 10,
+                "advancedQueryCapabilities": {"supportsPagination": True},
+            },
         ),
     ):
         batches = await getgdf_mod.get_query_data_batches(
@@ -235,24 +229,20 @@ async def test_batches_use_pagination_offsets_when_supported():
 @pytest.mark.asyncio
 async def test_batches_fall_back_to_object_id_chunks_without_pagination():
     object_ids = list(range(1, 26))  # 25 ids
-    with (
-        patch(
-            "restgdf.utils.getgdf.get_feature_count",
-            new=AsyncMock(return_value=25),
+    with patch(
+        "restgdf.utils.getgdf.get_feature_count",
+        new=AsyncMock(return_value=25),
+    ), patch(
+        "restgdf.utils.getgdf.get_metadata",
+        new=AsyncMock(
+            return_value={
+                "maxRecordCount": 10,
+                "advancedQueryCapabilities": {"supportsPagination": False},
+            },
         ),
-        patch(
-            "restgdf.utils.getgdf.get_metadata",
-            new=AsyncMock(
-                return_value={
-                    "maxRecordCount": 10,
-                    "advancedQueryCapabilities": {"supportsPagination": False},
-                },
-            ),
-        ),
-        patch(
-            "restgdf.utils.getgdf.get_object_ids",
-            new=AsyncMock(return_value=("OBJECTID", object_ids)),
-        ),
+    ), patch(
+        "restgdf.utils.getgdf.get_object_ids",
+        new=AsyncMock(return_value=("OBJECTID", object_ids)),
     ):
         batches = await getgdf_mod.get_query_data_batches(
             "https://example.com/0",

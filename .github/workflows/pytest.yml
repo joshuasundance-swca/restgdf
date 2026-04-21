@@ -54,7 +54,7 @@ jobs:
       - name: Install package with dev+geo extras
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev,geo]
+          python -m pip install -e ".[dev,geo]"
       - name: Run tests
         run: python -m pytest -q -m "not network"
 
@@ -71,7 +71,7 @@ jobs:
       - name: Install package with dev extras only
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev]
+          python -m pip install -e ".[dev]"
       - name: Run no-geo contract tests
         run: |
           python -m pytest -q \
@@ -93,7 +93,7 @@ jobs:
       - name: Install package with dev+geo extras
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e .[dev,geo]
+          python -m pip install -e ".[dev,geo]"
       - name: Run live network tests
         run: python -m pytest -q -m network --run-network
 
