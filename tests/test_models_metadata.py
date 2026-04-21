@@ -24,10 +24,14 @@ from __future__ import annotations
 import logging
 
 import pytest
+from pydantic import AliasChoices, AliasPath, Field
 
 from restgdf._models._drift import (
     PermissiveModel,
+    _is_arcgis_error_envelope,
+    _known_keys,
     _parse_response,
+    _sample_at_path,
     reset_drift_cache,
 )
 from restgdf._models.responses import LayerMetadata, ServiceInfo
@@ -270,3 +274,39 @@ def test_parse_response_layer_metadata_keeps_valid_fields_when_one_field_is_malf
         "esriFieldTypeDate",
     ]
     assert any("fields.2.type" in record.getMessage() for record in caplog.records)
+
+
+class _AliasChoicesModel(PermissiveModel):
+    field: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices(AliasPath("outer", "field"), "field"),
+    )
+
+
+class _AliasPathModel(PermissiveModel):
+    field: int | None = Field(
+        default=None,
+        validation_alias=AliasPath("outer", "field"),
+    )
+
+
+def test_known_keys_keeps_string_alias_choices_only() -> None:
+    assert _known_keys(_AliasChoicesModel) == {"field"}
+
+
+def test_known_keys_tolerates_validation_alias_without_choices() -> None:
+    assert _known_keys(_AliasPathModel) == {"field"}
+
+
+def test_sample_at_path_returns_last_resolved_value_on_shape_mismatch() -> None:
+    payload = {"fields": [{"name": "OBJECTID"}]}
+    assert _sample_at_path(payload, ("fields", "not-an-index")) == payload["fields"]
+
+
+def test_sample_at_path_returns_last_resolved_value_on_lookup_error() -> None:
+    payload = {"fields": [{"name": "OBJECTID"}]}
+    assert _sample_at_path(payload, ("missing",)) == payload
+
+
+def test_is_arcgis_error_envelope_rejects_malformed_error_payload() -> None:
+    assert _is_arcgis_error_envelope({"error": "not-a-mapping"}) is False
