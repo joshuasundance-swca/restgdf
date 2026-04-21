@@ -5,12 +5,12 @@ from __future__ import annotations
 import random
 import warnings
 from collections.abc import AsyncIterable
+from typing import TYPE_CHECKING
 
 from aiohttp import ClientSession
-from geopandas import GeoDataFrame
-from pandas import DataFrame
 
 from restgdf._models.responses import LayerMetadata
+from restgdf.utils._optional import require_geo_stack
 from restgdf.utils.getgdf import get_gdf, row_dict_generator
 from restgdf.utils.getinfo import (
     default_data,
@@ -50,6 +50,15 @@ __all__ = [
 ]
 from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list, ends_with_num
+
+if TYPE_CHECKING:
+    from geopandas import GeoDataFrame
+    from pandas import DataFrame
+
+
+def _require_featurelayer_geo_support(feature: str) -> None:
+    """Fail fast for FeatureLayer GeoDataFrame helpers on base installs."""
+    require_geo_stack(feature)
 
 
 class FeatureLayer:
@@ -110,11 +119,11 @@ class FeatureLayer:
         self.nestedcount: dict = {}
 
         self.gdf: GeoDataFrame | None = None
+        self._fieldtypes_frame: DataFrame | None = None
 
         self.metadata: LayerMetadata
         self.name: str
         self.fields: tuple[str, ...]
-        self.fieldtypes: DataFrame
         self.object_id_field: str
         self.count: int
 
@@ -132,9 +141,18 @@ class FeatureLayer:
             raise ValueError("The url must point to a FeatureLayer.")
         self.name = get_name(self.metadata)
         self.fields = get_fields(self.metadata)
-        self.fieldtypes = get_fields_frame(self.metadata)
+        self._fieldtypes_frame = None
         self.object_id_field = get_object_id_field(self.metadata)
         self.count = await get_feature_count(self.url, self.session, **self.kwargs)
+
+    @property
+    def fieldtypes(self) -> DataFrame:
+        """Return field metadata as a DataFrame when pandas is available."""
+        if not hasattr(self, "metadata"):
+            raise AttributeError("fieldtypes")
+        if self._fieldtypes_frame is None:
+            self._fieldtypes_frame = get_fields_frame(self.metadata)
+        return self._fieldtypes_frame
 
     @classmethod
     async def from_url(cls, url: str, **kwargs) -> FeatureLayer:
@@ -150,6 +168,7 @@ class FeatureLayer:
 
     async def sample_gdf(self, n: int = 10) -> GeoDataFrame:
         """Get n random features as a GeoDataFrame."""
+        _require_featurelayer_geo_support("FeatureLayer.sample_gdf()")
         oids = await get_unique_values(
             self.url,
             self.object_id_field,
@@ -163,6 +182,7 @@ class FeatureLayer:
 
     async def head_gdf(self, n: int = 10) -> GeoDataFrame:
         """Get the n first features as a GeoDataFrame."""
+        _require_featurelayer_geo_support("FeatureLayer.head_gdf()")
         oids = await get_unique_values(
             self.url,
             self.object_id_field,
@@ -177,6 +197,7 @@ class FeatureLayer:
     async def get_gdf(self) -> GeoDataFrame:
         """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
         if self.gdf is None:
+            _require_featurelayer_geo_support("FeatureLayer.get_gdf()")
             self.gdf = await get_gdf(self.url, self.session, **self.kwargs)
         return self.gdf
 

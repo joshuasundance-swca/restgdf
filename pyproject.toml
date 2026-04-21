@@ -15,16 +15,13 @@ restgdf = ["py.typed"]
 [project]
 name = "restgdf"
 version = "2.0.0"
-description = "improved esri rest io for geopandas"
+description = "lightweight async Esri REST client with optional GeoPandas extras"
 authors = [{ name = "Joshua Sundance Bailey" }]
 readme = "README.md"
 dependencies = [
     "aiohttp",
-    "geopandas",
-    "pandas",
     "pydantic>=2.13.3,<3",
     "eval_type_backport; python_version < '3.10'",
-    "pyogrio",
     "requests",
 ]
 license = { text = "MIT" }
@@ -73,6 +70,12 @@ Changelog = "https://github.com/joshuasundance-swca/restgdf/blob/main/CHANGELOG.
 
 
 [project.optional-dependencies]
+geo = [
+    "geopandas",
+    "pandas",
+    "pyogrio",
+]
+
 dev = [
     "bumpver",
     "coverage",
