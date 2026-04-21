@@ -165,7 +165,11 @@ class ObjectIdsResponse(StrictModel):
     object_id_field_name: str = Field(
         ...,
         alias="objectIdFieldName",
-        validation_alias=AliasChoices("objectIdFieldName", "object_id_field_name"),
+        validation_alias=AliasChoices(
+            "objectIdFieldName",
+            "objectIdField",
+            "object_id_field_name",
+        ),
     )
     object_ids: list[int] = Field(
         default_factory=list,

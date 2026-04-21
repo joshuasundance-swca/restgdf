@@ -31,6 +31,7 @@ from restgdf._models._drift import (
     reset_drift_cache,
 )
 from restgdf._models.responses import LayerMetadata, ServiceInfo
+from tests.id_schema_fixtures import load_id_schema_fixture
 
 
 @pytest.fixture(autouse=True)
@@ -235,3 +236,37 @@ def test_parse_response_layer_metadata_falls_back_for_bad_typed_field(
     assert layer.max_record_count is None
     bad_type_records = [r for r in caplog.records if "bad_type" in r.getMessage()]
     assert bad_type_records
+
+
+def test_layer_metadata_preserves_new_field_types_and_large_integer_fixture() -> None:
+    payload = load_id_schema_fixture("new-field-types")
+
+    layer = _parse_response(LayerMetadata, payload, context="new-field-types")
+
+    assert layer.fields is not None
+    assert [field.type for field in layer.fields] == [
+        "esriFieldTypeBigInteger",
+        "esriFieldTypeDateOnly",
+        "esriFieldTypeTimeOnly",
+        "esriFieldTypeTimestampOffset",
+    ]
+    dumped = layer.model_dump(by_alias=True, exclude_none=True)
+    assert dumped["sampleAttributes"]["ASSET_BIGID"] > 2**53
+
+
+def test_parse_response_layer_metadata_keeps_valid_fields_when_one_field_is_malformed(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    payload = load_id_schema_fixture("malformed-field-entry")
+    caplog.set_level(logging.DEBUG, logger="restgdf.schema_drift")
+
+    layer = _parse_response(LayerMetadata, payload, context="malformed-field-entry")
+
+    assert layer.fields is not None
+    assert [field.name for field in layer.fields] == ["OBJECTID", "CITY", "UPDATED_AT"]
+    assert [field.type for field in layer.fields] == [
+        "esriFieldTypeOID",
+        "esriFieldTypeString",
+        "esriFieldTypeDate",
+    ]
+    assert any("fields.2.type" in record.getMessage() for record in caplog.records)

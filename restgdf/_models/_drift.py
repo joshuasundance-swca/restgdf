@@ -2,13 +2,15 @@
 
 This module defines the two response-model tiers used across the library:
 
-* :class:`PermissiveModel` — ``extra="allow"``, accepts any payload, logs
+* :class:`PermissiveModel` — ``extra="allow"``, accepts variant payloads, logs
   drift. Used for metadata, service, folder, and crawl shapes where ArcGIS
-  vendor variance is expected.
+  vendor variance is expected. A top-level ArcGIS ``{"error": {...}}``
+  envelope is still surfaced as :class:`RestgdfResponseError` instead of
+  being treated as harmless drift.
 * :class:`StrictModel` — ``extra="ignore"``, raises
   :class:`~restgdf._models.RestgdfResponseError` on validation failure.
   Used for operation-critical envelopes (count, object-ids, token,
-  error envelope, feature response envelope).
+  explicit error envelope).
 
 The :func:`_parse_response` adapter is the single call-site that every
 parser uses to convert a raw dict into a validated model. It dedupes
@@ -119,6 +121,37 @@ def _log_drift(
     )
 
 
+def _sample_at_path(raw: Any, loc: tuple[Any, ...]) -> Any:
+    """Best-effort sample extraction for a pydantic error location."""
+    sample = raw
+    for part in loc:
+        try:
+            if isinstance(sample, dict):
+                sample = sample[part]
+            elif isinstance(sample, list) and isinstance(part, int):
+                sample = sample[part]
+            else:
+                return sample
+        except (IndexError, KeyError, TypeError):
+            return sample
+    return sample
+
+
+def _is_arcgis_error_envelope(raw: Any) -> bool:
+    """Return whether ``raw`` matches the ArcGIS top-level error envelope."""
+    if not isinstance(raw, dict) or "error" not in raw:
+        return False
+
+    # Imported lazily to avoid a module cycle: responses -> _drift -> responses.
+    from restgdf._models.responses import ErrorResponse
+
+    try:
+        ErrorResponse.model_validate(raw)
+    except ValidationError:
+        return False
+    return True
+
+
 def _parse_response(
     model_cls: type[_M],
     raw: Any,
@@ -152,6 +185,19 @@ def _parse_response(
                 raw=raw,
             ) from exc
 
+    if _is_arcgis_error_envelope(raw):
+        error = raw["error"]
+        message = error.get("message") or "ArcGIS error response"
+        code = error.get("code")
+        code_suffix = f" (code={code})" if code is not None else ""
+        raise RestgdfResponseError(
+            f"{model_cls.__name__} received ArcGIS error envelope{code_suffix}: "
+            f"{message}",
+            model_name=model_cls.__name__,
+            context=context,
+            raw=raw,
+        )
+
     cleaned: dict[str, Any] = dict(raw) if isinstance(raw, dict) else {}
     if not isinstance(raw, dict):
         _log_drift(
@@ -166,6 +212,8 @@ def _parse_response(
         instance = model_cls.model_validate(cleaned)
     except ValidationError as exc:
         # Strip failing fields, log each as drift, and revalidate.
+        top_level_removals: set[str] = set()
+        nested_list_removals: dict[str, set[int]] = {}
         for error in exc.errors():
             loc = error.get("loc", ())
             if not loc:
@@ -173,13 +221,30 @@ def _parse_response(
             top = loc[0]
             if not isinstance(top, str) or top not in cleaned:
                 continue
+            sample = _sample_at_path(raw, tuple(loc))
             _log_drift(
                 model_name=model_cls.__name__,
                 path=".".join(str(p) for p in loc),
                 kind="bad_type",
-                sample=cleaned[top],
+                sample=sample,
                 level=logging.DEBUG,
             )
+            if (
+                len(loc) > 1
+                and isinstance(loc[1], int)
+                and isinstance(cleaned.get(top), list)
+            ):
+                nested_list_removals.setdefault(top, set()).add(loc[1])
+                continue
+            top_level_removals.add(top)
+        for top, indexes in nested_list_removals.items():
+            values = cleaned.get(top)
+            if not isinstance(values, list):
+                continue
+            cleaned[top] = [
+                value for idx, value in enumerate(values) if idx not in indexes
+            ]
+        for top in top_level_removals:
             cleaned.pop(top, None)
         instance = model_cls.model_validate(cleaned)
 

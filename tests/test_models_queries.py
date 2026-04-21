@@ -11,6 +11,8 @@ envelope models added in slice S-3:
 * :class:`FeaturesResponse` — permissive envelope; the per-feature
   validation lives in :class:`Feature` and is intentionally *not* applied
   here so large feature batches flow through without per-item overhead.
+  Ordinary schema drift is tolerated, but explicit ArcGIS
+  ``{"error": {...}}`` envelopes still fail fast.
 * :class:`TokenResponse` — strict; validates the ``/generateToken`` reply.
 """
 
@@ -33,6 +35,7 @@ from restgdf._models.responses import (
     ObjectIdsResponse,
     TokenResponse,
 )
+from tests.id_schema_fixtures import load_id_schema_fixture
 
 
 @pytest.fixture(autouse=True)
@@ -157,6 +160,19 @@ def test_object_ids_response_dumps_camelcase_by_alias() -> None:
     assert dumped == {"objectIdFieldName": "OBJECTID", "objectIds": [1]}
 
 
+def test_object_ids_response_accepts_object_id_field_key_variant_fixture() -> None:
+    payload = load_id_schema_fixture("object-id-key-variants")
+
+    parsed = {
+        key: _parse_response(ObjectIdsResponse, response, context=key)
+        for key, response in payload["responses"].items()
+    }
+
+    assert parsed["objectIdFieldName"].object_id_field_name == "OBJECTID"
+    assert parsed["objectIdField"].object_id_field_name == "OBJECTID"
+    assert parsed["objectIdField"].object_ids[-1] > 2**31
+
+
 # --------------------------------------------------------------------------- #
 # FeaturesResponse                                                             #
 # --------------------------------------------------------------------------- #
@@ -213,6 +229,23 @@ def test_features_response_accepts_snake_case_aliases() -> None:
     )
     assert resp.object_id_field_name == "OBJECTID"
     assert resp.exceeded_transfer_limit is True
+
+
+def test_features_response_raises_on_arcgis_error_envelope() -> None:
+    raw = {
+        "error": {
+            "code": 400,
+            "message": "Unable to complete operation.",
+            "details": ["where clause is invalid"],
+        },
+    }
+
+    with pytest.raises(RestgdfResponseError) as exc_info:
+        _parse_response(FeaturesResponse, raw, context="https://example.com/query")
+
+    assert exc_info.value.model_name == "FeaturesResponse"
+    assert exc_info.value.context == "https://example.com/query"
+    assert exc_info.value.raw == raw
 
 
 # --------------------------------------------------------------------------- #

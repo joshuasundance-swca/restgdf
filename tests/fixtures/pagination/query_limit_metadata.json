@@ -1,0 +1,21 @@
+{
+  "currentVersion": 11.3,
+  "id": 0,
+  "name": "Hosted point layer limits sample",
+  "type": "Feature Layer",
+  "objectIdField": "OBJECTID",
+  "fields": [
+    {
+      "name": "OBJECTID",
+      "type": "esriFieldTypeOID"
+    }
+  ],
+  "maxRecordCount": 2000,
+  "standardMaxRecordCount": 16000,
+  "tileMaxRecordCount": 8000,
+  "maxRecordCountFactor": 1,
+  "advancedQueryCapabilities": {
+    "supportsPagination": true,
+    "supportsQueryWithResultType": true
+  }
+}

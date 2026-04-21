@@ -1,9 +1,10 @@
 """Typed runtime errors raised by validated ArcGIS response parsing.
 
 :class:`RestgdfResponseError` is the single exception type raised when a
-response fails strict-tier validation. Permissive (metadata/crawl) models
-never raise; they emit structured drift log records instead (see
-:mod:`restgdf._models._drift` in a later slice).
+response fails strict-tier validation or when a permissive parse receives an
+explicit top-level ArcGIS ``{"error": {...}}`` envelope. Ordinary
+metadata/crawl drift still logs through :mod:`restgdf._models._drift`
+instead of raising.
 """
 
 from __future__ import annotations
@@ -12,13 +13,13 @@ from typing import Any
 
 
 class RestgdfResponseError(ValueError):
-    """Raised when a strict-tier ArcGIS response fails validation.
+    """Raised when validated ArcGIS response handling must fail fast.
 
     Attributes
     ----------
     model_name
-        The pydantic model class name that rejected the payload (for example
-        ``"CountResponse"``).
+        The pydantic model class name associated with the failed parse (for
+        example ``"CountResponse"`` or ``"LayerMetadata"``).
     context
         A short identifier describing *where* the response came from
         (for example the request URL or a helper name). Used by operators

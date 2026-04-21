@@ -1,0 +1,18 @@
+{
+  "currentVersion": 11.1,
+  "id": 0,
+  "name": "Audit sample layer without paging flag",
+  "type": "Feature Layer",
+  "objectIdField": "OBJECTID",
+  "fields": [
+    {
+      "name": "OBJECTID",
+      "type": "esriFieldTypeOID"
+    }
+  ],
+  "maxRecordCount": 1000,
+  "advancedQueryCapabilities": {
+    "supportsOrderBy": true,
+    "supportsDistinct": true
+  }
+}

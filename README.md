@@ -249,6 +249,23 @@ Need a plain dict during a transitional migration? Use
 `restgdf.compat.as_dict(md)`. See [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md) for
 the full 1.x → 2.0 rewrite table.
 
+### ArcGIS drift guarantees and limitations
+
+- Strict envelopes (`CountResponse`, `ObjectIdsResponse`, `TokenResponse`) fail
+  fast with `RestgdfResponseError` when required keys are missing or malformed.
+- Permissive envelopes (`LayerMetadata`, `FeaturesResponse`, crawl/service
+  payloads) still tolerate unknown extras and missing optional fields, **but**
+  a top-level ArcGIS JSON error envelope (`{"error": {...}}`) now raises
+  `RestgdfResponseError` instead of being mistaken for partial metadata or an
+  empty feature page.
+- Query helpers intentionally call `aiohttp` JSON decoding with
+  `content_type=None`, so mislabeled JSON bodies such as `text/plain` still
+  parse.
+- Non-JSON/HTML bodies are not normalized: malformed query bodies still bubble
+  the underlying JSON decoder error, and `ArcGISTokenSession.update_token()`
+  still preserves aiohttp's native `ContentTypeError` behavior for HTML token
+  pages.
+
 # Documentation
 
 Full docs live at **<https://restgdf.readthedocs.io/>** (hosted by Read the Docs).
