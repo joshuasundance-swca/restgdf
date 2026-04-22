@@ -41,6 +41,7 @@ from restgdf._models._drift import _parse_response
 from restgdf._config import get_config
 from restgdf._models.responses import LayerMetadata
 from restgdf.utils._query import get_feature_count, get_metadata, get_object_ids
+from restgdf.utils._pagination import PaginationPlan, build_pagination_plan
 from restgdf.utils._stats import (
     get_unique_values,
     get_value_counts,
@@ -56,6 +57,8 @@ __all__ = [
     "DEFAULTDICT",
     "DEFAULT_METADATA_HEADERS",
     "FIELDDOESNOTEXIST",
+    "PaginationPlan",
+    "build_pagination_plan",
     "default_data",
     "default_headers",
     "get_feature_count",

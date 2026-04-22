@@ -303,6 +303,50 @@ observability, and normalization tracks:
 
 No existing APIs or behaviors change. ``__version__`` unchanged.
 
+### phase-2c
+
+**Additive — no breaking changes.** Two new public surfaces land under
+phase-2c (BL-21 + BL-22):
+
+- ``restgdf._models.responses.AdvancedQueryCapabilities`` — typed
+  ``PermissiveModel`` companion for the ArcGIS
+  ``advancedQueryCapabilities`` sub-object. Declares the five flags
+  restgdf routes on (``supportsPagination``, ``supportsQueryByOIDs``,
+  ``supportsReturnExceededLimitFeatures``,
+  ``supportsPaginationOnAggregatedQueries``, ``maxRecordCountFactor``)
+  with the standard camelCase/snake_case ``AliasChoices`` wiring;
+  unknown keys survive via the permissive tier. The raw
+  ``advanced_query_capabilities: dict | None`` field on
+  ``LayerMetadata`` is **unchanged** — the typed submodel is exposed as
+  the additive companion
+  ``LayerMetadata.advanced_query_capabilities_typed:
+  AdvancedQueryCapabilities | None``. Callers opt in; the raw dict
+  stays the default representation so permissive-tier consumers keep
+  working byte-for-byte.
+
+- ``restgdf.utils._pagination`` — new internal module containing a
+  frozen ``PaginationPlan`` dataclass and the sync pure-math
+  ``build_pagination_plan(total_records, max_record_count, *,
+  factor=1.0, advertised_factor=None)`` helper, both re-exported via
+  ``restgdf.utils.getinfo`` (patch-seam compatible with the existing
+  ``unittest.mock.patch`` targets used by ``tests/test_compat.py``).
+  The planner emits ``(resultOffset, resultRecordCount)`` tuples
+  byte-identical to the previous inline arithmetic inside
+  ``get_query_data_batches``; the pagination branch has been rerouted
+  through the planner without changing its public signature or any
+  pinned fixture. When ``factor`` exceeds ``advertised_factor`` the
+  planner clamps to the advertised value and logs a warning via
+  ``get_logger("pagination")`` (logger name
+  ``restgdf.pagination``). This phase keeps the call site wired at
+  ``factor=1.0`` so production batch sizes are unchanged; plumbing the
+  live ``maxRecordCountFactor`` from layer metadata into the planner
+  is a deliberate P1 follow-up so it can ship with its own review
+  surface and observability story.
+
+No behavior change for existing consumers. Byte-exact pagination
+fixtures in ``tests/test_getgdf.py`` and
+``tests/test_characterization.py`` stay green unchanged.
+
 ## Upcoming: restgdf 2.x to 3.x optional Geo extras
 
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This

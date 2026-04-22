@@ -75,6 +75,54 @@ class Feature(PermissiveModel):
     geometry: dict[str, Any] | None = None
 
 
+class AdvancedQueryCapabilities(PermissiveModel):
+    """Typed view over the ``advancedQueryCapabilities`` sub-object.
+
+    ArcGIS emits an open-ended set of capability flags here; this model
+    declares the ones restgdf routes on (pagination strategy selection,
+    `maxRecordCountFactor` clamp) and preserves the rest through
+    permissive ``extra="allow"``. The raw dict is still available as
+    :attr:`LayerMetadata.advanced_query_capabilities`; this submodel is
+    an opt-in typed companion surfaced via
+    :attr:`LayerMetadata.advanced_query_capabilities_typed`.
+    """
+
+    supports_pagination: bool | None = Field(
+        default=None,
+        alias="supportsPagination",
+        validation_alias=AliasChoices("supportsPagination", "supports_pagination"),
+    )
+    supports_query_by_oids: bool | None = Field(
+        default=None,
+        alias="supportsQueryByOIDs",
+        validation_alias=AliasChoices("supportsQueryByOIDs", "supports_query_by_oids"),
+    )
+    supports_return_exceeded_limit_features: bool | None = Field(
+        default=None,
+        alias="supportsReturnExceededLimitFeatures",
+        validation_alias=AliasChoices(
+            "supportsReturnExceededLimitFeatures",
+            "supports_return_exceeded_limit_features",
+        ),
+    )
+    supports_pagination_on_aggregated_queries: bool | None = Field(
+        default=None,
+        alias="supportsPaginationOnAggregatedQueries",
+        validation_alias=AliasChoices(
+            "supportsPaginationOnAggregatedQueries",
+            "supports_pagination_on_aggregated_queries",
+        ),
+    )
+    max_record_count_factor: float | None = Field(
+        default=None,
+        alias="maxRecordCountFactor",
+        validation_alias=AliasChoices(
+            "maxRecordCountFactor",
+            "max_record_count_factor",
+        ),
+    )
+
+
 class LayerMetadata(PermissiveModel):
     """Polymorphic ArcGIS REST metadata envelope.
 
@@ -111,6 +159,14 @@ class LayerMetadata(PermissiveModel):
         validation_alias=AliasChoices(
             "advancedQueryCapabilities",
             "advanced_query_capabilities",
+        ),
+    )
+    advanced_query_capabilities_typed: AdvancedQueryCapabilities | None = Field(
+        default=None,
+        alias="advancedQueryCapabilitiesTyped",
+        validation_alias=AliasChoices(
+            "advancedQueryCapabilitiesTyped",
+            "advanced_query_capabilities_typed",
         ),
     )
     layers: list[LayerMetadata] | None = None
