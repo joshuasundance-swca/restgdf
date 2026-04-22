@@ -41,7 +41,7 @@ def test_point_feature_hoists_object_id() -> None:
                     "y": 2.0,
                     "spatialReference": {"wkid": 4326},
                 },
-            }
+            },
         ],
         object_id_field_name="OBJECTID",
     )
@@ -62,20 +62,18 @@ def test_polygon_feature_type_inferred() -> None:
             {
                 "attributes": {},
                 "geometry": {"rings": [[[0, 0], [1, 0], [1, 1], [0, 0]]]},
-            }
-        ]
+            },
+        ],
     )
     feature = next(iter_normalized_features(response))
     assert feature.geometry is not None
     assert feature.geometry.type == "polygon"
-    assert feature.geometry.coords == {
-        "rings": [[[0, 0], [1, 0], [1, 1], [0, 0]]]
-    }
+    assert feature.geometry.coords == {"rings": [[[0, 0], [1, 0], [1, 1], [0, 0]]]}
 
 
 def test_polyline_feature_type_inferred() -> None:
     response = _features_response(
-        [{"attributes": {}, "geometry": {"paths": [[[0, 0], [1, 1]]]}}]
+        [{"attributes": {}, "geometry": {"paths": [[[0, 0], [1, 1]]]}}],
     )
     feature = next(iter_normalized_features(response))
     assert feature.geometry is not None
@@ -84,7 +82,7 @@ def test_polyline_feature_type_inferred() -> None:
 
 def test_multipoint_feature_type_inferred() -> None:
     response = _features_response(
-        [{"attributes": {}, "geometry": {"points": [[0, 0], [1, 1]]}}]
+        [{"attributes": {}, "geometry": {"points": [[0, 0], [1, 1]]}}],
     )
     feature = next(iter_normalized_features(response))
     assert feature.geometry is not None
@@ -97,8 +95,8 @@ def test_envelope_feature_type_inferred() -> None:
             {
                 "attributes": {},
                 "geometry": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1},
-            }
-        ]
+            },
+        ],
     )
     feature = next(iter_normalized_features(response))
     assert feature.geometry is not None
@@ -107,7 +105,7 @@ def test_envelope_feature_type_inferred() -> None:
 
 def test_unknown_geometry_shape_falls_back_to_none_type() -> None:
     response = _features_response(
-        [{"attributes": {}, "geometry": {"weird": [1, 2, 3]}}]
+        [{"attributes": {}, "geometry": {"weird": [1, 2, 3]}}],
     )
     feature = next(iter_normalized_features(response))
     assert feature.geometry is not None
@@ -146,7 +144,7 @@ def test_oid_hoisting_coerces_string_integers() -> None:
     assert feature.object_id == 42
 
 
-def test_oid_hoisting_tolerates_unparseable_value() -> None:
+def test_oid_hoisting_tolerates_unparsable_value() -> None:
     response = _features_response(
         [{"attributes": {"OBJECTID": "abc"}}],
         object_id_field_name="OBJECTID",
@@ -161,6 +159,21 @@ def test_oid_hoisting_missing_field_stays_none() -> None:
     assert feature.object_id is None
 
 
+def test_oid_hoisting_non_integral_float_truncates() -> None:
+    # Pins current behavior: ``int(42.5)`` truncates to ``42``. The
+    # normalization path uses raw ``int(...)`` coercion (responses.py
+    # ``iter_normalized_features``) so a non-integral float silently
+    # loses its fractional part. Callers that need strict integer
+    # semantics must pre-filter. If this policy changes, update the
+    # assertion rather than the docstring.
+    response = _features_response(
+        [{"attributes": {"OBJECTID": 42.5}}],
+        object_id_field_name="OBJECTID",
+    )
+    feature = next(iter_normalized_features(response))
+    assert feature.object_id == 42
+
+
 def test_sr_kwarg_fills_when_geometry_missing_sr() -> None:
     response = _features_response([{"geometry": {"x": 1, "y": 2}}])
     feature = next(iter_normalized_features(response, sr=4326))
@@ -170,7 +183,7 @@ def test_sr_kwarg_fills_when_geometry_missing_sr() -> None:
 
 def test_server_sr_wins_over_kwarg() -> None:
     response = _features_response(
-        [{"geometry": {"x": 1, "y": 2, "spatialReference": {"wkid": 3857}}}]
+        [{"geometry": {"x": 1, "y": 2, "spatialReference": {"wkid": 3857}}}],
     )
     feature = next(iter_normalized_features(response, sr=4326))
     assert feature.geometry is not None
@@ -183,7 +196,7 @@ def test_non_mapping_feature_entry_is_skipped() -> None:
     # non-mapping feature entries (which the wire-level list[dict] type
     # would otherwise reject at parse time).
     response = FeaturesResponse.model_construct(
-        features=["not a feature", {"attributes": {"k": 1}}]  # type: ignore[list-item]
+        features=["not a feature", {"attributes": {"k": 1}}],  # type: ignore[list-item]
     )
     features = list(iter_normalized_features(response))
     assert len(features) == 1
@@ -198,3 +211,92 @@ def test_geometry_has_z_and_has_m_defaults_and_aliases() -> None:
     aliased = NormalizedGeometry.model_validate({"hasZ": True, "hasM": True})
     assert aliased.has_z is True
     assert aliased.has_m is True
+
+
+def test_point_feature_propagates_has_z_and_has_m() -> None:
+    response = _features_response(
+        [
+            {
+                "attributes": {},
+                "geometry": {"x": 1, "y": 2, "z": 3, "hasZ": True, "hasM": True},
+            },
+        ],
+    )
+    feature = next(iter_normalized_features(response))
+    assert feature.geometry is not None
+    assert feature.geometry.type == "point"
+    assert feature.geometry.has_z is True
+    assert feature.geometry.has_m is True
+
+
+def test_polyline_feature_propagates_has_z() -> None:
+    response = _features_response(
+        [
+            {
+                "attributes": {},
+                "geometry": {"paths": [[[0, 0, 5], [1, 1, 5]]], "hasZ": True},
+            },
+        ],
+    )
+    feature = next(iter_normalized_features(response))
+    assert feature.geometry is not None
+    assert feature.geometry.has_z is True
+    assert feature.geometry.has_m is False
+
+
+def test_empty_rings_polygon_preserved_as_empty_coords() -> None:
+    response = _features_response([{"attributes": {}, "geometry": {"rings": []}}])
+    feature = next(iter_normalized_features(response))
+    assert feature.geometry is not None
+    assert feature.geometry.type == "polygon"
+    assert feature.geometry.coords == {"rings": []}
+
+
+def test_empty_paths_polyline_preserved_as_empty_coords() -> None:
+    response = _features_response([{"attributes": {}, "geometry": {"paths": []}}])
+    feature = next(iter_normalized_features(response))
+    assert feature.geometry is not None
+    assert feature.geometry.type == "polyline"
+    assert feature.geometry.coords == {"paths": []}
+
+
+def test_empty_dict_geometry_yields_none_typed_geometry() -> None:
+    # An empty geometry dict is still a Mapping, so the iterator
+    # produces a NormalizedGeometry with unknown type and empty coords
+    # rather than crashing or returning None. This pins defense-in-
+    # depth behavior against vendor payloads that omit coord keys.
+    response = _features_response([{"attributes": {"k": 1}, "geometry": {}}])
+    feature = next(iter_normalized_features(response))
+    assert feature.geometry is not None
+    assert feature.geometry.type is None
+    assert feature.geometry.coords == {}
+
+
+def test_curve_ring_geometry_falls_back_to_none_type() -> None:
+    response = _features_response(
+        [
+            {
+                "attributes": {},
+                "geometry": {"curveRings": [[[0, 0], {"c": [[1, 1], [0.5, 0.5]]}]]},
+            },
+        ],
+    )
+    feature = next(iter_normalized_features(response))
+    assert feature.geometry is not None
+    assert feature.geometry.type is None
+    assert "curveRings" in feature.geometry.coords
+
+
+def test_curve_path_geometry_falls_back_to_none_type() -> None:
+    response = _features_response(
+        [
+            {
+                "attributes": {},
+                "geometry": {"curvePaths": [[[0, 0], {"c": [[1, 1], [0.5, 0.5]]}]]},
+            },
+        ],
+    )
+    feature = next(iter_normalized_features(response))
+    assert feature.geometry is not None
+    assert feature.geometry.type is None
+    assert "curvePaths" in feature.geometry.coords

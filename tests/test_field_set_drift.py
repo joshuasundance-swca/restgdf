@@ -6,7 +6,11 @@ import logging
 
 import pytest
 
-from restgdf._models._drift import FieldSetDriftObserver, reset_drift_cache
+from restgdf._models._drift import (
+    FieldSetDriftObserver,
+    _log_drift,
+    reset_drift_cache,
+)
 
 DRIFT_LOGGER = "restgdf.schema_drift"
 
@@ -50,9 +54,7 @@ def test_field_disappeared_logged_once(caplog: pytest.LogCaptureFixture) -> None
     with caplog.at_level(logging.INFO, logger=DRIFT_LOGGER):
         observer.observe_page([_feature(OBJECTID=2)])
         observer.observe_page([_feature(OBJECTID=3)])
-    disappeared = [
-        r for r in caplog.records if "field_disappeared" in r.getMessage()
-    ]
+    disappeared = [r for r in caplog.records if "field_disappeared" in r.getMessage()]
     assert len(disappeared) == 1
     assert "legacy" in disappeared[0].getMessage()
 
@@ -74,7 +76,7 @@ def test_features_without_attributes_are_ignored(
     observer = FieldSetDriftObserver(context="layer-2")
     with caplog.at_level(logging.INFO, logger=DRIFT_LOGGER):
         observer.observe_page(
-            [{"geometry": {"x": 0, "y": 0}}, {"attributes": None}]  # type: ignore[list-item]
+            [{"geometry": {"x": 0, "y": 0}}, {"attributes": None}],  # type: ignore[list-item]
         )
     # No mapping attributes → treated as empty page → no drift.
     assert caplog.records == []
@@ -103,8 +105,7 @@ def test_drift_context_in_model_name(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.INFO, logger=DRIFT_LOGGER):
         observer.observe_page([_feature(a=1, b=2)])
     assert any(
-        "FieldSetDriftObserver[my-service/3]" in r.getMessage()
-        for r in caplog.records
+        "FieldSetDriftObserver[my-service/3]" in r.getMessage() for r in caplog.records
     )
 
 
@@ -121,3 +122,35 @@ def test_dedupe_across_disappear_reappear(
     messages = [r.getMessage() for r in caplog.records]
     assert sum("field_disappeared" in m and "'x'" in m for m in messages) == 1
     assert sum("field_appeared" in m and "'y'" in m for m in messages) == 1
+
+
+def test_reset_drift_cache_allows_re_emission(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    # Prove the dedupe cache is process-scoped and that a direct
+    # ``reset_drift_cache()`` call genuinely re-enables emission of the
+    # same drift key. Exercises ``_log_drift`` directly rather than
+    # going through the observer so the test is decoupled from the
+    # observer's internal "observed keys" state.
+    def emit() -> None:
+        _log_drift(
+            model_name="ResetTest",
+            path="my_field",
+            kind="field_appeared",
+            sample="my_field",
+            level=logging.INFO,
+        )
+
+    with caplog.at_level(logging.INFO, logger=DRIFT_LOGGER):
+        emit()
+        emit()  # deduped - no second record
+    first_pass = [r for r in caplog.records if "ResetTest" in r.getMessage()]
+    assert len(first_pass) == 1
+
+    caplog.clear()
+    reset_drift_cache()
+
+    with caplog.at_level(logging.INFO, logger=DRIFT_LOGGER):
+        emit()  # re-emits after cache reset
+    second_pass = [r for r in caplog.records if "ResetTest" in r.getMessage()]
+    assert len(second_pass) == 1

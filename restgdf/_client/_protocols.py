@@ -42,9 +42,11 @@ class AsyncHTTPSession(Protocol):
     """
 
     @property
-    def closed(self) -> bool: ...
+    def closed(self) -> bool:
+        ...
 
-    async def close(self) -> None: ...
+    async def close(self) -> None:
+        ...
 
     def get(
         self,
@@ -55,7 +57,8 @@ class AsyncHTTPSession(Protocol):
         ssl: Any = None,
         timeout: Any = None,
         **kwargs: Any,
-    ) -> Any: ...
+    ) -> Any:
+        ...
 
     def post(
         self,
@@ -68,7 +71,8 @@ class AsyncHTTPSession(Protocol):
         ssl: Any = None,
         timeout: Any = None,
         **kwargs: Any,
-    ) -> Any: ...
+    ) -> Any:
+        ...
 
 
 __all__ = ["AsyncHTTPSession"]
