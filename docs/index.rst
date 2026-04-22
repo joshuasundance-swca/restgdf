@@ -148,6 +148,7 @@ Explore the docs
    :caption: Recipes
 
    recipes/observability
+   recipes/streaming
 
 .. toctree::
    :hidden:

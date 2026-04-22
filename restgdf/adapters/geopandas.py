@@ -39,21 +39,48 @@ def rows_to_geodataframe(
 ) -> GeoDataFrame:
     """Materialize row-shaped dicts as a ``geopandas.GeoDataFrame``.
 
+    Requires the optional geo extra: ``pip install "restgdf[geo]"`` (brings
+    in ``pandas``, ``geopandas``, and ``pyogrio``).
+
     Parameters
     ----------
     rows:
         Iterable of row-shaped dicts, typically produced by
         :func:`restgdf.adapters.stream.iter_rows` or
-        :func:`restgdf.adapters.dict.features_to_rows`.
+        :func:`restgdf.adapters.dict.features_to_rows`. Each row's
+        ``geometry_field`` entry must be shapely-compatible (or a
+        ``GeoSeries`` element).
     geometry_field:
         Column name holding the geometry values. Defaults to ``"geometry"``.
     crs:
         Optional CRS passed through to ``GeoDataFrame(crs=...)``.
 
+    Returns
+    -------
+    geopandas.GeoDataFrame
+
     Raises
     ------
     restgdf.errors.OptionalDependencyError
         When any of ``pandas``, ``geopandas``, or ``pyogrio`` is missing.
+        Install via ``pip install "restgdf[geo]"``.
+
+    Examples
+    --------
+    >>> from shapely.geometry import Point  # doctest: +SKIP
+    >>> rows_to_geodataframe(  # doctest: +SKIP
+    ...     [{"OBJECTID": 1, "geometry": Point(0, 0)}],
+    ...     crs="EPSG:4326",
+    ... )
+
+    See Also
+    --------
+    :meth:`restgdf.FeatureLayer.get_gdf`
+        High-level accessor that returns the full layer as a single
+        ``GeoDataFrame``.
+    :meth:`restgdf.FeatureLayer.stream_gdf_chunks`
+        Async iterator yielding one ``GeoDataFrame`` per page, each with
+        ``gdf.attrs["spatial_reference"]`` populated from layer metadata.
     """
     require_geo_stack("restgdf.adapters.geopandas.rows_to_geodataframe()")
     GeoDataFrameCls = require_geopandas(
@@ -71,9 +98,34 @@ async def arows_to_geodataframe(
 ) -> GeoDataFrame:
     """Async counterpart of :func:`rows_to_geodataframe`.
 
-    Consumes the async iterable, then delegates. Raises
-    :class:`restgdf.errors.OptionalDependencyError` when the geo stack is
-    incomplete.
+    Consumes the async iterable to completion, then delegates. Requires the
+    optional geo extra: ``pip install "restgdf[geo]"``.
+
+    Parameters
+    ----------
+    rows:
+        Async iterable of row-shaped dicts — typically
+        :meth:`restgdf.FeatureLayer.stream_rows` or
+        :func:`restgdf.adapters.stream.iter_rows`.
+    geometry_field:
+        Column name for the geometry column. Defaults to ``"geometry"``.
+    crs:
+        Optional CRS forwarded to ``GeoDataFrame(crs=...)``.
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+
+    Raises
+    ------
+    restgdf.errors.OptionalDependencyError
+        When any of ``pandas``, ``geopandas``, or ``pyogrio`` is missing.
+
+    See Also
+    --------
+    :meth:`restgdf.FeatureLayer.get_gdf`
+        Equivalent to ``await arows_to_geodataframe(layer.stream_rows())``
+        with geometry normalization and CRS propagation handled for you.
     """
     materialized: list[dict[str, Any]] = [row async for row in rows]
     return rows_to_geodataframe(
