@@ -197,6 +197,7 @@ class ArcGISTokenSession:
             else dict(headers or {})
         )
         request_params = self.update_dict(params)
+        kwargs.setdefault("timeout", default_timeout())
         return await self.session.get(
             url,
             params=request_params,
@@ -221,6 +222,7 @@ class ArcGISTokenSession:
             else dict(headers or {})
         )
         request_data = self.update_dict(data)
+        kwargs.setdefault("timeout", default_timeout())
         return await self.session.post(
             url,
             data=request_data,

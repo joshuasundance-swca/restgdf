@@ -21,6 +21,7 @@ from restgdf.utils.getinfo import (
     get_object_ids,
     supports_pagination,
 )
+from restgdf.utils._http import default_timeout
 from restgdf.utils._metadata import supports_pagination_explicitly
 from restgdf.utils._optional import (
     require_geo_stack,
@@ -64,6 +65,7 @@ async def _get_sub_features(
 ) -> list[dict[str, Any]]:
     """Fetch a single query batch as raw ArcGIS feature dicts."""
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
+    kwargs.setdefault("timeout", default_timeout())
     response = await session.post(
         f"{url}/query",
         data=dict(query_data),
@@ -181,6 +183,7 @@ async def get_sub_gdf(
     if gdfdriver == "GeoJSON":
         data["f"] = "GeoJSON"
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
+    kwargs.setdefault("timeout", default_timeout())
 
     response = await session.post(
         f"{url}/query",
