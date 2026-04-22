@@ -22,7 +22,7 @@ if TYPE_CHECKING:  # pragma: no cover - import-time only
 __all__ = ["arows_to_dataframe", "rows_to_dataframe"]
 
 
-def rows_to_dataframe(rows: Iterable[dict[str, Any]]) -> "DataFrame":
+def rows_to_dataframe(rows: Iterable[dict[str, Any]]) -> DataFrame:
     """Materialize an iterable of row-shaped dicts as a ``pandas.DataFrame``.
 
     Raises :class:`restgdf.errors.OptionalDependencyError` when ``pandas`` is
@@ -32,7 +32,7 @@ def rows_to_dataframe(rows: Iterable[dict[str, Any]]) -> "DataFrame":
     return pd.DataFrame(list(rows))
 
 
-async def arows_to_dataframe(rows: AsyncIterable[dict[str, Any]]) -> "DataFrame":
+async def arows_to_dataframe(rows: AsyncIterable[dict[str, Any]]) -> DataFrame:
     """Async counterpart of :func:`rows_to_dataframe`.
 
     Consumes the async iterable to completion, then delegates to

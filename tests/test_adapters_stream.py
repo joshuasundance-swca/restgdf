@@ -78,6 +78,33 @@ async def test_iter_rows_delegates() -> None:
 
 
 @pytest.mark.asyncio
+async def test_iter_gdf_chunks_delegates() -> None:
+    pytest.importorskip("pandas")
+    pytest.importorskip("geopandas")
+    pytest.importorskip("pyogrio")
+
+    sentinel_chunks = [object(), object()]
+
+    async def fake_chunk_generator(url, session, **kwargs):
+        for chunk in sentinel_chunks:
+            yield chunk
+
+    with patch(
+        "restgdf.adapters.stream.chunk_generator",
+        side_effect=fake_chunk_generator,
+    ):
+        chunks = [
+            chunk
+            async for chunk in stream_adapter.iter_gdf_chunks(
+                "https://example.com/layer/0",
+                object(),
+            )
+        ]
+
+    assert chunks == sentinel_chunks
+
+
+@pytest.mark.asyncio
 async def test_iter_gdf_chunks_requires_geo_stack(monkeypatch) -> None:
     # Force chunk_generator's internal require_geo_stack to fail.
     import importlib

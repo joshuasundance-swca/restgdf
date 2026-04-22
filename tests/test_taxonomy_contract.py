@@ -25,9 +25,7 @@ def test_every_public_exception_inherits_restgdf_error() -> None:
     for name in errors_module.__all__:
         cls = getattr(errors_module, name)
         assert isinstance(cls, type), f"{name} is not a class"
-        assert issubclass(cls, RestgdfError), (
-            f"{name} must inherit RestgdfError"
-        )
+        assert issubclass(cls, RestgdfError), f"{name} must inherit RestgdfError"
 
 
 def test_exception_taxonomy_is_catchable_as_restgdf_error() -> None:
@@ -55,9 +53,7 @@ def test_every_logger_suffix_has_a_smoke_test(
     # which is the public API (R-55).
     logger = get_logger(suffix)
     assert logger.name == f"restgdf.{suffix}"
-    assert any(
-        isinstance(handler, logging.NullHandler) for handler in logger.handlers
-    )
+    assert any(isinstance(handler, logging.NullHandler) for handler in logger.handlers)
 
     caplog.clear()
     with caplog.at_level(logging.INFO, logger=logger.name):

@@ -4,7 +4,7 @@ import builtins
 import importlib
 import sys
 from contextlib import contextmanager
-from typing import Iterator
+from collections.abc import Iterator
 
 import pytest
 

@@ -36,7 +36,7 @@ def rows_to_geodataframe(
     *,
     geometry_field: str = "geometry",
     crs: Any = None,
-) -> "GeoDataFrame":
+) -> GeoDataFrame:
     """Materialize row-shaped dicts as a ``geopandas.GeoDataFrame``.
 
     Parameters
@@ -68,7 +68,7 @@ async def arows_to_geodataframe(
     *,
     geometry_field: str = "geometry",
     crs: Any = None,
-) -> "GeoDataFrame":
+) -> GeoDataFrame:
     """Async counterpart of :func:`rows_to_geodataframe`.
 
     Consumes the async iterable, then delegates. Raises

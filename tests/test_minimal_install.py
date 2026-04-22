@@ -18,7 +18,7 @@ import builtins
 import importlib
 import sys
 from contextlib import contextmanager
-from typing import Iterator
+from collections.abc import Iterator
 
 HEAVY_MODULE_PREFIXES = ("geopandas", "pandas", "pyogrio")
 
@@ -78,14 +78,24 @@ def test_featurelayer_and_directory_importable_without_geo_stack(
         assert restgdf.Directory.__name__ == "Directory"
 
 
-def test_get_config_probe_is_tolerant_of_phase_2a_merge_state() -> None:
+def test_get_config_probe_is_tolerant_of_phase_2a_merge_state(monkeypatch) -> None:
     # ``get_config`` lands with phase-2a. This test must pass whether
     # phase-2a has merged or not — it only asserts that an attribute probe
     # does not itself import the heavy stack, and that if present,
-    # ``get_config`` is callable.
-    restgdf = importlib.import_module("restgdf")
-    if hasattr(restgdf, "get_config"):
-        assert callable(restgdf.get_config)
+    # ``get_config`` is callable. Runs under the same guarded-import harness
+    # as the other BL-38 tests so the probe is provably base-install safe.
+    with _fresh_modules("restgdf", *HEAVY_MODULE_PREFIXES):
+        real_import = builtins.__import__
+
+        def guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name.split(".")[0] in HEAVY_MODULE_PREFIXES:
+                raise AssertionError(f"unexpected heavy import: {name}")
+            return real_import(name, globals, locals, fromlist, level)
+
+        monkeypatch.setattr(builtins, "__import__", guarded_import)
+        restgdf = importlib.import_module("restgdf")
+        if hasattr(restgdf, "get_config"):
+            assert callable(restgdf.get_config)
 
 
 def test_import_restgdf_adapters_is_core_safe(monkeypatch) -> None:

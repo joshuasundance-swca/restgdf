@@ -34,7 +34,7 @@ __all__ = ["iter_feature_batches", "iter_gdf_chunks", "iter_rows"]
 
 async def iter_feature_batches(
     url: str,
-    session: "ClientSession | ArcGISTokenSession",
+    session: ClientSession | ArcGISTokenSession,
     **kwargs: Any,
 ) -> AsyncIterator[list[dict[str, Any]]]:
     """Yield ArcGIS feature batches (lists of raw feature dicts) from ``url``.
@@ -48,7 +48,7 @@ async def iter_feature_batches(
 
 async def iter_rows(
     url: str,
-    session: "ClientSession | ArcGISTokenSession",
+    session: ClientSession | ArcGISTokenSession,
     **kwargs: Any,
 ) -> AsyncIterator[dict[str, Any]]:
     """Yield row-shaped dicts from ``url``.
@@ -62,7 +62,7 @@ async def iter_rows(
 
 async def iter_gdf_chunks(
     url: str,
-    session: "ClientSession | ArcGISTokenSession",
+    session: ClientSession | ArcGISTokenSession,
     **kwargs: Any,
 ) -> AsyncIterator[Any]:
     """Yield ``GeoDataFrame`` chunks from ``url``.
