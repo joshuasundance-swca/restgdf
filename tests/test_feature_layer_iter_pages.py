@@ -265,7 +265,5 @@ async def test_iter_pages_on_truncation_split_bisects_and_completes():
         ]
 
     # Expect two resolved pages covering all four OIDs.
-    all_oids = sorted(
-        f["attributes"]["OBJECTID"] for p in pages for f in p["features"]
-    )
+    all_oids = sorted(f["attributes"]["OBJECTID"] for p in pages for f in p["features"])
     assert all_oids == [1, 2, 3, 4]
