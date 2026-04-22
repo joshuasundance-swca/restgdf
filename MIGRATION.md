@@ -37,6 +37,14 @@ preserved via a pure alias shim and class identity is unchanged
 
 The preserved 2.x migration notes continue below.
 
+**BL-07 — `OptionalDependencyError` in `utils/_optional.py`.**
+Optional-dependency gates now raise
+`restgdf.errors.OptionalDependencyError` instead of bare
+`ModuleNotFoundError`. Because `OptionalDependencyError` multi-inherits
+`ModuleNotFoundError` (and therefore `ImportError`), existing
+`except ModuleNotFoundError:` and `except ImportError:` call sites
+continue to catch the new exception with no source changes.
+
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This
 new top section documents the next planned breaking change: GeoPandas-backed
 and pandas-backed workflows move behind the `restgdf[geo]` extra instead of

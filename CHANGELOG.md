@@ -26,6 +26,11 @@ All notable changes to restgdf are documented here. This project follows
   `from restgdf._models._errors import RestgdfResponseError` import
   path are preserved; `except ValueError:` call sites keep working
   (BL-06).
+- `restgdf.utils._optional._optional_dependency_error` now returns
+  `restgdf.errors.OptionalDependencyError` instead of a bare
+  `ModuleNotFoundError`. Existing `except ModuleNotFoundError:` and
+  `except ImportError:` handlers still catch the new exception because
+  `OptionalDependencyError` multi-inherits `ModuleNotFoundError` (BL-07).
 
 ## [2.0.0] - 2026-04-20
 
