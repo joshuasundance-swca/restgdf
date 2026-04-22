@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
+import time
 from dataclasses import dataclass, field
 
 import aiohttp
@@ -28,11 +29,20 @@ from restgdf.errors import (
     AuthNotAttachedError,
     AuthenticationError,
     TokenExpiredError,
+    TokenRefreshFailedError,
 )
 
 from pydantic import SecretStr
 
 _auth_logger = logging.getLogger("restgdf.auth")
+
+_MAX_TOKEN_RETRIES: int = 3
+"""Maximum number of ``/generateToken`` POST attempts before giving up."""
+
+_BASE_BACKOFF_S: float = 0.5
+"""Initial sleep between retries; doubles on each subsequent attempt."""
+
+_RETRYABLE_ERRORS = (OSError, asyncio.TimeoutError, ConnectionError)
 
 
 def _utc_now() -> datetime.datetime:
@@ -217,29 +227,67 @@ class ArcGISTokenSession:
         :class:`~restgdf._models.RestgdfResponseError` instead of
         ``KeyError`` deep in caller code paths.
 
+        Retries up to :data:`_MAX_TOKEN_RETRIES` times with exponential
+        backoff (base :data:`_BASE_BACKOFF_S`) on transient network
+        errors.  Deterministic errors (bad credentials, content-type
+        mismatches, validation failures) are re-raised immediately.
+        After exhausting retries, raises
+        :class:`~restgdf.errors.TokenRefreshFailedError`.
+
         Emits structured log events:
         * ``auth.refresh.start`` — before the POST
         * ``auth.refresh.success`` — after successful token update
         * ``auth.refresh.failure`` — on any exception
         """
-        _auth_logger.debug("auth.refresh.start url=%s", self.token_url)
-        try:
-            async with self.session.post(
+        last_exc: Exception | None = None
+        for attempt in range(1, _MAX_TOKEN_RETRIES + 1):
+            _auth_logger.debug(
+                "auth.refresh.start url=%s attempt=%d/%d",
                 self.token_url,
-                data=self.token_request_payload,
-                headers={"Content-Type": "application/x-www-form-urlencoded"},
-                timeout=default_timeout(),
-                ssl=self.verify_ssl,
-            ) as resp:
-                resp.raise_for_status()
-                data = await resp.json()
-            envelope = _parse_response(TokenResponse, data, context=self.token_url)
-            self.token = envelope.token
-            self.expires = envelope.expires
-            _auth_logger.debug("auth.refresh.success url=%s", self.token_url)
-        except Exception:
-            _auth_logger.debug("auth.refresh.failure url=%s", self.token_url)
-            raise
+                attempt,
+                _MAX_TOKEN_RETRIES,
+            )
+            try:
+                async with self.session.post(
+                    self.token_url,
+                    data=self.token_request_payload,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
+                    timeout=default_timeout(),
+                    ssl=self.verify_ssl,
+                ) as resp:
+                    resp.raise_for_status()
+                    data = await resp.json()
+                envelope = _parse_response(TokenResponse, data, context=self.token_url)
+                self.token = envelope.token
+                self.expires = envelope.expires
+                _auth_logger.debug("auth.refresh.success url=%s", self.token_url)
+                return
+            except _RETRYABLE_ERRORS as exc:
+                last_exc = exc
+                _auth_logger.debug(
+                    "auth.refresh.failure url=%s attempt=%d/%d",
+                    self.token_url,
+                    attempt,
+                    _MAX_TOKEN_RETRIES,
+                )
+                if attempt < _MAX_TOKEN_RETRIES:
+                    delay = _BASE_BACKOFF_S * (2 ** (attempt - 1))
+                    await asyncio.sleep(delay)
+            except Exception:
+                _auth_logger.debug(
+                    "auth.refresh.failure url=%s attempt=%d/%d",
+                    self.token_url,
+                    attempt,
+                    _MAX_TOKEN_RETRIES,
+                )
+                raise
+
+        raise TokenRefreshFailedError(
+            f"Failed to refresh token after {_MAX_TOKEN_RETRIES} attempts",
+            context=self.token_url,
+            attempt=_MAX_TOKEN_RETRIES,
+            cause=last_exc,
+        )
 
     def token_needs_update(self) -> bool:
         """Check if the token needs to be updated."""
