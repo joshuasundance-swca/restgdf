@@ -1,5 +1,42 @@
 # Upcoming: restgdf 2.x to 3.x optional Geo extras
 
+## Unreleased migration notes
+
+### phase-1a
+
+- **Bounded internal concurrency (BL-01).** Every restgdf top-level
+  orchestration call (`service_metadata`, `fetch_all_data`, `safe_crawl`)
+  now caps in-flight HTTP fan-out through a single
+  `asyncio.BoundedSemaphore` sized to
+  `Settings.max_concurrent_requests`. The new setting defaults to **8**
+  (matches aiohttp's `TCPConnector` default connection-pool size) and is
+  overridable via the `RESTGDF_MAX_CONCURRENT_REQUESTS` environment
+  variable. Saturation semantics = wait (no new exception is raised);
+  the only observable effect is that operators no longer see unbounded
+  fan-out on large directories or services with many layers. No public
+  signature changed — leaf helpers (`get_metadata`, `get_feature_count`)
+  remain semaphore-free; the cap is enforced at the three internal
+  `asyncio.gather` sites only.
+- **Single-flight token refresh (BL-03).** `ArcGISTokenSession` now
+  guards `update_token_if_needed` with a lazily-initialized per-instance
+  `asyncio.Lock` and double-checks `token_needs_update()` inside the
+  lock. Under N concurrent request paths that would previously have
+  each issued their own `/generateToken` POST, restgdf now issues
+  exactly one. Happy-path behavior (no contention, no expiry) is
+  unchanged. The lock field is excluded from `repr`/`compare` and
+  defaults to `None` so instances constructed outside a running event
+  loop (e.g. at import time) do not emit a deprecation warning.
+- **Request-verb seam (BL-20).** A new private helper
+  `restgdf.utils._http._choose_verb(url, body=None)` returns `"POST"`
+  for `/query` and `/queryRelatedRecords`, `"GET"` for bare
+  service / layer metadata URLs, and `"POST"` as the conservative
+  default for unknown URLs. This slice only introduces the seam —
+  existing call sites are unchanged. A later slice (BL-50) will extend
+  the helper to auto-switch `GET` → `POST` when a `where` clause pushes
+  a GET URL past the ArcGIS ~1800-byte URL budget.
+
+# Upcoming: restgdf 2.x to 3.x optional Geo extras
+
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This
 new top section documents the next planned breaking change: GeoPandas-backed
 and pandas-backed workflows move behind the `restgdf[geo]` extra instead of

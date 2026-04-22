@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from restgdf._models.crawl import CrawlError, CrawlReport, CrawlServiceEntry
 from restgdf._models.responses import LayerMetadata
+from restgdf._models._settings import get_settings
 from restgdf.utils.getinfo import service_metadata, get_metadata
 from restgdf.utils.token import ArcGISTokenSession
 
@@ -26,9 +27,21 @@ async def fetch_all_data(
     return_feature_count: bool = False,
 ) -> dict:
     """Fetch all services and their layers in a highly concurrent manner."""
+    # BL-01: one BoundedSemaphore per top-level orchestration call, shared
+    # with every nested ``service_metadata`` call so the cap is truly global
+    # per request (plan.md §3c R-18/R-44, kickoff §10.3). The outer
+    # fan-out uses plain ``asyncio.gather`` because the cap is enforced at
+    # the nested ``service_metadata`` fan-out and at the directory-level
+    # ``get_metadata`` calls below — wrapping outer tasks in the same sem
+    # would double-acquire (``asyncio.Semaphore`` is not re-entrant).
+    _sem = asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
+
     # Retrieve the initial list of folders and services
     try:
-        base_metadata = _to_plain_dict(await get_metadata(base_url, session, token))
+        async with _sem:
+            base_metadata = _to_plain_dict(
+                await get_metadata(base_url, session, token),
+            )
     except Exception as e:
         return {"error": e}
 
@@ -47,9 +60,10 @@ async def fetch_all_data(
     for folder in base_metadata.get("folders") or []:
         folder_url = f"{base_url}/{folder}"
         try:
-            folder_metadata = _to_plain_dict(
-                await get_metadata(folder_url, session, token),
-            )
+            async with _sem:
+                folder_metadata = _to_plain_dict(
+                    await get_metadata(folder_url, session, token),
+                )
         except Exception as e:
             return {"error": e}
         folder_metadata["url"] = folder_url
@@ -66,7 +80,7 @@ async def fetch_all_data(
 
     async def _service_metadata(*args, **kwargs):
         try:
-            return await service_metadata(*args, **kwargs)
+            return await service_metadata(*args, _sem=_sem, **kwargs)
         except Exception as e:
             return {"error": e}
 
@@ -125,10 +139,18 @@ async def safe_crawl(
     errors: list[CrawlError] = []
     services_raw: list[dict[str, Any]] = []
 
+    # BL-01: one BoundedSemaphore per top-level orchestration call, shared
+    # with every nested ``service_metadata`` call so the cap is truly global
+    # per request (plan.md §3c R-18/R-44, kickoff §10.3). The outer
+    # ``asyncio.gather`` below is NOT wrapped in this sem because nested
+    # orchestrators re-acquire it; ``asyncio.Semaphore`` is not re-entrant.
+    _sem = asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
+
     try:
-        base_metadata: dict[str, Any] = _to_plain_dict(
-            await get_metadata(base_url, session, token),
-        )
+        async with _sem:
+            base_metadata: dict[str, Any] = _to_plain_dict(
+                await get_metadata(base_url, session, token),
+            )
     except Exception as exc:
         errors.append(_make_error("base_metadata", base_url, exc))
         return CrawlReport(services=[], errors=errors, metadata=None)
@@ -147,9 +169,10 @@ async def safe_crawl(
     for folder in base_metadata.get("folders") or []:
         folder_url = f"{base_url}/{folder}"
         try:
-            folder_metadata = _to_plain_dict(
-                await get_metadata(folder_url, session, token),
-            )
+            async with _sem:
+                folder_metadata = _to_plain_dict(
+                    await get_metadata(folder_url, session, token),
+                )
         except Exception as exc:
             errors.append(_make_error("folder_metadata", folder_url, exc))
             continue
@@ -171,6 +194,7 @@ async def safe_crawl(
                 url,
                 token,
                 return_feature_count=return_feature_count,
+                _sem=_sem,
             )
         except Exception as exc:
             errors.append(_make_error("service_metadata", url, exc))
