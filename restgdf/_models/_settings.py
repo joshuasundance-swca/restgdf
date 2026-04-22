@@ -113,6 +113,19 @@ class Settings(BaseModel):
             ":class:`~restgdf.utils.token.ArcGISTokenSession`."
         ),
     )
+    max_concurrent_requests: int = Field(
+        default=8,
+        ge=1,
+        description=(
+            "Upper bound on the number of in-flight HTTP requests per "
+            "top-level restgdf orchestration call (``service_metadata``, "
+            "``fetch_all_data``, ``safe_crawl``). The default of 8 matches "
+            "aiohttp's ``TCPConnector`` default connection-pool size; "
+            "operators can raise or lower it via "
+            "``RESTGDF_MAX_CONCURRENT_REQUESTS``. Saturation semantics = "
+            "wait (plan.md §3c R-19)."
+        ),
+    )
     default_headers_json: str | None = Field(
         default=None,
         description=(
@@ -185,6 +198,11 @@ class Settings(BaseModel):
         _coerce("RESTGDF_CHUNK_SIZE", "chunk_size", int)
         _coerce("RESTGDF_TIMEOUT_SECONDS", "timeout_seconds", float)
         _coerce("RESTGDF_REFRESH_THRESHOLD", "refresh_threshold_seconds", int)
+        _coerce(
+            "RESTGDF_MAX_CONCURRENT_REQUESTS",
+            "max_concurrent_requests",
+            int,
+        )
 
         for env_key, field_name in (
             ("RESTGDF_USER_AGENT", "user_agent"),

@@ -3,6 +3,28 @@
 All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- `restgdf.utils._concurrency.bounded_gather(*aws, semaphore)` — internal
+  helper that caps concurrent fan-out via an `asyncio.BoundedSemaphore`
+  while preserving `asyncio.gather` result ordering and
+  `return_exceptions` semantics (BL-01).
+- `Settings.max_concurrent_requests: int = 8` (field) +
+  `RESTGDF_MAX_CONCURRENT_REQUESTS` env-var coercion. Caps the in-flight
+  HTTP fan-out inside every top-level restgdf orchestration call. Default
+  matches aiohttp `TCPConnector` pool size (BL-01).
+
+### Changed
+
+- `restgdf.utils.getinfo.service_metadata`,
+  `restgdf.utils.crawl.fetch_all_data`, and
+  `restgdf.utils.crawl.safe_crawl` now route their internal
+  `asyncio.gather` fan-out through `bounded_gather` with a per-call
+  `asyncio.BoundedSemaphore`. Saturation semantics = wait (no new
+  exception) (BL-01).
+
 ## [2.0.0] - 2026-04-20
 
 **Major release — pydantic 2.13 integration.** See

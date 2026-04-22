@@ -82,7 +82,9 @@ async def test_bounded_gather_cancellation_releases_slots():
         started.set()
         await asyncio.sleep(10)
 
-    outer = asyncio.create_task(bounded_gather(*(slow() for _ in range(5)), semaphore=sem))
+    outer = asyncio.create_task(
+        bounded_gather(*(slow() for _ in range(5)), semaphore=sem),
+    )
     await started.wait()
     outer.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -151,7 +153,9 @@ async def test_bounded_semaphore_caps_concurrency_at_fanout_sites(monkeypatch):
         # counting — the inner counter already enforces the cap.
         unbounded_sem = asyncio.BoundedSemaphore(10_000)
         return await original_bounded_gather(
-            *wrapped, semaphore=unbounded_sem, **kwargs
+            *wrapped,
+            semaphore=unbounded_sem,
+            **kwargs,
         )
 
     monkeypatch.setattr(_concurrency, "bounded_gather", counting_bounded_gather)
@@ -159,8 +163,18 @@ async def test_bounded_semaphore_caps_concurrency_at_fanout_sites(monkeypatch):
     import restgdf.utils.getinfo as getinfo_mod
     import restgdf.utils.crawl as crawl_mod
 
-    monkeypatch.setattr(getinfo_mod, "bounded_gather", counting_bounded_gather, raising=False)
-    monkeypatch.setattr(crawl_mod, "bounded_gather", counting_bounded_gather, raising=False)
+    monkeypatch.setattr(
+        getinfo_mod,
+        "bounded_gather",
+        counting_bounded_gather,
+        raising=False,
+    )
+    monkeypatch.setattr(
+        crawl_mod,
+        "bounded_gather",
+        counting_bounded_gather,
+        raising=False,
+    )
 
     monkeypatch.setenv("RESTGDF_MAX_CONCURRENT_REQUESTS", "4")
     reset_settings_cache()
@@ -171,8 +185,8 @@ async def test_bounded_semaphore_caps_concurrency_at_fanout_sites(monkeypatch):
         layers = [{"id": i} for i in range(N)]
 
         async def fake_get_metadata(url, session, token=None):
-            if "FeatureServer" in url and url.count("/") > 6:
-                # Leaf layer call.
+            if url.count("/") > 7:
+                # Leaf layer call (service_url + "/<layer_id>").
                 await asyncio.sleep(0)
                 return {"type": "Table"}
             # Top-level service call returns N layers.

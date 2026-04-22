@@ -25,6 +25,7 @@ from restgdf.utils._http import (
     default_data,
     default_headers,
 )
+from restgdf.utils._concurrency import bounded_gather
 from restgdf.utils._metadata import (
     FIELDDOESNOTEXIST,
     get_fields,
@@ -37,6 +38,7 @@ from restgdf.utils._metadata import (
     supports_pagination,
 )
 from restgdf._models._drift import _parse_response
+from restgdf._models._settings import get_settings
 from restgdf._models.responses import LayerMetadata
 from restgdf.utils._query import get_feature_count, get_metadata, get_object_ids
 from restgdf.utils._stats import (
@@ -140,6 +142,9 @@ async def service_metadata(
         _comprehensive_metadata(f"{service_url}/{layer['id']}")
         for layer in _service_metadata.get("layers") or []
     ]
-    results = await asyncio.gather(*tasks)
+    # BL-01: one BoundedSemaphore per top-level orchestration call, consumed
+    # at this enumerated fan-out site (plan.md §3c R-18/R-44, kickoff §10.3).
+    _sem = asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
+    results = await bounded_gather(*tasks, semaphore=_sem)
     _service_metadata["layers"] = results
     return _parse_response(LayerMetadata, _service_metadata, context=service_url)

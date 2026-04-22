@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 from restgdf._models.crawl import CrawlError, CrawlReport, CrawlServiceEntry
 from restgdf._models.responses import LayerMetadata
+from restgdf._models._settings import get_settings
+from restgdf.utils._concurrency import bounded_gather
 from restgdf.utils.getinfo import service_metadata, get_metadata
 from restgdf.utils.token import ArcGISTokenSession
 
@@ -80,7 +82,13 @@ async def fetch_all_data(
         )
         for service in services_list
     ]
-    service_metadata_results = await asyncio.gather(*service_metadata_tasks)
+    # BL-01: one BoundedSemaphore per top-level orchestration call
+    # (plan.md §3c R-18/R-44, kickoff §10.3).
+    _sem = asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
+    service_metadata_results = await bounded_gather(
+        *service_metadata_tasks,
+        semaphore=_sem,
+    )
 
     # Combine service_metadata_results with service names
     for i, service_data in enumerate(service_metadata_results):
@@ -176,7 +184,13 @@ async def safe_crawl(
             errors.append(_make_error("service_metadata", url, exc))
             return None
 
-    results = await asyncio.gather(*(_svc(svc["url"]) for svc in services_raw))
+    # BL-01: one BoundedSemaphore per top-level orchestration call
+    # (plan.md §3c R-18/R-44, kickoff §10.3).
+    _sem = asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
+    results = await bounded_gather(
+        *(_svc(svc["url"]) for svc in services_raw),
+        semaphore=_sem,
+    )
     service_entries: list[CrawlServiceEntry] = []
     for entry, result in zip(services_raw, results):
         service_entries.append(

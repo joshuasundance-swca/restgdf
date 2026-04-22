@@ -1,5 +1,25 @@
 # Upcoming: restgdf 2.x to 3.x optional Geo extras
 
+## Unreleased migration notes
+
+### phase-1a
+
+- **Bounded internal concurrency (BL-01).** Every restgdf top-level
+  orchestration call (`service_metadata`, `fetch_all_data`, `safe_crawl`)
+  now caps in-flight HTTP fan-out through a single
+  `asyncio.BoundedSemaphore` sized to
+  `Settings.max_concurrent_requests`. The new setting defaults to **8**
+  (matches aiohttp's `TCPConnector` default connection-pool size) and is
+  overridable via the `RESTGDF_MAX_CONCURRENT_REQUESTS` environment
+  variable. Saturation semantics = wait (no new exception is raised);
+  the only observable effect is that operators no longer see unbounded
+  fan-out on large directories or services with many layers. No public
+  signature changed — leaf helpers (`get_metadata`, `get_feature_count`)
+  remain semaphore-free; the cap is enforced at the three internal
+  `asyncio.gather` sites only.
+
+# Upcoming: restgdf 2.x to 3.x optional Geo extras
+
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This
 new top section documents the next planned breaking change: GeoPandas-backed
 and pandas-backed workflows move behind the `restgdf[geo]` extra instead of
