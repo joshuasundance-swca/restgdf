@@ -113,12 +113,20 @@ async def test_iter_pages_early_break_still_closes_span(
         "restgdf.utils.getgdf.get_query_data_batches",
         new=AsyncMock(return_value=[{"resultOffset": o} for o in (0, 1, 2)]),
     ):
-        async for _p in layer.iter_pages(order="request"):
+        gen = layer.iter_pages(order="request")
+        async for _p in gen:
             break
+        # Consumer ``break`` drops the loop-iterator reference, but the
+        # async-generator object survives on the local ``gen``. Explicitly
+        # ``aclose()`` to drive the ``finally`` block that ends the R-61
+        # span. Pre-fix this path would raise "Failed to detach context".
+        await gen.aclose()
 
     finished = memory_exporter.get_finished_spans()
     parents = [s for s in finished if s.name == "feature_layer.stream"]
-    assert len(parents) == 1, f"expected exactly 1 finished parent span, got {len(parents)}"
+    assert (
+        len(parents) == 1
+    ), f"expected exactly 1 finished parent span, got {len(parents)}"
 
     detach_errors = [
         rec for rec in caplog.records if "Failed to detach context" in rec.getMessage()
@@ -154,7 +162,9 @@ async def test_iter_pages_aclose_closes_span(memory_exporter, monkeypatch, caplo
 
     finished = memory_exporter.get_finished_spans()
     parents = [s for s in finished if s.name == "feature_layer.stream"]
-    assert len(parents) == 1, f"expected exactly 1 finished parent span, got {len(parents)}"
+    assert (
+        len(parents) == 1
+    ), f"expected exactly 1 finished parent span, got {len(parents)}"
 
     detach_errors = [
         rec for rec in caplog.records if "Failed to detach context" in rec.getMessage()

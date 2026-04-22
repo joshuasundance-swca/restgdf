@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 import warnings
 from collections.abc import AsyncIterable, AsyncIterator
+from contextlib import aclosing
 from typing import TYPE_CHECKING, Any, Literal
 
 from aiohttp import ClientSession
@@ -275,18 +276,25 @@ class FeatureLayer:
         out_fields = self.datadict.get("outFields")
         span_where = self.wherestr if self.wherestr and self.wherestr != "1=1" else None
 
-        async for page in _iter_pages_raw(
-            self.url,
-            self.session,
-            order=order,
-            max_concurrent_pages=max_concurrent_pages,
-            on_truncation=on_truncation,
-            span_layer_id=layer_id,
-            span_out_fields=out_fields,
-            span_where=span_where,
-            **merged_kwargs,
-        ):
-            yield page
+        # ``aclosing`` ensures the underlying async generator's ``finally``
+        # (which ends the R-61 INTERNAL span) runs when the consumer breaks
+        # early or calls ``aclose()``. Without it, GC-deferred cleanup would
+        # leak the span until the next event-loop tick.
+        async with aclosing(
+            _iter_pages_raw(
+                self.url,
+                self.session,
+                order=order,
+                max_concurrent_pages=max_concurrent_pages,
+                on_truncation=on_truncation,
+                span_layer_id=layer_id,
+                span_out_fields=out_fields,
+                span_where=span_where,
+                **merged_kwargs,
+            ),
+        ) as pages:
+            async for page in pages:
+                yield page
 
     async def iter_features(
         self,
@@ -302,14 +310,17 @@ class FeatureLayer:
         ``features`` list. See :meth:`iter_pages` for parameter
         semantics.
         """
-        async for page in self.iter_pages(
-            order=order,
-            max_concurrent_pages=max_concurrent_pages,
-            on_truncation=on_truncation,
-            **kwargs,
-        ):
-            for feature in page.get("features", []):
-                yield feature
+        async with aclosing(
+            self.iter_pages(  # type: ignore[type-var]
+                order=order,
+                max_concurrent_pages=max_concurrent_pages,
+                on_truncation=on_truncation,
+                **kwargs,
+            ),
+        ) as pages:
+            async for page in pages:
+                for feature in page.get("features", []):
+                    yield feature
 
     # ``stream_features`` is the canonical public name; ``iter_features``
     # is the lower-level iterator primitive. Keep them as the same
@@ -329,13 +340,16 @@ class FeatureLayer:
 
         See :meth:`iter_pages` for parameter semantics.
         """
-        async for page in self.iter_pages(
-            order=order,
-            max_concurrent_pages=max_concurrent_pages,
-            on_truncation=on_truncation,
-            **kwargs,
-        ):
-            yield list(page.get("features", []))
+        async with aclosing(
+            self.iter_pages(  # type: ignore[type-var]
+                order=order,
+                max_concurrent_pages=max_concurrent_pages,
+                on_truncation=on_truncation,
+                **kwargs,
+            ),
+        ) as pages:
+            async for page in pages:
+                yield list(page.get("features", []))
 
     async def stream_rows(
         self,
@@ -351,13 +365,16 @@ class FeatureLayer:
         ``geometry`` key holding the ArcGIS geometry dict verbatim.
         See :meth:`iter_pages` for parameter semantics.
         """
-        async for feature in self.iter_features(
-            order=order,
-            max_concurrent_pages=max_concurrent_pages,
-            on_truncation=on_truncation,
-            **kwargs,
-        ):
-            yield _feature_to_row_dict(feature)
+        async with aclosing(
+            self.iter_features(  # type: ignore[type-var]
+                order=order,
+                max_concurrent_pages=max_concurrent_pages,
+                on_truncation=on_truncation,
+                **kwargs,
+            ),
+        ) as features:
+            async for feature in features:
+                yield _feature_to_row_dict(feature)
 
     async def stream_gdf_chunks(
         self,
@@ -391,7 +408,7 @@ class FeatureLayer:
         """
         from restgdf.adapters.pandas import arows_to_dataframe
 
-        return await arows_to_dataframe(self.row_dict_generator())
+        return await arows_to_dataframe(self.stream_rows())
 
     async def row_dict_generator(
         self,

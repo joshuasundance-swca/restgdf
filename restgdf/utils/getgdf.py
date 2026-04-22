@@ -14,7 +14,7 @@ from restgdf._logging import get_logger
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse, LayerMetadata
 from restgdf.errors import PaginationError, RestgdfResponseError
-from restgdf.telemetry._spans import feature_layer_stream_span
+from restgdf.telemetry._spans import start_feature_layer_stream_span
 from restgdf.utils.getinfo import (
     default_data,
     default_headers,
@@ -568,13 +568,21 @@ async def _iter_pages_raw(
             f"max_concurrent_pages must be >= 1, got {max_concurrent_pages!r}",
         )
 
-    async with feature_layer_stream_span(
+    # R-61: open a NON-current INTERNAL span and end it from the outer
+    # ``finally:`` block. Using ``start_as_current_span`` here would attach
+    # an asyncio Context token that the async-generator machinery cannot
+    # safely detach when the consumer breaks early / calls ``aclose()`` /
+    # is cancelled, producing "Failed to detach context" errors and a
+    # leaked span. See rd-gate2-phase4a remediation.
+    span = start_feature_layer_stream_span(
         layer_url=url,
         layer_id=span_layer_id,
         out_fields=span_out_fields,
         where=span_where,
         order=order,
-    ):
+    )
+    tasks: list[asyncio.Task] = []
+    try:
         query_data_batches = await get_query_data_batches(url, session, **kwargs)
         fetch_kwargs = {k: v for k, v in kwargs.items() if k != "data"}
         sem = (
@@ -598,36 +606,37 @@ async def _iter_pages_raw(
 
         tasks = [asyncio.create_task(_fetch_bounded(qd)) for qd in query_data_batches]
 
-        try:
-            if order == "completion":
-                for fut in asyncio.as_completed(tasks):
-                    query_data, page = await fut
-                    async for resolved in _resolve_page(
-                        url,
-                        session,
-                        page,
-                        query_data,
-                        on_truncation=on_truncation,
-                        depth=0,
-                        max_depth=max_split_depth,
-                        request_kwargs=kwargs,
-                    ):
-                        yield resolved
-            else:
-                for task in tasks:
-                    query_data, page = await task
-                    async for resolved in _resolve_page(
-                        url,
-                        session,
-                        page,
-                        query_data,
-                        on_truncation=on_truncation,
-                        depth=0,
-                        max_depth=max_split_depth,
-                        request_kwargs=kwargs,
-                    ):
-                        yield resolved
-        finally:
+        if order == "completion":
+            for fut in asyncio.as_completed(tasks):
+                query_data, page = await fut
+                async for resolved in _resolve_page(
+                    url,
+                    session,
+                    page,
+                    query_data,
+                    on_truncation=on_truncation,
+                    depth=0,
+                    max_depth=max_split_depth,
+                    request_kwargs=kwargs,
+                ):
+                    yield resolved
+        else:
             for task in tasks:
-                if not task.done():
-                    task.cancel()
+                query_data, page = await task
+                async for resolved in _resolve_page(
+                    url,
+                    session,
+                    page,
+                    query_data,
+                    on_truncation=on_truncation,
+                    depth=0,
+                    max_depth=max_split_depth,
+                    request_kwargs=kwargs,
+                ):
+                    yield resolved
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        if span is not None:
+            span.end()
