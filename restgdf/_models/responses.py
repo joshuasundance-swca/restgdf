@@ -337,6 +337,31 @@ class NormalizedFeature(PermissiveModel):
     object_id: int | None = None
 
 
+_NULL_COORD_SENTINELS = {None, "NaN", "nan", "NAN"}
+
+
+def _is_null_geometry(geo: Mapping[str, Any]) -> bool:
+    """Return True when a geometry dict represents a null/empty geometry.
+
+    Five shapes: ``None``, ``{}``, missing key, ``{"x": None, "y": None}``,
+    ``{"x": "NaN", "y": "NaN"}``.  The first two (non-Mapping / empty dict)
+    are caught here; the coordinate-sentinel shapes need a value check.
+    """
+    if not geo:
+        return True
+    coord_keys = {k for k in geo if k not in {"spatialReference", "spatial_reference", "hasZ", "has_z", "hasM", "has_m"}}
+    if not coord_keys:
+        return True
+    for k in coord_keys:
+        v = geo.get(k)
+        if v is None:
+            continue
+        if isinstance(v, str) and v in ("NaN", "nan", "NAN"):
+            continue
+        return False
+    return True
+
+
 def _infer_geometry_type(geometry: Mapping[str, Any]) -> str | None:
     if "x" in geometry and "y" in geometry:
         return "point"
@@ -396,7 +421,7 @@ def iter_normalized_features(
 
         geometry_raw = raw.get("geometry")
         geometry: NormalizedGeometry | None
-        if isinstance(geometry_raw, Mapping):
+        if isinstance(geometry_raw, Mapping) and not _is_null_geometry(geometry_raw):
             geo_dict = dict(geometry_raw)
             coords = {
                 key: value
