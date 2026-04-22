@@ -31,6 +31,7 @@ from restgdf.utils._optional import (
     require_pandas_concat,
     require_pyogrio_list_drivers,
 )
+from restgdf.utils._pagination import build_pagination_plan
 from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list
 
@@ -159,13 +160,29 @@ async def get_query_data_batches(
         return [request_data]
 
     if supports_pagination(metadata) and supports_pagination_explicitly(metadata):
+        if isinstance(requested_page_size, int) and requested_page_size > 0:
+            return [
+                {
+                    **request_data,
+                    "resultOffset": offset,
+                    "resultRecordCount": min(page_size, feature_count - offset),
+                }
+                for offset in range(0, feature_count, page_size)
+            ]
+        plan = build_pagination_plan(feature_count, max_record_count)
+        # NOTE (BL-21/22 deferred): maxRecordCountFactor from
+        # advancedQueryCapabilities is intentionally NOT plumbed here in
+        # phase-2c. The planner API accepts `advertised_factor` / `factor`
+        # and will clamp with a warning via `get_logger("pagination")`;
+        # the live wire-up is deferred to a future phase to preserve
+        # byte-exact batch sizes during the 3.0 migration.
         return [
             {
                 **request_data,
                 "resultOffset": offset,
-                "resultRecordCount": min(page_size, feature_count - offset),
+                "resultRecordCount": count,
             }
-            for offset in range(0, feature_count, page_size)
+            for offset, count in plan.batches
         ]
 
     object_id_field_name, object_ids = await get_object_ids(url, session, **kwargs)

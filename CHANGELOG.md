@@ -85,6 +85,25 @@ All notable changes to restgdf are documented here. This project follows
   `features: list[dict]` stays for perf; normalization is opt-in.
   Geometry `type` is heuristically inferred from shape; `object_id` is
   `int`-coerced from `attributes[oid_field]` (BL-28).
+- `restgdf._models.responses.AdvancedQueryCapabilities` — typed
+  `PermissiveModel` companion for the ArcGIS `advancedQueryCapabilities`
+  sub-object, with camelCase / snake_case `AliasChoices` wiring and
+  permissive `extra="allow"` preservation of unknown keys (BL-21).
+- `LayerMetadata.advanced_query_capabilities_typed:
+  AdvancedQueryCapabilities | None` — additive typed companion to the
+  existing raw `advanced_query_capabilities: dict | None` field.
+  Caller-opt-in; the raw dict stays the default representation so
+  permissive-tier behavior is unchanged (BL-21).
+- `restgdf.utils._pagination.PaginationPlan` (frozen dataclass) and
+  `restgdf.utils._pagination.build_pagination_plan(total_records,
+  max_record_count, *, factor=1.0, advertised_factor=None)` — pure-math
+  pagination planner re-exported via `restgdf.utils.getinfo`. Emits
+  `(resultOffset, resultRecordCount)` tuples byte-identical to the
+  previous inline arithmetic in `get_query_data_batches`; clamps
+  `factor > advertised_factor` with a warning via
+  `get_logger("pagination")`. `get_query_data_batches` is rerouted
+  through the planner with no public-signature change and all pinned
+  fixtures preserved (BL-22).
 
 ### Changed
 
