@@ -181,6 +181,23 @@ migration message. Existing lazy imports (`FeatureLayer`, `Directory`,
 re-exports) are unchanged. `dir(restgdf)` now advertises every
 lazy-export key.
 
+### phase-1b-bl08
+
+`getgdf` / `_get_sub_features` no longer raise `RuntimeError` when an ArcGIS
+service returns `exceededTransferLimit=true` on a query batch; they now raise
+`restgdf.errors.PaginationError` (which multi-inherits `IndexError` per BL-06).
+
+- Callers doing `except RuntimeError:` around `get_gdf` / iter_gdf paths must
+  migrate to `except restgdf.errors.PaginationError:` or the broader
+  `except restgdf.errors.ArcGISServiceError:`.
+- `except Exception:` continues to catch it (no action).
+- `except IndexError:` also continues to catch it due to the multi-inherit
+  preserved for 2.x callers that treated cursor-exhaustion as an index error.
+- The exception now carries `batch_index` and `page_size` attributes useful
+  for resumable-pagination callers.
+
+Rationale: ties into the BL-06 exception taxonomy landed in phase-1c.
+
 ## Upcoming: restgdf 2.x to 3.x optional Geo extras
 
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This

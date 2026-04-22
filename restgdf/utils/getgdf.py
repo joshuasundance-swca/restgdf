@@ -12,6 +12,7 @@ from aiohttp import ClientSession
 
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse
+from restgdf.errors import PaginationError
 from restgdf.utils.getinfo import (
     default_data,
     default_headers,
@@ -61,6 +62,8 @@ async def _get_sub_features(
     url: str,
     session: ClientSession | ArcGISTokenSession,
     query_data: dict,
+    *,
+    batch_index: int | None = None,
     **kwargs,
 ) -> list[dict[str, Any]]:
     """Fetch a single query batch as raw ArcGIS feature dicts."""
@@ -75,9 +78,11 @@ async def _get_sub_features(
     raw = await response.json(content_type=None)
     envelope = _parse_response(FeaturesResponse, raw, context=f"{url}/query")
     if envelope.exceeded_transfer_limit:
-        raise RuntimeError(
+        raise PaginationError(
             f"{url}/query returned exceededTransferLimit=true; query batching missed "
             "records and the response page is incomplete.",
+            batch_index=batch_index,
+            page_size=query_data.get("resultRecordCount"),
         )
     return envelope.features or []
 
@@ -91,9 +96,15 @@ async def _feature_batch_generator(
     query_data_batches = await get_query_data_batches(url, session, **kwargs)
     tasks = {
         asyncio.create_task(
-            get_sub_features(url, session, query_data=query_data, **kwargs),
+            get_sub_features(
+                url,
+                session,
+                query_data=query_data,
+                batch_index=idx,
+                **kwargs,
+            ),
         )
-        for query_data in query_data_batches
+        for idx, query_data in enumerate(query_data_batches)
     }
     for feature_batch_future in asyncio.as_completed(tasks):
         yield await feature_batch_future
