@@ -27,6 +27,48 @@ lightweight async Esri REST client with optional GeoPandas extras
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
+## What's new in 3.0 (in progress)
+
+The `integration/3.0-rewrite` branch is the active development line for
+restgdf 3.0. Everything below ships alongside the 2.0 surface on the
+same `main` until the version number is rolled.
+
+- **Streaming APIs.** `FeatureLayer.stream_features`,
+  `stream_feature_batches`, and `stream_rows` expose ArcGIS
+  pagination as async generators with
+  `on_truncation="raise" | "ignore" | "split"`,
+  `order="request" | "completion"`, and `max_concurrent_pages` knobs,
+  plus an R-61 `feature_layer.stream` parent span when telemetry is
+  enabled. `stream_gdf_chunks` is the legacy `GeoDataFrame`-per-page
+  shape (requires `restgdf[geo]`, completion-order only, no shared
+  knobs). `stream_rows` works on the base install.
+- **Pandas-first output.** `FeatureLayer.get_df()` returns a
+  `pandas.DataFrame` without requiring the geo extra, sibling to
+  `get_gdf()`.
+- **Output adapters.** `restgdf.adapters.{dict,stream,pandas,geopandas}`
+  compose the streaming primitives into tabular shapes.
+- **Nested config.** `restgdf.Config` / `restgdf.get_config()` replace
+  the flat `Settings` object with eight frozen sub-configs and
+  `RESTGDF_<CATEGORY>_<FIELD>` env vars. The old flat variables keep
+  working with a `DeprecationWarning`.
+- **Error taxonomy.** `restgdf.errors` exposes `RestgdfError`,
+  `ConfigurationError`, `OptionalDependencyError`, `TransportError`,
+  `RestgdfTimeoutError`, `RateLimitError`, `ArcGISServiceError`,
+  `PaginationError`, `FieldDoesNotExistError`, `SchemaValidationError`,
+  `AuthenticationError`, and `OutputConversionError` — all with URL,
+  status-code, and retry-after context populated where applicable.
+- **Optional telemetry.** `pip install restgdf[telemetry]` unlocks
+  `RestgdfInstrumentor` and trace/span log correlation; see the new
+  [tracing recipe](https://restgdf.readthedocs.io/en/latest/recipes/tracing.html)
+  and [streaming recipe](https://restgdf.readthedocs.io/en/latest/recipes/streaming.html).
+- **Header-token default.** Tokens now ride the
+  `X-Esri-Authorization` header by default; set
+  `AuthConfig.transport="body"` to restore the old behavior.
+
+See [`CHANGELOG.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/CHANGELOG.md)
+and [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md)
+for the complete list.
+
 ## What's new in 2.0
 
 restgdf 2.0 is a **major release** built on [pydantic 2.13](https://docs.pydantic.dev/).
@@ -93,7 +135,8 @@ Base-install capabilities include:
 - typed pydantic response models like `LayerMetadata` and `CrawlReport`
 - `FeatureLayer.from_url`, `.metadata`, `.count`, and `.get_oids()`
 - single-field `get_unique_values()` queries
-- raw feature dictionaries via `FeatureLayer.row_dict_generator()`
+- raw feature dictionaries via `FeatureLayer.stream_features()` /
+  `stream_rows()` (deprecated `row_dict_generator()` still works)
 - `Directory` crawling and `ArcGISTokenSession` authentication helpers
 
 Install the geo extra for GeoDataFrame and pandas-backed workflows:
@@ -135,7 +178,7 @@ async def main():
         cities = await beaches.get_unique_values("CITY")
 
         first_rows = []
-        async for row in beaches.row_dict_generator(data={"outFields": "CITY,STATE"}):
+        async for row in beaches.stream_rows(data={"outFields": "CITY,STATE"}):
             first_rows.append(row)
             if len(first_rows) == 2:
                 break
@@ -149,6 +192,66 @@ print(count, max_record_count)
 print(cities)
 print(first_rows[0])
 ```
+
+## Streaming
+
+`FeatureLayer` exposes ArcGIS pagination as three async generators so
+you can process millions of rows without buffering them in memory. The
+`on_truncation` knob controls what happens when the server caps a page
+at `maxRecordCount`: `"raise"` (default), `"ignore"` (log + continue),
+or `"split"` (bisect by object-id and retry, up to depth 32).
+
+```python
+import asyncio
+
+from aiohttp import ClientSession
+
+from restgdf import FeatureLayer
+
+
+zipcodes_url = "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_ZIP_Codes_2016/FeatureServer/0"
+
+
+async def main():
+    async with ClientSession() as session:
+        oh = await FeatureLayer.from_url(
+            zipcodes_url,
+            where="STATE = 'OH'",
+            session=session,
+        )
+
+        # 1. Feature dicts, one per row (base install)
+        first_feature = None
+        async for feature in oh.stream_features(on_truncation="split"):
+            first_feature = feature
+            break
+
+        # 2. Per-page batches, preserving ArcGIS page boundaries
+        page_sizes = []
+        async for batch in oh.stream_feature_batches(order="request"):
+            page_sizes.append(len(batch))
+            if len(page_sizes) == 3:
+                break
+
+        # 3. GeoDataFrame chunks (requires `restgdf[geo]`; note that
+        # stream_gdf_chunks does *not* accept on_truncation / order /
+        # max_concurrent_pages — it yields in completion order).
+        chunk_shapes = []
+        async for chunk in oh.stream_gdf_chunks():
+            chunk_shapes.append(chunk.shape)
+            if len(chunk_shapes) == 2:
+                break
+
+    return first_feature, page_sizes, chunk_shapes
+
+
+first_feature, page_sizes, chunk_shapes = asyncio.run(main())
+```
+
+See the [streaming recipe](https://restgdf.readthedocs.io/en/latest/recipes/streaming.html)
+for the full matrix of `on_truncation`, `order`, and
+`max_concurrent_pages` combinations on the `iter_pages`-based shapes
+(`stream_features`, `stream_feature_batches`, `stream_rows`).
 
 ## GeoDataFrame workflows (`restgdf[geo]`)
 

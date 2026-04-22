@@ -293,7 +293,7 @@ _DEPRECATED_ALIASES: tuple[tuple[str, str, str, _Caster], ...] = (
 
 
 class Config(BaseModel):
-    """Aggregate of the seven sub-configs. Frozen.
+    """Aggregate of the eight sub-configs. Frozen.
 
     Use :func:`get_config` (process-cached) rather than instantiating directly
     in production code; direct instantiation is useful for tests.
