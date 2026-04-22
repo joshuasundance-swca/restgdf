@@ -5,9 +5,11 @@ Verifies that the helper resolves against ``Settings.timeout_seconds``
 ``session.post`` call-site in scope forwards a matching
 :class:`aiohttp.ClientTimeout`.
 
-Scope: BL-02 only. ``restgdf/utils/getgdf.py`` is deliberately excluded
-from the call-site inventory per the phase-1b scope lock (R-47 /
-forbidden-token grep).
+Scope: BL-02. The two ArcGIS query batch POSTs in
+``restgdf/utils/getgdf.py`` (``_get_sub_features`` and
+``get_sub_gdf``) plus the ``ArcGISTokenSession.get``/``post`` wrappers
+are in scope here; the pagination/``supports_pagination`` callsite in
+``getgdf.py`` is BL-08's problem and remains untouched.
 """
 
 from __future__ import annotations
@@ -231,6 +233,99 @@ async def test_nested_count_forwards_timeout():
     )
     assert len(session.post_calls) == 1
     _assert_timeout_kwarg(session.post_calls[0][1], 30.0)
+
+
+@pytest.mark.asyncio
+async def test_get_sub_features_forwards_timeout():
+    """BL-02 completion: ``_get_sub_features`` (getgdf.py) forwards timeout."""
+    from restgdf.utils.getgdf import _get_sub_features
+
+    session = _RecordingSession({"features": [], "exceededTransferLimit": False})
+    await _get_sub_features(
+        "https://example.com/service/0",
+        session,  # type: ignore[arg-type]
+        {"where": "1=1", "outFields": "*", "f": "json"},
+    )
+    assert len(session.post_calls) == 1
+    _assert_timeout_kwarg(session.post_calls[0][1], 30.0)
+
+
+@pytest.mark.asyncio
+async def test_get_sub_gdf_forwards_timeout(monkeypatch):
+    """BL-02 completion: ``get_sub_gdf`` (getgdf.py) forwards timeout."""
+    pytest.importorskip("pyogrio")
+    import restgdf.utils.getgdf as getgdf_mod
+
+    class _GdfResponse(_FakeResponse):
+        async def text(self) -> str:
+            return "{}"
+
+    class _TextRecordingSession(_RecordingSession):
+        async def post(self, url: str, **kwargs: Any) -> _GdfResponse:
+            self.post_calls.append((url, kwargs))
+            return _GdfResponse(self._payload)
+
+    monkeypatch.setattr(getgdf_mod, "_require_geo_query_support", lambda feature: None)
+    monkeypatch.setattr(getgdf_mod, "_get_supported_drivers", lambda: {"GeoJSON": "rw"})
+    monkeypatch.setattr(getgdf_mod, "read_file", lambda *a, **kw: "sentinel")
+
+    session = _TextRecordingSession({"features": []})
+    await getgdf_mod.get_sub_gdf(
+        "https://example.com/service/0",
+        session,  # type: ignore[arg-type]
+        {"where": "1=1", "outFields": "*", "f": "json"},
+    )
+    assert len(session.post_calls) == 1
+    _assert_timeout_kwarg(session.post_calls[0][1], 30.0)
+
+
+@pytest.mark.asyncio
+async def test_arcgis_token_session_get_defaults_timeout():
+    """BL-02 completion: ``ArcGISTokenSession.get`` defaults timeout kwarg."""
+    from restgdf.utils.token import ArcGISTokenSession
+
+    inner = _RecordingSession({"ok": True})
+    ts = ArcGISTokenSession(
+        session=inner,  # type: ignore[arg-type]
+        token="existing",
+        expires=32503680000000,
+    )
+    await ts.get("https://example.com/service/0")
+    assert len(inner.get_calls) == 1
+    _assert_timeout_kwarg(inner.get_calls[0][1], 30.0)
+
+
+@pytest.mark.asyncio
+async def test_arcgis_token_session_post_defaults_timeout():
+    """BL-02 completion: ``ArcGISTokenSession.post`` defaults timeout kwarg."""
+    from restgdf.utils.token import ArcGISTokenSession
+
+    inner = _RecordingSession({"ok": True})
+    ts = ArcGISTokenSession(
+        session=inner,  # type: ignore[arg-type]
+        token="existing",
+        expires=32503680000000,
+    )
+    await ts.post("https://example.com/service/0", data={"f": "json"})
+    assert len(inner.post_calls) == 1
+    _assert_timeout_kwarg(inner.post_calls[0][1], 30.0)
+
+
+@pytest.mark.asyncio
+async def test_arcgis_token_session_get_respects_caller_timeout():
+    """Explicit caller timeouts must override the default (regression guard)."""
+    from restgdf.utils.token import ArcGISTokenSession
+
+    inner = _RecordingSession({"ok": True})
+    ts = ArcGISTokenSession(
+        session=inner,  # type: ignore[arg-type]
+        token="existing",
+        expires=32503680000000,
+    )
+    caller_timeout = aiohttp.ClientTimeout(total=1.25)
+    await ts.get("https://example.com/service/0", timeout=caller_timeout)
+    assert len(inner.get_calls) == 1
+    assert inner.get_calls[0][1].get("timeout") is caller_timeout
 
 
 def test_default_timeout_ignores_namespace_that_lacks_timeout_attr():
