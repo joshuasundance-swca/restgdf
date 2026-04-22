@@ -67,12 +67,21 @@ All notable changes to restgdf are documented here. This project follows
   `OptionalDependencyError` multi-inherits `ModuleNotFoundError` (BL-07).
 - HTTP timeouts are now plumbed through `Settings.timeout_seconds` into
   every library-maintained `session.get` / `session.post` call-site
-  (`restgdf.utils._query`, `restgdf.utils._stats`, and
-  `ArcGISTokenSession.update_token`). The new
+  (`restgdf.utils._query`, `restgdf.utils._stats`,
+  `restgdf.utils.getgdf._get_sub_features` / `get_sub_gdf`,
+  `ArcGISTokenSession.update_token`, and the
+  `ArcGISTokenSession.get` / `.post` wrappers). The new
   `restgdf.utils._http.default_timeout()` helper returns an
   `aiohttp.ClientTimeout` sized from `Settings.timeout_seconds` (float,
   default `30.0`, overridable via `RESTGDF_TIMEOUT_SECONDS`). Callers
   that already pass `timeout=` keep precedence (BL-02).
+- `ArcGISTokenSession.__post_init__` now respects a caller-supplied
+  `config=TokenSessionConfig(...)` instead of overwriting it, and
+  derives the `TokenSessionConfig` split fields from
+  `token_refresh_threshold` internally (no longer via the deprecated
+  `refresh_threshold_seconds` alias), so plain construction no longer
+  fires a `DeprecationWarning`. `token_refresh_threshold` is resynced
+  from the validated config after construction.
 
 ### Deprecated
 
