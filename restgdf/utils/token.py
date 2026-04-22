@@ -30,6 +30,8 @@ from restgdf.errors import (
     TokenExpiredError,
 )
 
+from pydantic import SecretStr
+
 _auth_logger = logging.getLogger("restgdf.auth")
 
 
@@ -50,15 +52,26 @@ __all__ = [
 ]
 
 
-def get_token(username: str, password: str) -> dict:
-    """Synchronously request an ArcGIS Online token."""
+from restgdf._compat import _warn_deprecated
+
+
+def get_token(username: str, password: str | SecretStr) -> dict:
+    """Synchronously request an ArcGIS Online token.
+
+    .. deprecated:: 3.0
+        Use :class:`ArcGISTokenSession` instead for async token lifecycle.
+    """
+    _warn_deprecated(
+        "get_token() is deprecated; use ArcGISTokenSession for async token management.",
+    )
     url = "https://www.arcgis.com/sharing/rest/generateToken"
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    pw = password.get_secret_value() if isinstance(password, SecretStr) else password
     data = {
         "f": "json",
         "client": "requestip",
         "username": username,
-        "password": password,
+        "password": pw,
     }
     return requests.post(url, headers=headers, data=data, timeout=30).json()
 
