@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from typing import Any
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, PrivateAttr, field_validator
 
 from restgdf._models._drift import PermissiveModel, StrictModel
 
@@ -305,11 +305,12 @@ class NormalizedGeometry(PermissiveModel):
 
     type: str | None = None
     coords: Any = None
-    spatial_reference: int | dict[str, Any] | None = Field(
+    spatial_reference: int | None = Field(
         default=None,
         alias="spatialReference",
         validation_alias=AliasChoices("spatialReference", "spatial_reference"),
     )
+    _raw_spatial_reference: dict[str, Any] | None = PrivateAttr(default=None)
     has_z: bool = Field(
         default=False,
         alias="hasZ",
@@ -408,13 +409,31 @@ def iter_normalized_features(
                 spatial_ref = geo_dict.get("spatial_reference")
             if spatial_ref is None:
                 spatial_ref = sr
+
+            # BL-23: normalize SR dict → EPSG int, preserve raw dict
+            raw_sr_dict: dict[str, Any] | None = None
+            epsg_int: int | None = None
+            if isinstance(spatial_ref, Mapping):
+                raw_sr_dict = dict(spatial_ref)
+                epsg_int = raw_sr_dict.get("latestWkid") or raw_sr_dict.get("wkid")
+                if not isinstance(epsg_int, int):
+                    epsg_int = None
+            elif isinstance(spatial_ref, int):
+                epsg_int = spatial_ref
+            elif isinstance(spatial_ref, str):
+                try:
+                    epsg_int = int(spatial_ref)
+                except (ValueError, TypeError):
+                    epsg_int = None
+
             geometry = NormalizedGeometry(
                 type=inferred,
                 coords=coords,
-                spatial_reference=spatial_ref,
+                spatial_reference=epsg_int,
                 has_z=bool(geo_dict.get("hasZ") or geo_dict.get("has_z") or False),
                 has_m=bool(geo_dict.get("hasM") or geo_dict.get("has_m") or False),
             )
+            geometry._raw_spatial_reference = raw_sr_dict
         else:
             geometry = None
 

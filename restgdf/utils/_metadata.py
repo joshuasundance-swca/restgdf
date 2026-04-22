@@ -25,6 +25,35 @@ FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
 LayerMetadataLike = Union[LayerMetadata, Mapping[str, Any]]
 
 
+def normalize_spatial_reference(
+    sr: int | str | dict[str, Any] | None,
+) -> tuple[int | None, dict[str, Any] | None]:
+    """Extract EPSG int from a spatial reference value (BL-23).
+
+    Returns ``(epsg_int, raw_dict)``:
+    - dict → ``latestWkid`` preferred, then ``wkid``; raw dict preserved
+    - int → passed through; raw is ``None``
+    - str → coerced to int if possible; raw is ``None``
+    - None → ``(None, None)``
+    """
+    if sr is None:
+        return None, None
+    if isinstance(sr, int):
+        return sr, None
+    if isinstance(sr, str):
+        try:
+            return int(sr), None
+        except (ValueError, TypeError):
+            return None, None
+    if isinstance(sr, Mapping):
+        raw = dict(sr)
+        epsg = sr.get("latestWkid") or sr.get("wkid")
+        if isinstance(epsg, int):
+            return epsg, raw
+        return None, raw
+    return None, None
+
+
 def _as_dict(metadata: LayerMetadataLike) -> dict:
     """Normalize a ``LayerMetadata`` model or raw mapping to a plain dict.
 
