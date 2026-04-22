@@ -150,6 +150,13 @@ exclude_also = [
 
     # Don't complain about abstract methods, they aren't run:
     "@(abc\\.)?abstractmethod",
+
+    # Don't complain about type-checking-only imports / overloads:
+    "if TYPE_CHECKING:",
+    "@overload",
+
+    # Don't complain about Protocol / ABC method stubs:
+    "^\\s*\\.\\.\\.\\s*$",
     ]
 
 ignore_errors = true
