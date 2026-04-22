@@ -5,7 +5,6 @@ RED-first — these fail until feat(BL-11) adds _call_with_auth_retry.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
@@ -49,7 +48,6 @@ class TestSingleFlightRefreshOn498:
         resp_200 = _make_response(status=200, json_body={"features": []})
 
         call_count = 0
-        original_get = session.get
 
         async def mock_get(*args, **kwargs):
             nonlocal call_count

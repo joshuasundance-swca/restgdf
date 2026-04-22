@@ -14,7 +14,6 @@ from __future__ import annotations
 import asyncio
 import datetime
 import logging
-import time
 from dataclasses import dataclass, field
 
 import aiohttp
@@ -25,6 +24,7 @@ from restgdf._models.credentials import AGOLUserPass, TokenSessionConfig
 from restgdf._models.responses import TokenResponse
 from restgdf.utils._http import default_timeout
 
+from restgdf._compat import _warn_deprecated
 from restgdf.errors import (
     AuthNotAttachedError,
     AuthenticationError,
@@ -36,11 +36,9 @@ from pydantic import SecretStr
 
 _auth_logger = logging.getLogger("restgdf.auth")
 
-_MAX_TOKEN_RETRIES: int = 3
-"""Maximum number of ``/generateToken`` POST attempts before giving up."""
+_MAX_TOKEN_RETRIES: int = 3  # Max /generateToken POST attempts
 
-_BASE_BACKOFF_S: float = 0.5
-"""Initial sleep between retries; doubles on each subsequent attempt."""
+_BASE_BACKOFF_S: float = 0.5  # Initial retry sleep; doubles each attempt
 
 _RETRYABLE_ERRORS = (OSError, asyncio.TimeoutError, ConnectionError)
 
@@ -60,9 +58,6 @@ __all__ = [
     "TokenSessionConfig",
     "get_token",
 ]
-
-
-from restgdf._compat import _warn_deprecated
 
 
 def get_token(username: str, password: str | SecretStr) -> dict:
@@ -218,7 +213,11 @@ class ArcGISTokenSession:
     def update_dict(self, input_dict: dict | None = None) -> dict:
         """Return a request payload/query dict merged with the active token."""
         output_dict = dict(input_dict or {})
-        if self.token and self._transport in ("body", "query") and "token" not in output_dict:
+        if (
+            self.token
+            and self._transport in ("body", "query")
+            and "token" not in output_dict
+        ):
             output_dict["token"] = self.token
         return output_dict
 
@@ -231,8 +230,8 @@ class ArcGISTokenSession:
         :class:`~restgdf._models.RestgdfResponseError` instead of
         ``KeyError`` deep in caller code paths.
 
-        Retries up to :data:`_MAX_TOKEN_RETRIES` times with exponential
-        backoff (base :data:`_BASE_BACKOFF_S`) on transient network
+        Retries up to ``_MAX_TOKEN_RETRIES`` times with exponential
+        backoff (base ``_BASE_BACKOFF_S``) on transient network
         errors.  Deterministic errors (bad credentials, content-type
         mismatches, validation failures) are re-raised immediately.
         After exhausting retries, raises
@@ -345,7 +344,8 @@ class ArcGISTokenSession:
 
         has_explicit_token = "token" in (payload or {})
         request_headers = (
-            self.update_headers(headers) if not has_explicit_token
+            self.update_headers(headers)
+            if not has_explicit_token
             else dict(headers or {})
         )
         request_payload = self.update_dict(payload)
@@ -353,7 +353,10 @@ class ArcGISTokenSession:
 
         session_method = getattr(self.session, method)
         resp = await session_method(
-            url, **{payload_key: request_payload}, headers=request_headers, **kwargs,
+            url,
+            **{payload_key: request_payload},
+            headers=request_headers,
+            **kwargs,
         )
 
         status = getattr(resp, "status", 200)
@@ -373,13 +376,16 @@ class ArcGISTokenSession:
 
             # Rebuild auth for the retry.
             request_headers = (
-                self.update_headers(headers) if not has_explicit_token
+                self.update_headers(headers)
+                if not has_explicit_token
                 else dict(headers or {})
             )
             request_payload = self.update_dict(payload)
             resp = await session_method(
-                url, **{payload_key: request_payload},
-                headers=request_headers, **kwargs,
+                url,
+                **{payload_key: request_payload},
+                headers=request_headers,
+                **kwargs,
             )
             if getattr(resp, "status", 200) == 498:
                 raise TokenExpiredError(
@@ -399,7 +405,12 @@ class ArcGISTokenSession:
     ) -> aiohttp.ClientResponse:
         """Make a GET request to the specified URL with the token."""
         return await self._call_with_auth_retry(
-            "get", url, "params", params, headers, **kwargs,
+            "get",
+            url,
+            "params",
+            params,
+            headers,
+            **kwargs,
         )
 
     async def post(
@@ -411,7 +422,12 @@ class ArcGISTokenSession:
     ) -> aiohttp.ClientResponse:
         """Make a POST request to the specified URL with the token."""
         return await self._call_with_auth_retry(
-            "post", url, "data", data, headers, **kwargs,
+            "post",
+            url,
+            "data",
+            data,
+            headers,
+            **kwargs,
         )
 
     async def __aenter__(self) -> ArcGISTokenSession:

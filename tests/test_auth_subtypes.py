@@ -108,7 +108,7 @@ class TestContextAttemptCause:
     )
     def test_defaults_are_none(self, cls):
         exc = cls("msg")
-        assert exc.context is None
+        assert exc.context == ""
         assert exc.attempt is None
         assert exc.cause is None
 

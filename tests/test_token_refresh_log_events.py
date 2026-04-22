@@ -31,9 +31,9 @@ class TestAuthRefreshLogEvents:
             await ts.update_token()
 
         messages = [r.message for r in caplog.records if "restgdf.auth" in r.name]
-        assert any("auth.refresh.start" in m for m in messages), (
-            f"Expected 'auth.refresh.start' in auth log, got: {messages}"
-        )
+        assert any(
+            "auth.refresh.start" in m for m in messages
+        ), f"Expected 'auth.refresh.start' in auth log, got: {messages}"
 
     @pytest.mark.asyncio
     async def test_refresh_success_event_logged(self, caplog):
@@ -51,9 +51,9 @@ class TestAuthRefreshLogEvents:
             await ts.update_token()
 
         messages = [r.message for r in caplog.records if "restgdf.auth" in r.name]
-        assert any("auth.refresh.success" in m for m in messages), (
-            f"Expected 'auth.refresh.success' in auth log, got: {messages}"
-        )
+        assert any(
+            "auth.refresh.success" in m for m in messages
+        ), f"Expected 'auth.refresh.success' in auth log, got: {messages}"
 
     @pytest.mark.asyncio
     async def test_refresh_failure_event_logged(self, caplog):
@@ -76,6 +76,6 @@ class TestAuthRefreshLogEvents:
                 pass
 
         messages = [r.message for r in caplog.records if "restgdf.auth" in r.name]
-        assert any("auth.refresh.failure" in m for m in messages), (
-            f"Expected 'auth.refresh.failure' in auth log, got: {messages}"
-        )
+        assert any(
+            "auth.refresh.failure" in m for m in messages
+        ), f"Expected 'auth.refresh.failure' in auth log, got: {messages}"

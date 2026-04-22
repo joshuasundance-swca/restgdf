@@ -156,12 +156,12 @@ class AuthConfig(BaseModel):
         return value
 
     @model_validator(mode="after")
-    def _reject_query_without_flag(self) -> "AuthConfig":
+    def _reject_query_without_flag(self) -> AuthConfig:
         """R-13 strict: ``transport='query'`` without ``allow_query_transport`` → error."""
         if self.transport == "query" and not self.allow_query_transport:
             raise ValueError(
                 "transport='query' is insecure and requires "
-                "allow_query_transport=True at AuthConfig construction."
+                "allow_query_transport=True at AuthConfig construction.",
             )
         return self
 

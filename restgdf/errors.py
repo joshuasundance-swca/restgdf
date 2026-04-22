@@ -193,7 +193,7 @@ class _AuthSubtypeBase(AuthenticationError):
             context=context or "",
             raw=raw,
         )
-        self.context = context
+        self.context: str = context or ""
         self.attempt = attempt
         self.cause = cause
         if cause is not None and isinstance(cause, BaseException):
@@ -211,9 +211,7 @@ class _AuthSubtypeBase(AuthenticationError):
 
     def __repr__(self) -> str:
         cls = type(self).__name__
-        cause_repr = (
-            _redact_secret_str(self.cause) if self.cause is not None else None
-        )
+        cause_repr = _redact_secret_str(self.cause) if self.cause is not None else None
         return (
             f"{cls}(context={self.context!r}, "
             f"attempt={self.attempt!r}, cause={cause_repr!r})"
@@ -246,7 +244,10 @@ class TokenExpiredError(_AuthSubtypeBase):
         cause: BaseException | None = None,
     ) -> None:
         super().__init__(
-            message, context=context, attempt=attempt, cause=cause,
+            message,
+            context=context,
+            attempt=attempt,
+            cause=cause,
         )
         self.code = code
 

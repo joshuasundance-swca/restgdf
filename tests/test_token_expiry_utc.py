@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import datetime
 
-import pytest
 
 from restgdf._models.credentials import AGOLUserPass
 
@@ -30,9 +29,10 @@ class TestUTCWallClockExpiry:
         )
 
         assert hasattr(ts, "expires_at"), "ArcGISTokenSession must have expires_at attr"
-        assert isinstance(ts.expires_at, datetime.datetime), (
-            f"expires_at must be datetime, got {type(ts.expires_at)}"
-        )
+        assert isinstance(
+            ts.expires_at,
+            datetime.datetime,
+        ), f"expires_at must be datetime, got {type(ts.expires_at)}"
         assert ts.expires_at.tzinfo is not None, "expires_at must be tz-aware"
         assert ts.expires_at.tzinfo == datetime.timezone.utc
 

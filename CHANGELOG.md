@@ -116,6 +116,21 @@ All notable changes to restgdf are documented here. This project follows
   `TokenSessionConfig.clock_skew_seconds` (default `30`) — explicit
   integer fields (`ge=0`) replacing the implicit semantics of the
   previous single `refresh_threshold_seconds` knob (BL-04).
+- Five auth error subtypes under `AuthenticationError` (BL-10):
+  `InvalidCredentialsError`, `TokenExpiredError`, `TokenRequiredError`,
+  `TokenRefreshFailedError`, `AuthNotAttachedError`. All carry
+  `.context`, `.attempt`, `.cause` attributes with `SecretStr`
+  auto-redaction.
+- `ArcGISTokenSession.expires_at` — tz-aware UTC `datetime` property
+  computed from the epoch-ms `expires` field (BL-16).
+- `_utc_now()` shim for deterministic wall-clock test control (BL-16).
+- Structured `auth.refresh.start / .success / .failure` log events at
+  DEBUG level on the `restgdf.auth` logger (BL-15).
+- Bounded `/generateToken` retry: transient errors retried up to 3×
+  with exponential backoff; deterministic errors propagate immediately.
+  After exhaustion raises `TokenRefreshFailedError` (BL-12).
+- Referer binding: `token_request_payload` honours `config.referer` and
+  switches ArcGIS `client` to `"referer"` when set (R-15).
 - `restgdf._logging`: add library-wide logger factory `get_logger(suffix)` (BL-25)
   and standard `extra=` envelope helper `build_log_extra` (BL-26). Existing
   `get_drift_logger` / `restgdf.schema_drift` contract unchanged. Call-site
@@ -161,6 +176,16 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Changed
 
+- **BREAKING** Default token wire transport flipped from `"body"` to
+  `"header"` (BL-13). Tokens are now sent via the
+  `X-Esri-Authorization` header. Set `transport="body"` in
+  `AuthConfig`/`TokenSessionConfig` to restore the old behavior.
+- **BREAKING** `refresh_leeway_seconds` default raised 60 → 120 (BL-13).
+- `ArcGISTokenSession.token_needs_update` refactored to use `expires_at`
+  and `_utc_now()` instead of inline epoch arithmetic (BL-16).
+- Reactive 498/499 handling in `_call_with_auth_retry`: HTTP 498 triggers
+  single-flight refresh + one retry; HTTP 499 raises
+  `AuthNotAttachedError` immediately (BL-11).
 - `restgdf.utils.getinfo.service_metadata`,
   `restgdf.utils.crawl.fetch_all_data`, and
   `restgdf.utils.crawl.safe_crawl` now route their internal
@@ -203,6 +228,9 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Deprecated
 
+- `get_token()` emits `DeprecationWarning` on every call (BL-14).
+  Migrate to `ArcGISTokenSession` for async token management.
+  `get_token` now also accepts `pydantic.SecretStr` passwords.
 - `restgdf.Settings` and `restgdf.get_settings()` are deprecated in
   favour of `restgdf.Config` / `restgdf.get_config()`. `get_settings()`
   now emits a single `DeprecationWarning` on first call and constructs

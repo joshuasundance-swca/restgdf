@@ -11,7 +11,6 @@ interpolates raw credential values (password, token, secret).
 from __future__ import annotations
 
 import ast
-import textwrap
 from pathlib import Path
 
 import pytest
@@ -60,12 +59,14 @@ class TestRefererBinding:
 _TOKEN_PY = Path(__file__).resolve().parent.parent / "restgdf" / "utils" / "token.py"
 
 # Attribute names that MUST NOT appear as format-args in logging calls
-_FORBIDDEN_ATTRS = frozenset({
-    "password",
-    "token",
-    "secret",
-    "get_secret_value",
-})
+_FORBIDDEN_ATTRS = frozenset(
+    {
+        "password",
+        "token",
+        "secret",
+        "get_secret_value",
+    },
+)
 
 
 class _LogArgVisitor(ast.NodeVisitor):
