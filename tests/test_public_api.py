@@ -33,6 +33,7 @@ _EXPECTED_CLASSES = {
     "Feature",
     "FeatureLayer",
     "FeaturesResponse",
+    "FieldDoesNotExistError",
     "FieldSpec",
     "InvalidCredentialsError",
     "LayerMetadata",

@@ -27,7 +27,6 @@ from restgdf.utils._http import (
 )
 from restgdf.utils._concurrency import bounded_gather
 from restgdf.utils._metadata import (
-    FIELDDOESNOTEXIST,
     get_fields,
     get_fields_frame,
     get_max_record_count,
@@ -56,7 +55,6 @@ __all__ = [
     "ClientSession",
     "DEFAULTDICT",
     "DEFAULT_METADATA_HEADERS",
-    "FIELDDOESNOTEXIST",
     "PaginationPlan",
     "build_pagination_plan",
     "default_data",

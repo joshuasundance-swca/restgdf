@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Union
 from pydantic import BaseModel
 
 from restgdf._models.responses import FieldSpec, LayerMetadata
+from restgdf.errors import FieldDoesNotExistError
 from restgdf.utils._deprecations import deprecated_alias
 from restgdf.utils._optional import require_pandas_dataframe
 
@@ -71,7 +72,10 @@ def get_object_id_field(metadata: LayerMetadataLike) -> str:
     if len(oid_fields) == 1:
         return oid_fields[0]
     if len(oid_fields) > 1:
-        raise FIELDDOESNOTEXIST
+        raise FieldDoesNotExistError(
+            context="get_object_id_field",
+            message=f"Ambiguous OID fields: {oid_fields!r}",
+        )
 
     for key, value in metadata.items():
         if key.lower() not in {"objectidfield", "objectidfieldname"}:
@@ -84,7 +88,7 @@ def get_object_id_field(metadata: LayerMetadataLike) -> str:
     if isinstance(unique_id_name, str):
         return field_name_lookup.get(unique_id_name.lower(), unique_id_name)
 
-    raise FIELDDOESNOTEXIST
+    raise FieldDoesNotExistError(context="get_object_id_field")
 
 
 def get_max_record_count(metadata: LayerMetadataLike) -> int:
@@ -96,7 +100,7 @@ def get_max_record_count(metadata: LayerMetadataLike) -> int:
     )
     key_list = [key for key in metadata.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
-        raise FIELDDOESNOTEXIST
+        raise FieldDoesNotExistError(context="get_max_record_count")
     return metadata[key_list[0]]
 
 
@@ -106,7 +110,7 @@ def get_name(metadata: LayerMetadataLike) -> str:
     key_pattern = compile("name", flags=IGNORECASE)
     key_list = [key for key in metadata.keys() if key_pattern.match(key)]
     if len(key_list) != 1:
-        raise FIELDDOESNOTEXIST
+        raise FieldDoesNotExistError(context="get_name")
     return metadata[key_list[0]]
 
 
