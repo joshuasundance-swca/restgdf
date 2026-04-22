@@ -51,6 +51,17 @@ the 3.x migration period; it exposes `_warn_deprecated` and
 `async_deprecated_wrapper`. Not part of the public API; no caller
 changes.
 
+**BL-57 — `restgdf.__getattr__` extension point.** The lazy-import hook
+in `restgdf/__init__.py` now consults a `_REMOVED_EXPORTS: dict[str,
+str]` mapping *after* the lazy-import path. The mapping is empty in
+phase-1c; later phases register removed/renamed top-level names here
+so that importing them emits a `DeprecationWarning` (via
+`restgdf._compat._warn_deprecated`) and raises `AttributeError` with a
+migration message. Existing lazy imports (`FeatureLayer`, `Directory`,
+`utils`, `compat`, the pydantic re-exports, and the new `restgdf.errors`
+re-exports) are unchanged. `dir(restgdf)` now advertises every
+lazy-export key.
+
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This
 new top section documents the next planned breaking change: GeoPandas-backed
 and pandas-backed workflows move behind the `restgdf[geo]` extra instead of

@@ -18,6 +18,10 @@ All notable changes to restgdf are documented here. This project follows
   pagination context when cursor-based iteration fails (BL-06).
 - `RateLimitError.retry_after` attribute carries an optional
   seconds-until-retry hint (BL-06).
+- `restgdf.__getattr__` now consults a `_REMOVED_EXPORTS` extension
+  point before raising `AttributeError`, letting future phases register
+  removed top-level names with a `DeprecationWarning` + migration
+  message. Mapping is empty in this release (BL-57).
 
 ### Changed
 
