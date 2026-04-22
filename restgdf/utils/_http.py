@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 
 import aiohttp
 
-from restgdf._models._settings import Settings, get_settings
+from restgdf._config import get_config
 
 DEFAULT_METADATA_HEADERS = {
     "Accept": "application/json,text/plain,*/*",
@@ -92,19 +92,24 @@ def _choose_verb(
     return "POST"
 
 
-def default_timeout(settings: Settings | Any | None = None) -> aiohttp.ClientTimeout:
-    """Return an :class:`aiohttp.ClientTimeout` driven by ``Settings.timeout_seconds``.
+def default_timeout(settings: Any | None = None) -> aiohttp.ClientTimeout:
+    """Return an :class:`aiohttp.ClientTimeout` driven by restgdf config.
 
-    The ``total`` attribute is set to the float ``timeout_seconds`` knob on
-    the supplied settings object (or the cached process-level
-    :func:`~restgdf._models._settings.get_settings` instance when no
-    argument is passed). Callers who need a custom timeout should either
-    instantiate ``Settings`` directly or override the returned object.
+    When ``settings`` is ``None`` (the library-default call path), the
+    timeout is resolved from :func:`restgdf.get_config` — specifically
+    ``config.timeout.total_s``. When a ``settings`` object is supplied,
+    the helper reads its ``timeout_seconds`` attribute (duck-typed) to
+    remain backwards compatible with the legacy
+    :class:`restgdf.Settings` surface and any ``SimpleNamespace``-style
+    fakes used in tests.
 
-    This helper is intentionally read-only: it never mutates the settings
-    instance and never caches the ``ClientTimeout`` across calls, so
-    environment-driven overrides via ``RESTGDF_TIMEOUT_SECONDS`` take
-    effect as soon as :func:`reset_settings_cache` has been called.
+    This helper is intentionally read-only: it never mutates its inputs
+    and never caches the ``ClientTimeout`` across calls, so environment
+    overrides take effect as soon as
+    :func:`~restgdf.reset_config_cache` (or the legacy
+    :func:`~restgdf._models._settings.reset_settings_cache`) has been
+    called.
     """
-    resolved = settings if settings is not None else get_settings()
-    return aiohttp.ClientTimeout(total=float(resolved.timeout_seconds))
+    if settings is not None:
+        return aiohttp.ClientTimeout(total=float(settings.timeout_seconds))
+    return aiohttp.ClientTimeout(total=float(get_config().timeout.total_s))

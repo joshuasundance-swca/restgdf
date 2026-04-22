@@ -38,7 +38,7 @@ from restgdf.utils._metadata import (
     supports_pagination,
 )
 from restgdf._models._drift import _parse_response
-from restgdf._models._settings import get_settings
+from restgdf._config import get_config
 from restgdf._models.responses import LayerMetadata
 from restgdf.utils._query import get_feature_count, get_metadata, get_object_ids
 from restgdf.utils._stats import (
@@ -123,7 +123,9 @@ async def service_metadata(
     # BL-01: when called nested (``_sem`` supplied), every HTTP call made by
     # this orchestrator must compete for the same cap as the caller's fan-out.
     # When called standalone, a fresh sem preserves the direct-call contract.
-    sem = _sem or asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
+    sem = _sem or asyncio.BoundedSemaphore(
+        get_config().concurrency.max_concurrent_requests,
+    )
 
     # Service-level metadata is a single HTTP call — gate it explicitly so it
     # participates in the shared cap without being wrapped by the

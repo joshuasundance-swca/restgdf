@@ -1,20 +1,27 @@
-"""Process-level runtime settings for restgdf.
+"""Process-level runtime settings for restgdf (**deprecated shim**).
 
-A single :class:`Settings` pydantic model centralizes every runtime knob
-(HTTP timeouts, user-agent, chunk size, token-session defaults, drift-logger
-level). The library does **not** depend on ``pydantic-settings`` — that
-package requires Python 3.10+ and restgdf supports 3.9. Instead,
-:meth:`Settings.from_env` reads ``os.environ`` (or a caller-supplied mapping,
-for tests) and safely coerces each value.
+Since phase-2a BL-18 this module is a *backwards-compatibility shim* over
+:mod:`restgdf._config`. The flat :class:`Settings` model and
+:func:`get_settings` remain for existing callers but:
 
-Values are resolved lazily via :func:`get_settings`, which caches a single
-``Settings`` instance per process. Tests and long-lived processes that need
-to reconfigure at runtime call :func:`reset_settings_cache` to drop the
-cached instance; the next :func:`get_settings` call re-reads the environment.
+* :func:`get_settings` emits a :class:`DeprecationWarning` on first use and
+  constructs its return value from :func:`restgdf.get_config` — the new
+  source of truth.
+* Deprecated flat env-var names (``RESTGDF_TIMEOUT_SECONDS``,
+  ``RESTGDF_TOKEN_URL``, ``RESTGDF_REFRESH_THRESHOLD``, ``RESTGDF_USER_AGENT``,
+  ``RESTGDF_LOG_LEVEL``, ``RESTGDF_MAX_CONCURRENT_REQUESTS``) are honoured by
+  :class:`restgdf.Config` with their own ``DeprecationWarning``s — see
+  ``MIGRATION.md`` ``phase-2a``.
 
-This module only provides the infrastructure. Consumer migration (wiring
-``get_settings()`` into the HTTP helpers and token session) happens in
-later slices so it does not conflict with parallel work.
+Prefer :func:`restgdf.get_config` / :class:`restgdf.Config` in new code. The
+``Settings`` class and ``get_settings`` function will be removed no earlier
+than restgdf 3.0.
+
+``Settings.from_env`` is **not** deprecated at the method level — it is the
+legacy direct path and keeps its original semantics (reads the flat env-var
+set, no alias translation, no deprecation warnings). Callers that invoke
+``Settings.from_env()`` directly therefore do **not** receive the new-wins
+alias semantics; use :class:`restgdf.Config.from_env` for that contract.
 """
 
 from __future__ import annotations
@@ -22,6 +29,7 @@ from __future__ import annotations
 import functools
 import os
 import re
+import warnings
 from collections.abc import Mapping
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
@@ -31,6 +39,8 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    HttpUrl,
+    TypeAdapter,
     ValidationError,
     field_validator,
 )
@@ -39,6 +49,13 @@ from restgdf._models._errors import RestgdfResponseError
 
 
 _VERSION_RE = re.compile(r"""^__version__\s*=\s*["']([^"']+)["']\s*$""", re.MULTILINE)
+
+
+# Shared URL-validation adapter + log-level alias map. Kept in sync with the
+# copies in :mod:`restgdf._config` so the legacy :class:`Settings` shim
+# applies the same validation as the new layered :class:`restgdf.Config`.
+_HTTP_URL_ADAPTER: TypeAdapter[HttpUrl] = TypeAdapter(HttpUrl)
+_LOG_LEVEL_ALIASES: dict[str, str] = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 
 
 @functools.lru_cache(maxsize=1)
@@ -138,6 +155,7 @@ class Settings(BaseModel):
     @classmethod
     def _normalize_log_level(cls, value: str) -> str:
         upper = value.upper()
+        upper = _LOG_LEVEL_ALIASES.get(upper, upper)
         if upper not in _VALID_LOG_LEVELS:
             raise ValueError(
                 f"log_level must be one of {sorted(_VALID_LOG_LEVELS)!r}",
@@ -147,10 +165,12 @@ class Settings(BaseModel):
     @field_validator("token_url")
     @classmethod
     def _check_token_url_scheme(cls, value: str) -> str:
-        if not value.startswith(("http://", "https://")):
+        try:
+            _HTTP_URL_ADAPTER.validate_python(value)
+        except ValidationError as exc:
             raise ValueError(
-                "token_url must start with 'http://' or 'https://'",
-            )
+                f"token_url must be a valid http(s) URL: {value!r} ({exc})",
+            ) from exc
         return value
 
     @classmethod
@@ -227,17 +247,71 @@ class Settings(BaseModel):
 
 @functools.lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Return the process-wide cached :class:`Settings` instance."""
-    return Settings.from_env()
+    """Return the process-wide cached :class:`Settings` instance.
+
+    .. deprecated:: phase-2a
+       Use ``restgdf.get_config()`` and ``restgdf.Config``. This shim
+       constructs a :class:`Settings` from the cached ``Config`` and
+       emits a single :class:`DeprecationWarning` per process.
+    """
+    warnings.warn(
+        "restgdf.get_settings() / restgdf.Settings are deprecated; "
+        "use restgdf.get_config() / restgdf.Config instead. See "
+        "MIGRATION.md phase-2a.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    from restgdf._config import get_config
+
+    cfg = get_config()
+    shim_kwargs: dict[str, Any] = {
+        "timeout_seconds": cfg.timeout.total_s,
+        "user_agent": cfg.transport.user_agent,
+        "log_level": cfg.telemetry.log_level,
+        "token_url": (
+            cfg.auth.token_url
+            if cfg.auth.token_url is not None
+            else Settings.model_fields["token_url"].get_default()
+        ),
+        "refresh_threshold_seconds": int(cfg.auth.refresh_threshold_s),
+        "max_concurrent_requests": cfg.concurrency.max_concurrent_requests,
+    }
+    raw_chunk = os.environ.get("RESTGDF_CHUNK_SIZE")
+    if raw_chunk is not None:
+        try:
+            shim_kwargs["chunk_size"] = int(raw_chunk)
+        except ValueError as exc:
+            raise RestgdfResponseError(
+                f"invalid value for RESTGDF_CHUNK_SIZE: {raw_chunk!r} ({exc})",
+                model_name="Settings",
+                context="RESTGDF_CHUNK_SIZE",
+                raw=raw_chunk,
+            ) from exc
+    raw_hdr = os.environ.get("RESTGDF_DEFAULT_HEADERS_JSON")
+    if raw_hdr is not None:
+        shim_kwargs["default_headers_json"] = raw_hdr
+    try:
+        return Settings(**shim_kwargs)
+    except ValidationError as exc:
+        raise RestgdfResponseError(
+            f"Settings shim validation failed: {exc.errors()!r}",
+            model_name="Settings",
+            context="get_settings",
+            raw=dict(shim_kwargs),
+        ) from exc
 
 
 def reset_settings_cache() -> None:
-    """Clear the :func:`get_settings` cache.
+    """Clear the :func:`get_settings` cache *and* the new Config cache.
 
-    Useful for tests (force a re-read of ``os.environ``) and for
-    long-running processes that change configuration at runtime.
+    Bidirectional cascade with ``restgdf.reset_config_cache`` so tests
+    and long-lived processes can refresh all configuration with a single
+    call regardless of which accessor they use.
     """
     get_settings.cache_clear()
+    from restgdf._config import get_config as _gc
+
+    _gc.cache_clear()
 
 
 __all__ = [

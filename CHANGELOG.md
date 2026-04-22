@@ -7,6 +7,27 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Added
 
+- `restgdf.Config` — frozen pydantic 2.x aggregate of seven frozen
+  sub-configs (`TransportConfig`, `TimeoutConfig`, `RetryConfig`,
+  `LimiterConfig`, `ConcurrencyConfig`, `AuthConfig`, `TelemetryConfig`)
+  plus `Config.from_env(env=None)` classmethod. Sub-configs and the
+  aggregate are immutable at both slot and nested-field level (BL-18).
+- `restgdf.get_config()` — process-wide cached `Config` accessor
+  (`functools.lru_cache(maxsize=1)`), and `restgdf.reset_config_cache()`
+  which clears it. `reset_config_cache` and the existing
+  `reset_settings_cache` now cascade bidirectionally so tests can
+  refresh all configuration with a single call regardless of which
+  accessor they currently use (BL-18).
+- Nested environment-variable surface `RESTGDF_<CATEGORY>_<FIELD>`
+  wired through `Config.from_env` for every sub-config field
+  (`RESTGDF_TRANSPORT_USER_AGENT`, `RESTGDF_TIMEOUT_TOTAL_S`,
+  `RESTGDF_RETRY_ENABLED`, `RESTGDF_LIMITER_RATE_PER_HOST`,
+  `RESTGDF_CONCURRENCY_MAX_CONCURRENT_REQUESTS`,
+  `RESTGDF_AUTH_TOKEN_URL`, `RESTGDF_TELEMETRY_LOG_LEVEL`, etc.).
+  Invalid coercions and validator rejections raise
+  `RestgdfResponseError` with the underlying `pydantic.ValidationError`
+  preserved as `__cause__` (BL-18).
+
 ### Added
 
 - `restgdf.utils._concurrency.bounded_gather(*aws, semaphore)` — internal
@@ -90,6 +111,20 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Deprecated
 
+- `restgdf.Settings` and `restgdf.get_settings()` are deprecated in
+  favour of `restgdf.Config` / `restgdf.get_config()`. `get_settings()`
+  now emits a single `DeprecationWarning` on first call and constructs
+  its return value from `get_config()`; existing callers continue to
+  work unchanged. Will be removed no earlier than restgdf 3.0. See
+  `MIGRATION.md` `phase-2a` for the rename table (BL-18).
+- Six flat environment variables — `RESTGDF_TIMEOUT_SECONDS`,
+  `RESTGDF_TOKEN_URL`, `RESTGDF_REFRESH_THRESHOLD`,
+  `RESTGDF_USER_AGENT`, `RESTGDF_LOG_LEVEL`,
+  `RESTGDF_MAX_CONCURRENT_REQUESTS` — are deprecated in favour of
+  their `RESTGDF_<CATEGORY>_<FIELD>` replacements. The old names
+  continue to work but emit a `DeprecationWarning` when read via
+  `Config.from_env` / `get_config`; when both the old and new names
+  are set the new one wins and the warning notes the override (BL-18).
 - `TokenSessionConfig.refresh_threshold_seconds` is now a read/write
   alias that emits `DeprecationWarning`. Reads return
   `refresh_leeway_seconds + clock_skew_seconds`; constructor writes
