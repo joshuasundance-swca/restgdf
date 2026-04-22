@@ -45,6 +45,12 @@ Optional-dependency gates now raise
 `except ModuleNotFoundError:` and `except ImportError:` call sites
 continue to catch the new exception with no source changes.
 
+**BL-56 — private `restgdf._compat` helper (internal).** New private
+module `restgdf._compat` centralizes `DeprecationWarning` emission for
+the 3.x migration period; it exposes `_warn_deprecated` and
+`async_deprecated_wrapper`. Not part of the public API; no caller
+changes.
+
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This
 new top section documents the next planned breaking change: GeoPandas-backed
 and pandas-backed workflows move behind the `restgdf[geo]` extra instead of
