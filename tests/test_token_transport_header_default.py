@@ -24,12 +24,16 @@ class TestAuthConfigTransportDefault:
         cfg = AuthConfig(token_url="https://example.com/generateToken")
         assert cfg.header_name == "X-Esri-Authorization"
 
-    def test_body_transport_requires_allow_flag(self):
-        """R-13 strict: transport='body' without allow_query_transport raises."""
-        # NOTE: R-13 only blocks 'query', body is always allowed
+    def test_body_transport_is_allowed_without_flag(self):
+        """R-13 strict: only transport='query' is gated by allow_query_transport.
+
+        The 'body' transport is accepted without any opt-in flag: unlike
+        query-string tokens (which can be exposed in logs/referers), body
+        tokens remain out-of-band and therefore do not require the extra
+        ``allow_query_transport`` guard.
+        """
         from restgdf._config import AuthConfig
 
-        # body is NOT blocked — just test query is blocked
         cfg = AuthConfig(
             token_url="https://example.com/generateToken",
             transport="body",

@@ -58,10 +58,5 @@ class TestResilienceConfig:
         try:
             with pytest.raises((ConfigurationError, RestgdfResponseError)):
                 get_config()
-        except NameError:
-            from restgdf._models._errors import RestgdfResponseError as _RE
-
-            with pytest.raises((ConfigurationError, _RE)):
-                get_config()
         finally:
             reset_config_cache()

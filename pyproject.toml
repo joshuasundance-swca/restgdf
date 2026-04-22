@@ -85,18 +85,16 @@ telemetry = [
 ]
 
 dev = [
-    "aioresponses",
+    "aioresponses>=0.7",
     "bumpver",
     "coverage",
     "hypothesis",
-    "opentelemetry-sdk",
+    "opentelemetry-instrumentation-aiohttp-client>=0.44b0",
+    "opentelemetry-sdk>=1.20",
     "pre-commit",
     "pytest",
     "pytest-asyncio",
     "setuptools>=82.0.1",
-    "opentelemetry-sdk>=1.20",
-    "opentelemetry-instrumentation-aiohttp-client>=0.44b0",
-    "aioresponses>=0.7",
 ]
 
 doc = [
