@@ -28,12 +28,28 @@ if TYPE_CHECKING:
         get_settings,
     )
     from .directory.directory import Directory
+    from .errors import (
+        ArcGISServiceError,
+        AuthenticationError,
+        ConfigurationError,
+        OptionalDependencyError,
+        OutputConversionError,
+        PaginationError,
+        RateLimitError,
+        RestgdfError,
+        RestgdfTimeoutError,
+        SchemaValidationError,
+        TransportError,
+    )
     from .featurelayer.featurelayer import FeatureLayer
     from .utils.token import ArcGISTokenSession
 
 __all__ = [
     "AGOLUserPass",
+    "ArcGISServiceError",
     "ArcGISTokenSession",
+    "AuthenticationError",
+    "ConfigurationError",
     "CountResponse",
     "CrawlError",
     "CrawlReport",
@@ -47,11 +63,19 @@ __all__ = [
     "FieldSpec",
     "LayerMetadata",
     "ObjectIdsResponse",
+    "OptionalDependencyError",
+    "OutputConversionError",
+    "PaginationError",
+    "RateLimitError",
+    "RestgdfError",
     "RestgdfResponseError",
+    "RestgdfTimeoutError",
+    "SchemaValidationError",
     "ServiceInfo",
     "Settings",
     "TokenResponse",
     "TokenSessionConfig",
+    "TransportError",
     "compat",
     "get_settings",
     "utils",
@@ -83,6 +107,22 @@ _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
             "get_settings",
         )
     },
+    **{
+        name: ("restgdf.errors", name)
+        for name in (
+            "ArcGISServiceError",
+            "AuthenticationError",
+            "ConfigurationError",
+            "OptionalDependencyError",
+            "OutputConversionError",
+            "PaginationError",
+            "RateLimitError",
+            "RestgdfError",
+            "RestgdfTimeoutError",
+            "SchemaValidationError",
+            "TransportError",
+        )
+    },
     "ArcGISTokenSession": ("restgdf.utils.token", "ArcGISTokenSession"),
     "Directory": ("restgdf.directory.directory", "Directory"),
     "FeatureLayer": ("restgdf.featurelayer.featurelayer", "FeatureLayer"),
@@ -90,12 +130,20 @@ _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
     "utils": ("restgdf.utils", None),
 }
 
+_REMOVED_EXPORTS: dict[str, str] = {}
+
 
 def __getattr__(name: str) -> Any:
     try:
         module_name, attr_name = _LAZY_EXPORTS[name]
-    except KeyError as exc:
-        raise AttributeError(f"module 'restgdf' has no attribute {name!r}") from exc
+    except KeyError:
+        removed_message = _REMOVED_EXPORTS.get(name)
+        if removed_message is not None:
+            from restgdf._compat import _warn_deprecated
+
+            _warn_deprecated(removed_message, stacklevel=3)
+            raise AttributeError(removed_message)
+        raise AttributeError(f"module 'restgdf' has no attribute {name!r}")
 
     module = importlib.import_module(module_name)
     value = module if attr_name is None else getattr(module, attr_name)
@@ -104,4 +152,4 @@ def __getattr__(name: str) -> Any:
 
 
 def __dir__() -> list[str]:
-    return sorted(set(globals()) | set(__all__))
+    return sorted(set(globals()) | set(__all__) | set(_LAZY_EXPORTS))

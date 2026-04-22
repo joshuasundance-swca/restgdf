@@ -15,7 +15,10 @@ import restgdf
 
 _EXPECTED_CLASSES = {
     "AGOLUserPass",
+    "ArcGISServiceError",
     "ArcGISTokenSession",
+    "AuthenticationError",
+    "ConfigurationError",
     "CountResponse",
     "CrawlError",
     "CrawlReport",
@@ -29,11 +32,19 @@ _EXPECTED_CLASSES = {
     "FieldSpec",
     "LayerMetadata",
     "ObjectIdsResponse",
+    "OptionalDependencyError",
+    "OutputConversionError",
+    "PaginationError",
+    "RateLimitError",
+    "RestgdfError",
     "RestgdfResponseError",
+    "RestgdfTimeoutError",
+    "SchemaValidationError",
     "ServiceInfo",
     "Settings",
     "TokenResponse",
     "TokenSessionConfig",
+    "TransportError",
 }
 
 _EXPECTED_CALLABLES = {

@@ -20,6 +20,21 @@ All notable changes to restgdf are documented here. This project follows
   for bare service/layer metadata URLs, and `"POST"` as the
   conservative default. Call sites unchanged; forward-compatible stub
   for BL-50's future ~1800-byte GET→POST auto-switch (BL-20).
+- `restgdf.errors` module exposing the canonical exception taxonomy:
+  `RestgdfError`, `ConfigurationError`, `OptionalDependencyError`,
+  `TransportError`, `RestgdfTimeoutError`, `RateLimitError`,
+  `ArcGISServiceError`, `PaginationError`, `SchemaValidationError`,
+  `AuthenticationError`, and `OutputConversionError`. All are
+  re-exported from the top-level `restgdf` package via the lazy-import
+  hook (BL-06).
+- `PaginationError.batch_index` and `.page_size` attributes carry
+  pagination context when cursor-based iteration fails (BL-06).
+- `RateLimitError.retry_after` attribute carries an optional
+  seconds-until-retry hint (BL-06).
+- `restgdf.__getattr__` now consults a `_REMOVED_EXPORTS` extension
+  point before raising `AttributeError`, letting future phases register
+  removed top-level names with a `DeprecationWarning` + migration
+  message. Mapping is empty in this release (BL-57).
 
 ### Changed
 
@@ -34,6 +49,16 @@ All notable changes to restgdf are documented here. This project follows
   lazily-initialized per-instance `asyncio.Lock` with a double-checked
   `token_needs_update()` inside the lock. The new `_refresh_lock` field
   is `init=False`, `repr=False`, `compare=False` (BL-03).
+- `RestgdfResponseError` now inherits from `restgdf.errors.RestgdfError`
+  in addition to `ValueError`. Class identity and the
+  `from restgdf._models._errors import RestgdfResponseError` import
+  path are preserved; `except ValueError:` call sites keep working
+  (BL-06).
+- `restgdf.utils._optional._optional_dependency_error` now returns
+  `restgdf.errors.OptionalDependencyError` instead of a bare
+  `ModuleNotFoundError`. Existing `except ModuleNotFoundError:` and
+  `except ImportError:` handlers still catch the new exception because
+  `OptionalDependencyError` multi-inherits `ModuleNotFoundError` (BL-07).
 
 ## [2.0.0] - 2026-04-20
 

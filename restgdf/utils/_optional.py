@@ -6,6 +6,8 @@ from importlib import import_module
 from types import ModuleType
 from typing import Any
 
+from restgdf.errors import OptionalDependencyError
+
 GEO_EXTRA = "restgdf[geo]"
 GEO_EXTRA_GUIDANCE = (
     f"Install `{GEO_EXTRA}` to enable pandas/geopandas/pyogrio-backed workflows. "
@@ -16,9 +18,9 @@ GEO_EXTRA_GUIDANCE = (
 def _optional_dependency_error(
     feature: str,
     missing_module: str,
-) -> ModuleNotFoundError:
+) -> OptionalDependencyError:
     """Build a consistent user-facing error for optional dependency gates."""
-    return ModuleNotFoundError(
+    return OptionalDependencyError(
         f"{feature} requires optional dependency '{missing_module}'. "
         f"{GEO_EXTRA_GUIDANCE}",
     )
