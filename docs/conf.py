@@ -69,6 +69,10 @@ nitpick_ignore = [
     ("py:class", "aiohttp.client.ClientSession"),
     # Self-referential pydantic generics can confuse the resolver.
     ("py:class", "restgdf._models.responses.LayerMetadata"),
+    # Private auth-subtype mixin – deliberately not public.
+    ("py:class", "restgdf.errors._AuthSubtypeBase"),
+    # Union syntax ``int | None`` in numpydoc attribute section.
+    ("py:class", "int | None"),
 ]
 
 nitpick_ignore_regex = [

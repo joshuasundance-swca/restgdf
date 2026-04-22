@@ -143,8 +143,15 @@ async def test_arcgistokensession():
     assert await get_response.json() == {"ok": True}
     assert token_session.token == "generated-token"
     assert session.post_calls[0][0].endswith("generateToken")
-    assert session.post_calls[1][1]["data"]["token"] == "generated-token"
-    assert session.get_calls[0][1]["params"]["token"] == "generated-token"
+    # Under default transport='header', token goes in headers, not body/params.
+    assert (
+        session.post_calls[1][1]["headers"]["X-Esri-Authorization"]
+        == "Bearer generated-token"
+    )
+    assert (
+        session.get_calls[0][1]["headers"]["X-Esri-Authorization"]
+        == "Bearer generated-token"
+    )
 
 
 def test_featurelayer_requires_url_to_end_with_numeric_layer_id():

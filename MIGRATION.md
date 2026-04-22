@@ -865,3 +865,69 @@ Key additions:
 Telemetry is **disabled by default** (`TelemetryConfig.enabled = False`).
 `import restgdf.telemetry` always succeeds; runtime functions raise
 `OptionalDependencyError` when OTel is absent and telemetry is enabled.
+
+### phase-3c
+
+**Auth runtime consolidation.** Phase-3c hardens the token-session
+authentication layer with five runtime improvements and deprecates the
+legacy synchronous ``get_token`` helper.
+
+#### Breaking changes
+
+- **Default wire transport flipped to ``"header"``** (BL-13).
+  ``ArcGISTokenSession`` now sends the token via the
+  ``X-Esri-Authorization`` header instead of embedding it in the POST
+  body. If your server requires body/query transport, set
+  ``AuthConfig(transport="body")`` or ``TokenSessionConfig(transport="body")``.
+- **``get_token()`` emits ``DeprecationWarning``** (BL-14).
+  The synchronous helper still works but will be removed in 4.0. Migrate
+  to ``ArcGISTokenSession`` for async token lifecycle management.
+  ``get_token`` now also accepts ``pydantic.SecretStr`` passwords.
+- **``refresh_leeway_seconds`` default raised 60 → 120** (BL-13).
+  Token proactive-refresh fires two minutes before expiry instead of one.
+
+#### New error subtypes (BL-10)
+
+Five new ``AuthenticationError`` subclasses carry structured context:
+
+- ``InvalidCredentialsError`` — bad username/password (HTTP 401).
+- ``TokenExpiredError`` — server-side 498 after refresh attempt.
+- ``TokenRequiredError`` — endpoint demands a token the session lacks.
+- ``TokenRefreshFailedError`` — ``/generateToken`` exhausted retries.
+- ``AuthNotAttachedError`` — server 499: no token attached to request.
+
+All expose ``.context``, ``.attempt``, and ``.cause`` attributes.
+``SecretStr`` values are auto-redacted in ``repr``/``str``.
+
+#### Reactive 498/499 handling (BL-11)
+
+``_call_with_auth_retry`` intercepts HTTP 498 (token expired) with a
+single-flight refresh + one automatic retry. HTTP 499 (token not
+attached) raises ``AuthNotAttachedError`` immediately — no retry.
+
+#### Bounded token retry (BL-12)
+
+``update_token`` retries transient network errors up to 3 times with
+exponential backoff (0.5 s → 1.0 s). Deterministic errors (invalid
+credentials, content-type mismatches) propagate immediately. After
+exhaustion, ``TokenRefreshFailedError`` is raised with the last
+exception chained as ``__cause__``.
+
+#### Structured auth log events (BL-15)
+
+``update_token`` emits ``auth.refresh.start``, ``auth.refresh.success``,
+and ``auth.refresh.failure`` events at DEBUG level via the
+``restgdf.auth`` logger.
+
+#### UTC wall-clock expiry (BL-16)
+
+- ``ArcGISTokenSession.expires_at`` property returns a tz-aware UTC
+  ``datetime.datetime`` (or ``None``).
+- ``_utc_now()`` shim is monkeypatchable for deterministic time tests.
+- ``token_needs_update`` refactored to use ``expires_at`` and ``_utc_now()``.
+
+#### Referer binding (R-15)
+
+When ``TokenSessionConfig.referer`` (or ``AuthConfig.referer``) is set,
+``token_request_payload`` includes ``"referer": <url>`` and switches the
+ArcGIS ``client`` field from ``"requestip"`` to ``"referer"``.

@@ -37,16 +37,18 @@ import functools
 import os
 import warnings
 from collections.abc import Mapping
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
     HttpUrl,
+    SecretStr,
     TypeAdapter,
     ValidationError,
     field_validator,
+    model_validator,
 )
 
 from restgdf._models._errors import RestgdfResponseError
@@ -115,12 +117,30 @@ class ConcurrencyConfig(BaseModel):
 
 
 class AuthConfig(BaseModel):
-    """ArcGIS token-session defaults."""
+    """ArcGIS token-session defaults.
+
+    .. versionchanged:: 3.0
+        Default *transport* flipped from ``"body"`` to ``"header"``; default
+        *header_name* is ``"X-Esri-Authorization"``.  Pass
+        ``allow_query_transport=True`` to enable ``transport="query"``.
+    """
 
     model_config = _FROZEN
 
     token_url: str | None = None
+    transport: Literal["header", "body", "query"] = "header"
+    header_name: str = Field(default="X-Esri-Authorization", min_length=1)
+    referer: str | None = None
+
     refresh_threshold_s: float = Field(default=60.0, ge=0)
+    refresh_leeway_s: float = Field(default=120.0, ge=0.0, le=600.0)
+    clock_skew_s: float = Field(default=30.0, ge=0.0, le=120.0)
+
+    username: SecretStr | None = None
+    password: SecretStr | None = None
+    token: SecretStr | None = None
+
+    allow_query_transport: bool = False
 
     @field_validator("token_url")
     @classmethod
@@ -134,6 +154,16 @@ class AuthConfig(BaseModel):
                 f"token_url must be a valid http(s) URL: {value!r} ({exc})",
             ) from exc
         return value
+
+    @model_validator(mode="after")
+    def _reject_query_without_flag(self) -> AuthConfig:
+        """R-13 strict: ``transport='query'`` without ``allow_query_transport`` → error."""
+        if self.transport == "query" and not self.allow_query_transport:
+            raise ValueError(
+                "transport='query' is insecure and requires "
+                "allow_query_transport=True at AuthConfig construction.",
+            )
+        return self
 
 
 class TelemetryConfig(BaseModel):

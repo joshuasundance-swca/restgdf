@@ -87,15 +87,13 @@ def test_update_headers_and_dict_respect_existing_values():
         expires=32503680000000,
     )
 
-    assert token_session.auth_headers == {"Authorization": "Bearer abc123"}
+    assert token_session.auth_headers == {"X-Esri-Authorization": "Bearer abc123"}
     assert token_session.update_headers({"X-Test": "yes"}) == {
         "X-Test": "yes",
-        "Authorization": "Bearer abc123",
+        "X-Esri-Authorization": "Bearer abc123",
     }
-    assert token_session.update_dict({"where": "1=1"}) == {
-        "where": "1=1",
-        "token": "abc123",
-    }
+    # Under default transport='header', update_dict does NOT inject body token.
+    assert token_session.update_dict({"where": "1=1"}) == {"where": "1=1"}
     assert token_session.update_dict({"token": "explicit"}) == {"token": "explicit"}
 
 
@@ -167,8 +165,15 @@ async def test_arcgistokensession_refreshes_and_injects_auth():
     assert await get_response.json() == {"ok": True}
     assert token_session.token == "generated-token"
     assert session.post_calls[0][0].endswith("generateToken")
-    assert session.post_calls[1][1]["data"]["token"] == "generated-token"
-    assert session.get_calls[0][1]["params"]["token"] == "generated-token"
+    # Under default transport='header', token goes in headers, not body/params.
+    assert (
+        session.post_calls[1][1]["headers"]["X-Esri-Authorization"]
+        == "Bearer generated-token"
+    )
+    assert (
+        session.get_calls[0][1]["headers"]["X-Esri-Authorization"]
+        == "Bearer generated-token"
+    )
 
 
 @pytest.mark.asyncio

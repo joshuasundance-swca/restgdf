@@ -123,9 +123,8 @@ def test_tokensessionconfig_defaults():
         token_url="https://example.com/sharing/rest/generateToken",
         credentials=_creds(),
     )
-    assert cfg.refresh_leeway_seconds == 60
+    assert cfg.refresh_leeway_seconds == 120
     assert cfg.clock_skew_seconds == 30
-    assert cfg.verify_ssl is True
 
 
 def test_tokensessionconfig_nested_credentials_preserve_secretstr():

@@ -43,8 +43,10 @@ if TYPE_CHECKING:
     from .directory.directory import Directory
     from .errors import (
         ArcGISServiceError,
+        AuthNotAttachedError,
         AuthenticationError,
         ConfigurationError,
+        InvalidCredentialsError,
         OptionalDependencyError,
         OutputConversionError,
         PaginationError,
@@ -52,6 +54,9 @@ if TYPE_CHECKING:
         RestgdfError,
         RestgdfTimeoutError,
         SchemaValidationError,
+        TokenExpiredError,
+        TokenRefreshFailedError,
+        TokenRequiredError,
         TransportError,
     )
     from .featurelayer.featurelayer import FeatureLayer
@@ -62,6 +67,7 @@ __all__ = [
     "ArcGISServiceError",
     "ArcGISTokenSession",
     "AuthConfig",
+    "AuthNotAttachedError",
     "AuthenticationError",
     "ConcurrencyConfig",
     "Config",
@@ -77,6 +83,7 @@ __all__ = [
     "FeatureLayer",
     "FeaturesResponse",
     "FieldSpec",
+    "InvalidCredentialsError",
     "LayerMetadata",
     "LimiterConfig",
     "ObjectIdsResponse",
@@ -94,6 +101,9 @@ __all__ = [
     "Settings",
     "TelemetryConfig",
     "TimeoutConfig",
+    "TokenExpiredError",
+    "TokenRefreshFailedError",
+    "TokenRequiredError",
     "TokenResponse",
     "TokenSessionConfig",
     "TransportConfig",
@@ -152,8 +162,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
         name: ("restgdf.errors", name)
         for name in (
             "ArcGISServiceError",
+            "AuthNotAttachedError",
             "AuthenticationError",
             "ConfigurationError",
+            "InvalidCredentialsError",
             "OptionalDependencyError",
             "OutputConversionError",
             "PaginationError",
@@ -161,6 +173,9 @@ _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
             "RestgdfError",
             "RestgdfTimeoutError",
             "SchemaValidationError",
+            "TokenExpiredError",
+            "TokenRefreshFailedError",
+            "TokenRequiredError",
             "TransportError",
         )
     },
