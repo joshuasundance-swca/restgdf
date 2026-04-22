@@ -14,7 +14,7 @@ from restgdf._client.request import build_conservative_query_data
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse
 from restgdf.utils._deprecations import deprecated_alias
-from restgdf.utils._http import default_headers
+from restgdf.utils._http import default_headers, default_timeout
 from restgdf.utils._optional import require_pandas_dataframe
 from restgdf.utils.token import ArcGISTokenSession
 
@@ -70,6 +70,7 @@ async def get_unique_values(
     )
 
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
+    xkwargs.setdefault("timeout", default_timeout())
 
     response = await session.post(
         f"{url}/query",
@@ -123,6 +124,7 @@ async def get_value_counts(
         "groupByFieldsForStatistics": field,
         **data,
     }
+    kwargs.setdefault("timeout", default_timeout())
     response = await session.post(
         f"{url}/query",
         data=data,
@@ -169,6 +171,7 @@ async def nested_count(
         "groupByFieldsForStatistics": ",".join(fields),
         **data,
     }
+    kwargs.setdefault("timeout", default_timeout())
     response = await session.post(
         f"{url}/query",
         data=data,

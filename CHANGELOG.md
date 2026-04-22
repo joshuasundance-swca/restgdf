@@ -7,6 +7,8 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Added
 
+### Added
+
 - `restgdf.utils._concurrency.bounded_gather(*aws, semaphore)` — internal
   helper that caps concurrent fan-out via an `asyncio.BoundedSemaphore`
   while preserving `asyncio.gather` result ordering and
@@ -35,6 +37,10 @@ All notable changes to restgdf are documented here. This project follows
   point before raising `AttributeError`, letting future phases register
   removed top-level names with a `DeprecationWarning` + migration
   message. Mapping is empty in this release (BL-57).
+- `TokenSessionConfig.refresh_leeway_seconds` (default `60`) and
+  `TokenSessionConfig.clock_skew_seconds` (default `30`) — explicit
+  integer fields (`ge=0`) replacing the implicit semantics of the
+  previous single `refresh_threshold_seconds` knob (BL-04).
 
 ### Changed
 
@@ -59,6 +65,41 @@ All notable changes to restgdf are documented here. This project follows
   `ModuleNotFoundError`. Existing `except ModuleNotFoundError:` and
   `except ImportError:` handlers still catch the new exception because
   `OptionalDependencyError` multi-inherits `ModuleNotFoundError` (BL-07).
+- HTTP timeouts are now plumbed through `Settings.timeout_seconds` into
+  every library-maintained `session.get` / `session.post` call-site
+  (`restgdf.utils._query`, `restgdf.utils._stats`,
+  `restgdf.utils.getgdf._get_sub_features` / `get_sub_gdf`,
+  `ArcGISTokenSession.update_token`, and the
+  `ArcGISTokenSession.get` / `.post` wrappers). The new
+  `restgdf.utils._http.default_timeout()` helper returns an
+  `aiohttp.ClientTimeout` sized from `Settings.timeout_seconds` (float,
+  default `30.0`, overridable via `RESTGDF_TIMEOUT_SECONDS`). Callers
+  that already pass `timeout=` keep precedence (BL-02).
+- `ArcGISTokenSession.__post_init__` now respects a caller-supplied
+  `config=TokenSessionConfig(...)` instead of overwriting it, and
+  derives the `TokenSessionConfig` split fields from
+  `token_refresh_threshold` internally (no longer via the deprecated
+  `refresh_threshold_seconds` alias), so plain construction no longer
+  fires a `DeprecationWarning`. `token_refresh_threshold` is resynced
+  from the validated config after construction.
+
+### Deprecated
+
+- `TokenSessionConfig.refresh_threshold_seconds` is now a read/write
+  alias that emits `DeprecationWarning`. Reads return
+  `refresh_leeway_seconds + clock_skew_seconds`; constructor writes
+  split the supplied total into
+  `clock_skew_seconds = min(30, total)` and
+  `refresh_leeway_seconds = total - clock_skew_seconds`. Migrate to the
+  explicit field pair before a future release drops the alias.
+
+### Fixed
+
+- `ArcGISTokenSession.update_token` now forwards the session's
+  `verify_ssl` flag as `ssl=` on the `/generateToken` POST. Previously
+  the flag was honoured for feature/query requests but ignored during
+  token refresh, so `verify_ssl=False` sessions could still fail TLS
+  verification against self-signed ArcGIS Enterprise deployments.
 
 ## [2.0.0] - 2026-04-20
 

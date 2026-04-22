@@ -6,9 +6,13 @@ Private submodule; all public names are re-exported by
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 from collections.abc import Mapping
 from urllib.parse import urlsplit
+
+import aiohttp
+
+from restgdf._models._settings import Settings, get_settings
 
 DEFAULT_METADATA_HEADERS = {
     "Accept": "application/json,text/plain,*/*",
@@ -86,3 +90,21 @@ def _choose_verb(
     ):
         return "GET"
     return "POST"
+
+
+def default_timeout(settings: Settings | Any | None = None) -> aiohttp.ClientTimeout:
+    """Return an :class:`aiohttp.ClientTimeout` driven by ``Settings.timeout_seconds``.
+
+    The ``total`` attribute is set to the float ``timeout_seconds`` knob on
+    the supplied settings object (or the cached process-level
+    :func:`~restgdf._models._settings.get_settings` instance when no
+    argument is passed). Callers who need a custom timeout should either
+    instantiate ``Settings`` directly or override the returned object.
+
+    This helper is intentionally read-only: it never mutates the settings
+    instance and never caches the ``ClientTimeout`` across calls, so
+    environment-driven overrides via ``RESTGDF_TIMEOUT_SECONDS`` take
+    effect as soon as :func:`reset_settings_cache` has been called.
+    """
+    resolved = settings if settings is not None else get_settings()
+    return aiohttp.ClientTimeout(total=float(resolved.timeout_seconds))

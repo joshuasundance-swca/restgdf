@@ -35,6 +35,92 @@
   the helper to auto-switch `GET` → `POST` when a `where` clause pushes
   a GET URL past the ArcGIS ~1800-byte URL budget.
 
+### phase-1b
+
+#### HTTP timeouts are now plumbed via `Settings.timeout_seconds` (BL-02)
+
+Every library-maintained `session.get` / `session.post` call-site now
+forwards an explicit `aiohttp.ClientTimeout` whose `total` is resolved
+from `Settings.timeout_seconds` (float, default `30.0`). The knob is
+overridable via the `RESTGDF_TIMEOUT_SECONDS` environment variable; call
+`restgdf._models._settings.reset_settings_cache()` in long-lived
+processes or tests that mutate the environment at runtime.
+
+| Call-site | Behaviour before | Behaviour after |
+|---|---|---|
+| `restgdf.utils._query.get_feature_count` | No timeout (aiohttp default) | `timeout=default_timeout()` |
+| `restgdf.utils._query.get_metadata` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils._query.get_object_ids` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils._stats.get_unique_values` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils._stats.get_value_counts` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils._stats.nested_count` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils.getgdf._get_sub_features` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils.getgdf.get_sub_gdf` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils.token.ArcGISTokenSession.update_token` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils.token.ArcGISTokenSession.get` | No timeout | `kwargs.setdefault("timeout", default_timeout())` |
+| `restgdf.utils.token.ArcGISTokenSession.post` | No timeout | `kwargs.setdefault("timeout", default_timeout())` |
+
+The BL-08 pagination-probe POST in `restgdf.utils.getgdf` is intentionally
+still unmigrated in phase-1b and will move in its dedicated slice.
+Callers that already pass an explicit `timeout=` kwarg continue to
+override the default.
+
+#### Token refresh threshold split into leeway + clock skew (BL-04)
+
+`TokenSessionConfig` now exposes two explicit fields:
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `refresh_leeway_seconds` | `int` (≥ 0) | `60` | How far in advance of the token expiry to refresh. |
+| `clock_skew_seconds` | `int` (≥ 0) | `30` | Extra padding for client/server clock drift. |
+
+`refresh_threshold_seconds` is retained as a **deprecation alias**:
+
+- **Reads** emit `DeprecationWarning` and return
+  `refresh_leeway_seconds + clock_skew_seconds`.
+- **Writes** via the constructor kwarg emit `DeprecationWarning`, then
+  split the supplied total: `clock_skew_seconds = min(30, total)` and
+  `refresh_leeway_seconds = total - clock_skew_seconds`. Negative
+  totals are rejected by the `ge=0` field constraint.
+
+`ArcGISTokenSession.__post_init__` now respects a caller-supplied
+`config=TokenSessionConfig(...)` instead of overwriting it, and
+synthesises the split fields from `self.token_refresh_threshold` when
+no config is supplied. Constructing a plain
+`ArcGISTokenSession(credentials=...)` no longer fires a
+`DeprecationWarning`; the dataclass mirror
+`self.token_refresh_threshold` is resynced from the validated config
+after construction so the two never drift.
+
+Migrate existing configuration eagerly:
+
+```python
+# before
+TokenSessionConfig(token_url=..., credentials=..., refresh_threshold_seconds=90)
+
+# after
+TokenSessionConfig(
+    token_url=...,
+    credentials=...,
+    refresh_leeway_seconds=60,
+    clock_skew_seconds=30,
+)
+```
+
+The alias will be removed in a future release (no earlier than 3.0
+final) — coordinate with the `restgdf._compat` migration planned for
+phase-1c (BL-56) which will centralise the warning helper.
+
+#### `ArcGISTokenSession.verify_ssl` now plumbs into token refresh (BL-05)
+
+`ArcGISTokenSession.update_token` previously issued the
+`/generateToken` POST without forwarding the session's `verify_ssl`
+flag, so `ArcGISTokenSession(..., verify_ssl=False)` still performed
+TLS verification against ArcGIS Enterprise deployments with
+self-signed or internal certificates. The POST now forwards
+`ssl=self.verify_ssl` to `aiohttp`, matching the existing behaviour of
+other library-maintained request sites.
+
 ### phase-1c
 
 Phase-1c introduces the canonical exception taxonomy at

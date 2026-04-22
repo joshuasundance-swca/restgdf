@@ -123,7 +123,8 @@ def test_tokensessionconfig_defaults():
         token_url="https://example.com/sharing/rest/generateToken",
         credentials=_creds(),
     )
-    assert cfg.refresh_threshold_seconds == 60
+    assert cfg.refresh_leeway_seconds == 60
+    assert cfg.clock_skew_seconds == 30
     assert cfg.verify_ssl is True
 
 
@@ -137,15 +138,23 @@ def test_tokensessionconfig_nested_credentials_preserve_secretstr():
 
 
 def test_tokensessionconfig_parse_response_roundtrip():
-    cfg = _parse_response(
-        TokenSessionConfig,
-        {
-            "token_url": "https://example.com/sharing/rest/generateToken",
-            "credentials": {"username": "u", "password": "p"},
-            "refresh_threshold_seconds": 120,
-            "verify_ssl": False,
-        },
-        context="test",
-    )
-    assert cfg.refresh_threshold_seconds == 120
+    import warnings as _warnings
+
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore", DeprecationWarning)
+        cfg = _parse_response(
+            TokenSessionConfig,
+            {
+                "token_url": "https://example.com/sharing/rest/generateToken",
+                "credentials": {"username": "u", "password": "p"},
+                "refresh_threshold_seconds": 120,
+                "verify_ssl": False,
+            },
+            context="test",
+        )
+    assert cfg.clock_skew_seconds == 30
+    assert cfg.refresh_leeway_seconds == 90
+    with _warnings.catch_warnings():
+        _warnings.simplefilter("ignore", DeprecationWarning)
+        assert cfg.refresh_threshold_seconds == 120
     assert cfg.verify_ssl is False
