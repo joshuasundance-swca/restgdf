@@ -138,6 +138,7 @@ class ArcGISTokenSession:
             data=self.token_request_payload,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=default_timeout(),
+            ssl=self.verify_ssl,
         ) as resp:
             resp.raise_for_status()
             data = await resp.json()

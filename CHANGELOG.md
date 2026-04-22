@@ -84,6 +84,14 @@ All notable changes to restgdf are documented here. This project follows
   `refresh_leeway_seconds = total - clock_skew_seconds`. Migrate to the
   explicit field pair before a future release drops the alias.
 
+### Fixed
+
+- `ArcGISTokenSession.update_token` now forwards the session's
+  `verify_ssl` flag as `ssl=` on the `/generateToken` POST. Previously
+  the flag was honoured for feature/query requests but ignored during
+  token refresh, so `verify_ssl=False` sessions could still fail TLS
+  verification against self-signed ArcGIS Enterprise deployments.
+
 ## [2.0.0] - 2026-04-20
 
 **Major release — pydantic 2.13 integration.** See

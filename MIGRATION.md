@@ -65,6 +65,16 @@ The alias will be removed in a future release (no earlier than 3.0
 final) — coordinate with the `restgdf._compat` migration planned for
 phase-1c (BL-56) which will centralise the warning helper.
 
+### `ArcGISTokenSession.verify_ssl` now plumbs into token refresh (BL-05)
+
+`ArcGISTokenSession.update_token` previously issued the
+`/generateToken` POST without forwarding the session's `verify_ssl`
+flag, so `ArcGISTokenSession(..., verify_ssl=False)` still performed
+TLS verification against ArcGIS Enterprise deployments with
+self-signed or internal certificates. The POST now forwards
+`ssl=self.verify_ssl` to `aiohttp`, matching the existing behaviour of
+other library-maintained request sites.
+
 ---
 
 # Upcoming: restgdf 2.x to 3.x optional Geo extras
