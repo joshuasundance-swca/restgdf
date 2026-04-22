@@ -31,7 +31,7 @@ _LOG = get_logger("pagination")
 _DEFAULT_FACTOR: Final[float] = 1.0
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class PaginationPlan:
     """Frozen result of :func:`build_pagination_plan`.
 

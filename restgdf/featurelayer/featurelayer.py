@@ -5,12 +5,11 @@ from __future__ import annotations
 import random
 import warnings
 from collections.abc import AsyncIterable, AsyncIterator
-from contextlib import aclosing
 from typing import TYPE_CHECKING, Any, Literal
 
 from aiohttp import ClientSession
 
-from restgdf._compat import _warn_deprecated
+from restgdf._compat import _warn_deprecated, aclosing
 from restgdf._models.responses import LayerMetadata
 from restgdf.errors import FieldDoesNotExistError
 from restgdf.utils._optional import require_geo_stack

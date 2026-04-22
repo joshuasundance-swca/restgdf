@@ -742,9 +742,9 @@ async def test_featurelayer(client_session):
     assert (await ziprest.getvaluecounts("PO_NAME")).set_index("PO_NAME").to_dict()[
         "PO_NAME_count"
     ]["Cincinnati"] > 40
-    with raises(IndexError):
+    with raises(FieldDoesNotExistError):
         assert "Cincinnati" in await ziprest.getuniquevalues("zzzzzz")
-    with raises(IndexError):
+    with raises(FieldDoesNotExistError):
         assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP"))) > 900
     assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP_CODE"))) > 900
     assert ziprest.count > ziprest.metadata.max_record_count
