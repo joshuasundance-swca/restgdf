@@ -50,6 +50,7 @@ from restgdf.utils._stats import (
     nestedcount,
 )
 from restgdf.utils.token import ArcGISTokenSession
+from restgdf.errors import RestgdfTimeoutError
 
 __all__ = [
     "ClientSession",
@@ -79,6 +80,45 @@ __all__ = [
     "service_metadata",
     "supports_pagination",
 ]
+
+
+async def _feature_count_with_timeout(
+    session: ClientSession | ArcGISTokenSession,
+    url: str,
+    token: str | None,
+    *,
+    timeout: float | None = None,
+    max_attempts: int = 3,
+) -> int:
+    """Fetch feature count with inline bounded retry.
+
+    BL-51: inline-only retry (R-59 — no restgdf.resilience imports).
+    On repeated ``asyncio.TimeoutError`` or server 5xx, retries up to
+    ``max_attempts`` with exponential back-off. When all attempts are
+    exhausted on a timeout, wraps as :class:`RestgdfTimeoutError`.
+    """
+    kwargs: dict[str, Any] = {}
+    if token is not None:
+        kwargs["data"] = {"token": token}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+
+    last_exc: BaseException | None = None
+    for attempt in range(max_attempts):
+        try:
+            return await get_feature_count(url, session, **kwargs)
+        except (asyncio.TimeoutError, TimeoutError) as exc:
+            last_exc = exc
+        except Exception as exc:
+            last_exc = exc
+            if attempt >= max_attempts - 1:
+                raise
+        if attempt < max_attempts - 1:
+            await asyncio.sleep(0.1 * (2 ** attempt))
+
+    raise RestgdfTimeoutError(
+        f"feature_count for {url} timed out after {max_attempts} attempts",
+    ) from last_exc
 
 
 async def get_offset_range(
@@ -149,12 +189,12 @@ async def service_metadata(
         metadata["url"] = layer_url
         if return_feature_count and metadata.get("type") == "Feature Layer":
             try:
-                feature_count = await get_feature_count(
-                    layer_url,
+                feature_count = await _feature_count_with_timeout(
                     session,
-                    **({"data": {"token": token}} if token is not None else {}),
+                    layer_url,
+                    token,
                 )
-            except KeyError:
+            except (KeyError, RestgdfTimeoutError):
                 feature_count = None
             metadata["feature_count"] = feature_count
         return metadata
