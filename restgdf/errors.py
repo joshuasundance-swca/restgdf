@@ -1,7 +1,7 @@
 """Canonical exception taxonomy for restgdf 3.0.
 
 This module defines the public exception hierarchy used by every public
-entry point in :mod:`restgdf`. All domain-specific exceptions derive from
+entry point in ``restgdf``. All domain-specific exceptions derive from
 :class:`RestgdfError` so callers can catch "any restgdf failure" with a
 single ``except RestgdfError`` block while still being able to discriminate
 between transport, schema, auth, pagination, configuration, and conversion
@@ -47,7 +47,7 @@ from typing import Any
 
 
 class RestgdfError(Exception):
-    """Base class for every exception raised by :mod:`restgdf`."""
+    """Base class for every exception raised by ``restgdf``."""
 
 
 class ConfigurationError(RestgdfError, ValueError):

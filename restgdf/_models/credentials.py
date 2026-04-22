@@ -126,7 +126,7 @@ class TokenSessionConfig(StrictModel):
 
     @property
     def refresh_threshold_seconds(self) -> int:
-        """Legacy alias: sum of leeway + skew, emits ``DeprecationWarning``."""
+        """Return the legacy threshold sum (``leeway + skew``) and emit a ``DeprecationWarning``."""
         warnings.warn(
             "`TokenSessionConfig.refresh_threshold_seconds` is deprecated; "
             "read `refresh_leeway_seconds` and `clock_skew_seconds` "
