@@ -151,3 +151,7 @@ def fake_session() -> FakeSession:
     """Drop-in session fixture for Phase 0+ characterization tests."""
 
     return FakeSession()
+
+
+from tests._telemetry_utils import _telemetry_provider  # noqa: E402, F401
+from tests._telemetry_utils import memory_exporter  # noqa: E402, F401

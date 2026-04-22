@@ -79,6 +79,11 @@ resilience = [
     "aiolimiter>=1.1",
 ]
 
+telemetry = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-instrumentation-aiohttp-client>=0.44b0",
+]
+
 dev = [
     "bumpver",
     "coverage",
@@ -86,6 +91,9 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "setuptools>=82.0.1",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-instrumentation-aiohttp-client>=0.44b0",
+    "aioresponses>=0.7",
 ]
 
 doc = [

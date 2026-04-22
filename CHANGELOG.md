@@ -38,6 +38,11 @@ All notable changes to restgdf are documented here. This project follows
 - ``docs/recipes/tracing.md`` — recipe for structured observability,
   error-attribute inspection, and OpenTelemetry integration with the
   resilience extra (BL-33).
+- `restgdf[telemetry]` optional extra — `RestgdfInstrumentor` (dynamic
+  subclass of `AioHttpClientInstrumentor`, R-58), `feature_layer_stream_span`
+  async context-manager (INTERNAL span, R-21), `span_context_fields` helper,
+  and `_SpanContextFilter` auto-attached to the `restgdf` root logger for
+  trace/span log correlation (BL-32).
 - `restgdf.Config` — frozen pydantic 2.x aggregate of seven frozen
   sub-configs (`TransportConfig`, `TimeoutConfig`, `RetryConfig`,
   `LimiterConfig`, `ConcurrencyConfig`, `AuthConfig`, `TelemetryConfig`)

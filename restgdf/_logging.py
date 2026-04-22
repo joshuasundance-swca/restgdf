@@ -75,6 +75,7 @@ def get_logger(suffix: str = "") -> logging.Logger:
     logger = logging.getLogger(name)
     if not any(isinstance(h, logging.NullHandler) for h in logger.handlers):
         logger.addHandler(logging.NullHandler())
+    _ensure_span_context_filter(logger)
     return logger
 
 
@@ -153,3 +154,45 @@ __all__ = [
     "get_drift_logger",
     "get_logger",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Span-context correlation filter (BL-32, phase-3b)
+# ---------------------------------------------------------------------------
+
+
+class _SpanContextFilter(logging.Filter):
+    """Stamp ``trace_id`` and ``span_id`` on log records when OTel is active.
+
+    Silent no-op when ``opentelemetry`` is not installed — never raises
+    :class:`ImportError` or :class:`~restgdf.errors.OptionalDependencyError`.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            from opentelemetry import trace  # type: ignore[import-untyped]
+        except ImportError:
+            return True
+
+        span = trace.get_current_span()
+        ctx = span.get_span_context()
+        if ctx is not None and ctx.is_valid:
+            record.trace_id = format(ctx.trace_id, "032x")  # type: ignore[attr-defined]
+            record.span_id = format(ctx.span_id, "016x")  # type: ignore[attr-defined]
+        return True
+
+
+def _ensure_span_context_filter(logger: logging.Logger) -> None:
+    """Attach :class:`_SpanContextFilter` to *logger* if not already present."""
+    if not any(isinstance(f, _SpanContextFilter) for f in logger.filters):
+        logger.addFilter(_SpanContextFilter())
+
+
+def _install_span_context_filter() -> None:
+    """Attach :class:`_SpanContextFilter` to the ``restgdf`` logger tree."""
+    _ensure_span_context_filter(logging.getLogger("restgdf"))
+    for suffix in LOGGER_SUFFIXES:
+        _ensure_span_context_filter(logging.getLogger(f"restgdf.{suffix}"))
+
+
+_install_span_context_filter()
