@@ -144,6 +144,13 @@ Explore the docs
 
 .. toctree::
    :hidden:
+   :maxdepth: 2
+   :caption: Recipes
+
+   recipes/observability
+
+.. toctree::
+   :hidden:
    :maxdepth: 1
    :caption: Recipes
 

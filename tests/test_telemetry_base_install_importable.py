@@ -5,8 +5,6 @@ from __future__ import annotations
 import importlib
 import sys
 
-import pytest
-
 
 def test_restgdf_telemetry_is_importable_without_otel(monkeypatch):
     """``import restgdf.telemetry`` succeeds even when opentelemetry is absent."""
@@ -15,7 +13,9 @@ def test_restgdf_telemetry_is_importable_without_otel(monkeypatch):
     monkeypatch.setitem(sys.modules, "opentelemetry.trace", None)
     monkeypatch.setitem(sys.modules, "opentelemetry.instrumentation", None)
     monkeypatch.setitem(
-        sys.modules, "opentelemetry.instrumentation.aiohttp_client", None
+        sys.modules,
+        "opentelemetry.instrumentation.aiohttp_client",
+        None,
     )
 
     # Purge any cached restgdf.telemetry modules so re-import is forced.

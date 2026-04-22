@@ -14,7 +14,9 @@ from restgdf.telemetry._correlation import span_context_fields
 
 @pytest.mark.asyncio
 async def test_restgdf_log_record_auto_carries_trace_id(
-    memory_exporter, monkeypatch, caplog
+    memory_exporter,
+    monkeypatch,
+    caplog,
 ):
     """_SpanContextFilter stamps trace_id/span_id onto LogRecords automatically."""
     monkeypatch.setenv("RESTGDF_TELEMETRY_ENABLED", "1")
@@ -39,7 +41,8 @@ async def test_restgdf_log_record_auto_carries_trace_id(
 
 @pytest.mark.asyncio
 async def test_span_context_fields_still_works_for_user_loggers(
-    memory_exporter, monkeypatch
+    memory_exporter,
+    monkeypatch,
 ):
     """The helper remains public for non-restgdf.* logger consumers."""
     monkeypatch.setenv("RESTGDF_TELEMETRY_ENABLED", "1")

@@ -841,3 +841,27 @@ library expects a plain `str`, unwrap explicitly with
 - **Tracing recipe (BL-33).** New `docs/recipes/tracing.md` documents
   structured observability, error-attribute inspection, and OpenTelemetry
   integration with the resilience extra.
+
+### phase-3b
+
+**`restgdf[telemetry]` optional extra (BL-32)**
+
+Install with `pip install restgdf[telemetry]` to enable OpenTelemetry
+integration. The extra brings in `opentelemetry-api` and
+`opentelemetry-instrumentation-aiohttp-client`.
+
+Key additions:
+
+- `RestgdfInstrumentor` — dynamic subclass of `AioHttpClientInstrumentor`
+  that adds CLIENT spans for every aiohttp request (R-58).
+- `feature_layer_stream_span` — async context-manager producing a single
+  INTERNAL `feature_layer.stream` parent span (R-21). Not yet wired into
+  `FeatureLayer.iter_pages` (phase-4A).
+- `span_context_fields()` — convenience for non-restgdf loggers wanting
+  the current `trace_id` / `span_id`.
+- `_SpanContextFilter` auto-attached to the `restgdf` root logger; stamps
+  `trace_id` and `span_id` on every log record when a span is active.
+
+Telemetry is **disabled by default** (`TelemetryConfig.enabled = False`).
+`import restgdf.telemetry` always succeeds; runtime functions raise
+`OptionalDependencyError` when OTel is absent and telemetry is enabled.

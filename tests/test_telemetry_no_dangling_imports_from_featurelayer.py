@@ -10,8 +10,6 @@ from __future__ import annotations
 import pathlib
 import re
 
-import pytest
-
 
 _PRODUCTION_DIRS = [
     "restgdf/featurelayer",
@@ -35,16 +33,17 @@ def test_featurelayer_does_not_import_telemetry_helpers():
             text = py.read_text(encoding="utf-8")
             if _FORBIDDEN_PATTERN.search(text):
                 violations.append(str(py.relative_to(root)))
-    assert violations == [], (
-        f"R-61 violation: feature_layer_stream_span imported in {violations}"
-    )
+    assert (
+        violations == []
+    ), f"R-61 violation: feature_layer_stream_span imported in {violations}"
 
 
 def test_no_pytest_skip_waiting_on_phase_4a():
     """No test is marked @pytest.mark.skip with reason mentioning phase-4A."""
     root = pathlib.Path(__file__).resolve().parent.parent / "tests"
     skip_pattern = re.compile(
-        r"@pytest\.mark\.skip.*(?:phase.?4A|iter_pages)", re.IGNORECASE
+        r"@pytest\.mark\.skip.*(?:phase.?4A|iter_pages)",
+        re.IGNORECASE,
     )
     own_name = pathlib.Path(__file__).name
     violations: list[str] = []
@@ -54,6 +53,6 @@ def test_no_pytest_skip_waiting_on_phase_4a():
         text = py.read_text(encoding="utf-8")
         if skip_pattern.search(text):
             violations.append(py.name)
-    assert violations == [], (
-        f"R-61 violation: skip markers waiting on phase-4A in {violations}"
-    )
+    assert (
+        violations == []
+    ), f"R-61 violation: skip markers waiting on phase-4A in {violations}"

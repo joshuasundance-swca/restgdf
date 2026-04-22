@@ -153,4 +153,5 @@ def fake_session() -> FakeSession:
     return FakeSession()
 
 
-from tests._telemetry_utils import _telemetry_provider, memory_exporter  # noqa: F401
+from tests._telemetry_utils import _telemetry_provider  # noqa: E402, F401
+from tests._telemetry_utils import memory_exporter  # noqa: E402, F401

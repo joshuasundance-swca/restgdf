@@ -17,11 +17,11 @@ async def test_custom_attrs_use_restgdf_namespace(memory_exporter, monkeypatch):
     async with feature_layer_stream_span(layer_url=url, order="completion") as span:
         span.set_attribute("restgdf.page.count", 7)
 
-    (parent,) = [
+    (parent,) = (
         s
         for s in memory_exporter.get_finished_spans()
         if s.name == "feature_layer.stream"
-    ]
+    )
     attrs = dict(parent.attributes or {})
 
     assert (
@@ -37,14 +37,15 @@ async def test_custom_attrs_use_restgdf_namespace(memory_exporter, monkeypatch):
         if not k.startswith("restgdf.")
         and not k.startswith(("http.", "net.", "server.", "url.", "network."))
     ]
-    assert non_restgdf_custom == [], (
-        f"R-22 violation: unprefixed custom attrs: {non_restgdf_custom}"
-    )
+    assert (
+        non_restgdf_custom == []
+    ), f"R-22 violation: unprefixed custom attrs: {non_restgdf_custom}"
 
 
 @pytest.mark.asyncio
 async def test_service_root_is_token_scrubbed_and_layer_id_stripped(
-    memory_exporter, monkeypatch
+    memory_exporter,
+    monkeypatch,
 ):
     monkeypatch.setenv("RESTGDF_TELEMETRY_ENABLED", "1")
     reset_config_cache()
@@ -55,14 +56,14 @@ async def test_service_root_is_token_scrubbed_and_layer_id_stripped(
     ) as _:
         pass
 
-    (parent,) = [
+    (parent,) = (
         s
         for s in memory_exporter.get_finished_spans()
         if s.name == "feature_layer.stream"
-    ]
+    )
     scrubbed = (parent.attributes or {}).get("restgdf.service_root", "")
     assert "SECRET" not in scrubbed
-    assert scrubbed.endswith("/FeatureServer"), (
-        f"expected FeatureServer root, got {scrubbed!r}"
-    )
+    assert scrubbed.endswith(
+        "/FeatureServer",
+    ), f"expected FeatureServer root, got {scrubbed!r}"
     assert "/0" not in scrubbed.rsplit("/FeatureServer", 1)[-1]

@@ -16,7 +16,9 @@ def test_instrumentor_without_telemetry_extra_raises_optional_dep(monkeypatch):
     monkeypatch.setitem(sys.modules, "opentelemetry", None)
     monkeypatch.setitem(sys.modules, "opentelemetry.instrumentation", None)
     monkeypatch.setitem(
-        sys.modules, "opentelemetry.instrumentation.aiohttp_client", None
+        sys.modules,
+        "opentelemetry.instrumentation.aiohttp_client",
+        None,
     )
 
     # Force re-import of the instrumentor module to pick up the blocked import.

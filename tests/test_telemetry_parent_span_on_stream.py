@@ -11,7 +11,8 @@ from restgdf.telemetry import feature_layer_stream_span
 
 @pytest.mark.asyncio
 async def test_feature_layer_stream_emits_internal_parent_span(
-    memory_exporter, monkeypatch
+    memory_exporter,
+    monkeypatch,
 ):
     monkeypatch.setenv("RESTGDF_TELEMETRY_ENABLED", "1")
     reset_config_cache()
@@ -25,9 +26,9 @@ async def test_feature_layer_stream_emits_internal_parent_span(
 
     finished = memory_exporter.get_finished_spans()
     parents = [s for s in finished if s.name == "feature_layer.stream"]
-    assert len(parents) == 1, (
-        f"expected 1 parent INTERNAL span, got {[s.name for s in finished]}"
-    )
+    assert (
+        len(parents) == 1
+    ), f"expected 1 parent INTERNAL span, got {[s.name for s in finished]}"
     assert parents[0].kind == SpanKind.INTERNAL
 
     # R-21: no restgdf-owned per-page INTERNAL children.
