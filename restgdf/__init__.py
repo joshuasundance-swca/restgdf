@@ -28,12 +28,28 @@ if TYPE_CHECKING:
         get_settings,
     )
     from .directory.directory import Directory
+    from .errors import (
+        ArcGISServiceError,
+        AuthenticationError,
+        ConfigurationError,
+        OptionalDependencyError,
+        OutputConversionError,
+        PaginationError,
+        RateLimitError,
+        RestgdfError,
+        RestgdfTimeoutError,
+        SchemaValidationError,
+        TransportError,
+    )
     from .featurelayer.featurelayer import FeatureLayer
     from .utils.token import ArcGISTokenSession
 
 __all__ = [
     "AGOLUserPass",
+    "ArcGISServiceError",
     "ArcGISTokenSession",
+    "AuthenticationError",
+    "ConfigurationError",
     "CountResponse",
     "CrawlError",
     "CrawlReport",
@@ -47,11 +63,19 @@ __all__ = [
     "FieldSpec",
     "LayerMetadata",
     "ObjectIdsResponse",
+    "OptionalDependencyError",
+    "OutputConversionError",
+    "PaginationError",
+    "RateLimitError",
+    "RestgdfError",
     "RestgdfResponseError",
+    "RestgdfTimeoutError",
+    "SchemaValidationError",
     "ServiceInfo",
     "Settings",
     "TokenResponse",
     "TokenSessionConfig",
+    "TransportError",
     "compat",
     "get_settings",
     "utils",
@@ -81,6 +105,22 @@ _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
             "TokenResponse",
             "TokenSessionConfig",
             "get_settings",
+        )
+    },
+    **{
+        name: ("restgdf.errors", name)
+        for name in (
+            "ArcGISServiceError",
+            "AuthenticationError",
+            "ConfigurationError",
+            "OptionalDependencyError",
+            "OutputConversionError",
+            "PaginationError",
+            "RateLimitError",
+            "RestgdfError",
+            "RestgdfTimeoutError",
+            "SchemaValidationError",
+            "TransportError",
         )
     },
     "ArcGISTokenSession": ("restgdf.utils.token", "ArcGISTokenSession"),

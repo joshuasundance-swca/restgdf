@@ -1,5 +1,42 @@
 # Upcoming: restgdf 2.x to 3.x optional Geo extras
 
+## Unreleased migration notes
+
+### phase-1c
+
+Phase-1c introduces the canonical exception taxonomy at
+`restgdf.errors`. Every new class is additive for `except` semantics:
+callers that previously caught `ValueError`, `ModuleNotFoundError`,
+`TimeoutError`, `PermissionError`, `IndexError`, or `ImportError` around
+restgdf APIs continue to work because the new classes multi-inherit the
+appropriate builtin.
+
+**BL-06 — public error classes.** Public taxonomy rooted at
+`restgdf.errors.RestgdfError`:
+
+```
+RestgdfError
+├── ConfigurationError(RestgdfError, ValueError)
+│   └── OptionalDependencyError(ConfigurationError, ModuleNotFoundError)
+├── RestgdfResponseError(RestgdfError, ValueError)
+│   ├── SchemaValidationError
+│   ├── ArcGISServiceError
+│   │   └── PaginationError(ArcGISServiceError, IndexError)   # .batch_index, .page_size
+│   └── AuthenticationError(RestgdfResponseError, PermissionError)
+├── TransportError
+│   ├── RestgdfTimeoutError(TransportError, TimeoutError)
+│   └── RateLimitError(TransportError)                        # .retry_after
+└── OutputConversionError
+```
+
+All classes re-export from the top-level `restgdf` package. The existing
+`RestgdfResponseError` definition moved from
+`restgdf._models._errors` to `restgdf.errors`; the old import path is
+preserved via a pure alias shim and class identity is unchanged
+(`restgdf._models._errors.RestgdfResponseError is restgdf.errors.RestgdfResponseError`).
+
+The preserved 2.x migration notes continue below.
+
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This
 new top section documents the next planned breaking change: GeoPandas-backed
 and pandas-backed workflows move behind the `restgdf[geo]` extra instead of
