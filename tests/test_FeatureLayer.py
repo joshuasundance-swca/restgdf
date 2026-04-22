@@ -428,6 +428,40 @@ async def test_row_dict_generator_merges_data_kwargs():
 
 
 @pytest.mark.asyncio
+async def test_get_df_does_not_emit_deprecation_warning():
+    """rd-gate2 HIGH #2: FeatureLayer.get_df must not emit DeprecationWarning.
+
+    get_df is a supported public method; it must not route through the
+    deprecated ``row_dict_generator`` shim. It should consume ``stream_rows``
+    instead.
+    """
+    import warnings
+
+    from pandas import DataFrame as _PandasDataFrame
+
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+
+    async def fake_stream_rows(self, **kwargs):
+        for row in ({"OBJECTID": 1, "geometry": None},):
+            yield row
+
+    with patch.object(FeatureLayer, "stream_rows", new=fake_stream_rows):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            df = await layer.get_df()
+
+    assert isinstance(df, _PandasDataFrame)
+    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert deprecations == [], (
+        f"FeatureLayer.get_df unexpectedly emitted DeprecationWarning(s): "
+        f"{[str(w.message) for w in deprecations]}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_getuniquevalues_cache_includes_sortby():
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",

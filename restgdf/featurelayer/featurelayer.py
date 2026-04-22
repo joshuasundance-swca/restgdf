@@ -4,15 +4,23 @@ from __future__ import annotations
 
 import random
 import warnings
-from collections.abc import AsyncIterable
-from typing import TYPE_CHECKING
+from collections.abc import AsyncIterable, AsyncIterator
+from contextlib import aclosing
+from typing import TYPE_CHECKING, Any, Literal
 
 from aiohttp import ClientSession
 
+from restgdf._compat import _warn_deprecated
 from restgdf._models.responses import LayerMetadata
 from restgdf.errors import FieldDoesNotExistError
 from restgdf.utils._optional import require_geo_stack
-from restgdf.utils.getgdf import get_gdf, row_dict_generator
+from restgdf.utils.getgdf import (
+    _feature_to_row_dict,
+    _iter_pages_raw,
+    chunk_generator,
+    get_gdf,
+    row_dict_generator,
+)
 from restgdf.utils.getinfo import (
     default_data,
     get_feature_count,
@@ -195,11 +203,196 @@ class FeatureLayer:
         return await new_rest.get_gdf()
 
     async def get_gdf(self) -> GeoDataFrame:
-        """Get a GeoDataFrame from an ArcGIS FeatureLayer."""
+        """Get a GeoDataFrame from an ArcGIS FeatureLayer.
+
+        The returned ``GeoDataFrame`` carries
+        ``gdf.attrs["spatial_reference"]`` populated from the layer's
+        metadata envelope (R-65) when the layer advertises a spatial
+        reference via ``extent.spatialReference`` or top-level
+        ``spatialReference``.
+        """
         if self.gdf is None:
             _require_featurelayer_geo_support("FeatureLayer.get_gdf()")
             self.gdf = await get_gdf(self.url, self.session, **self.kwargs)
         return self.gdf
+
+    # -----------------------------------------------------------------
+    # Streaming primitives (BL-24 / Q-A11). ``iter_pages`` is the single
+    # low-level async generator every public streaming helper composes
+    # on top of. ``stream_features`` is a deliberate alias of
+    # ``iter_features`` so callers have a single canonical name.
+    # -----------------------------------------------------------------
+    async def iter_pages(
+        self,
+        *,
+        order: Literal["request", "completion"] = "request",
+        max_concurrent_pages: int | None = None,
+        on_truncation: Literal["raise", "ignore", "split"] = "raise",
+        **kwargs: Any,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Yield raw ArcGIS query-page envelopes from this FeatureLayer.
+
+        Parameters
+        ----------
+        order
+            ``"request"`` (default) yields pages in submit order.
+            ``"completion"`` yields pages as the underlying fetches
+            complete (may reorder relative to the pagination plan).
+        max_concurrent_pages
+            Upper bound on concurrent in-flight page fetches.
+            ``None`` (default) leaves concurrency unbounded.
+        on_truncation
+            Behavior when a page reports ``exceededTransferLimit=true``:
+
+            * ``"raise"`` (default) — raise
+              :class:`restgdf.errors.RestgdfResponseError` with
+              ``context='exceededTransferLimit'``.
+            * ``"ignore"`` — log a ``restgdf.pagination`` warning and
+              yield the truncated page anyway.
+            * ``"split"`` — bisect the predicate's OID list and recurse
+              (max depth 32; irreducible partitions raise).
+
+        Yields
+        ------
+        dict
+            The full raw response envelope for each page (``features``,
+            ``objectIdFieldName``, ``exceededTransferLimit``, etc.).
+
+        Notes
+        -----
+        When telemetry is enabled, emits exactly ONE INTERNAL parent
+        span named ``feature_layer.stream`` wrapping the per-page loop
+        (R-61). No per-page restgdf child spans are emitted.
+        """
+        merged_kwargs = {**self.kwargs, **kwargs}
+        if "data" in self.kwargs or "data" in kwargs:
+            merged_kwargs["data"] = default_data(
+                kwargs.get("data"),
+                self.kwargs.get("data"),
+            )
+
+        metadata = getattr(self, "metadata", None)
+        layer_id = getattr(metadata, "id", None) if metadata is not None else None
+        out_fields = self.datadict.get("outFields")
+        span_where = self.wherestr if self.wherestr and self.wherestr != "1=1" else None
+
+        # ``aclosing`` ensures the underlying async generator's ``finally``
+        # (which ends the R-61 INTERNAL span) runs when the consumer breaks
+        # early or calls ``aclose()``. Without it, GC-deferred cleanup would
+        # leak the span until the next event-loop tick.
+        async with aclosing(
+            _iter_pages_raw(
+                self.url,
+                self.session,
+                order=order,
+                max_concurrent_pages=max_concurrent_pages,
+                on_truncation=on_truncation,
+                span_layer_id=layer_id,
+                span_out_fields=out_fields,
+                span_where=span_where,
+                **merged_kwargs,
+            ),
+        ) as pages:
+            async for page in pages:
+                yield page
+
+    async def iter_features(
+        self,
+        *,
+        order: Literal["request", "completion"] = "request",
+        max_concurrent_pages: int | None = None,
+        on_truncation: Literal["raise", "ignore", "split"] = "raise",
+        **kwargs: Any,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Yield one raw ArcGIS feature dict at a time.
+
+        Thin wrapper over :meth:`iter_pages` that flattens each page's
+        ``features`` list. See :meth:`iter_pages` for parameter
+        semantics.
+        """
+        async with aclosing(
+            self.iter_pages(  # type: ignore[type-var]
+                order=order,
+                max_concurrent_pages=max_concurrent_pages,
+                on_truncation=on_truncation,
+                **kwargs,
+            ),
+        ) as pages:
+            async for page in pages:
+                for feature in page.get("features", []):
+                    yield feature
+
+    # ``stream_features`` is the canonical public name; ``iter_features``
+    # is the lower-level iterator primitive. Keep them as the same
+    # coroutine function so introspection and import paths agree
+    # (see tests/test_feature_layer_streaming_public.py).
+    stream_features = iter_features
+
+    async def stream_feature_batches(
+        self,
+        *,
+        order: Literal["request", "completion"] = "request",
+        max_concurrent_pages: int | None = None,
+        on_truncation: Literal["raise", "ignore", "split"] = "raise",
+        **kwargs: Any,
+    ) -> AsyncIterator[list[dict[str, Any]]]:
+        """Yield one list of raw feature dicts per page.
+
+        See :meth:`iter_pages` for parameter semantics.
+        """
+        async with aclosing(
+            self.iter_pages(  # type: ignore[type-var]
+                order=order,
+                max_concurrent_pages=max_concurrent_pages,
+                on_truncation=on_truncation,
+                **kwargs,
+            ),
+        ) as pages:
+            async for page in pages:
+                yield list(page.get("features", []))
+
+    async def stream_rows(
+        self,
+        *,
+        order: Literal["request", "completion"] = "request",
+        max_concurrent_pages: int | None = None,
+        on_truncation: Literal["raise", "ignore", "split"] = "raise",
+        **kwargs: Any,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Yield row-shaped dicts (attributes plus raw geometry).
+
+        Each row is the layer feature's ``attributes`` merged with a
+        ``geometry`` key holding the ArcGIS geometry dict verbatim.
+        See :meth:`iter_pages` for parameter semantics.
+        """
+        async with aclosing(
+            self.iter_features(  # type: ignore[type-var]
+                order=order,
+                max_concurrent_pages=max_concurrent_pages,
+                on_truncation=on_truncation,
+                **kwargs,
+            ),
+        ) as features:
+            async for feature in features:
+                yield _feature_to_row_dict(feature)
+
+    async def stream_gdf_chunks(
+        self,
+        **kwargs: Any,
+    ) -> AsyncIterator[GeoDataFrame]:
+        """Yield ``GeoDataFrame`` chunks; each chunk's ``attrs`` carries spatial_reference (R-65).
+
+        Requires the optional geo stack (``geopandas`` / ``pyogrio``).
+        """
+        _require_featurelayer_geo_support("FeatureLayer.stream_gdf_chunks()")
+        merged_kwargs = {**self.kwargs, **kwargs}
+        if "data" in self.kwargs or "data" in kwargs:
+            merged_kwargs["data"] = default_data(
+                kwargs.get("data"),
+                self.kwargs.get("data"),
+            )
+        async for chunk in chunk_generator(self.url, self.session, **merged_kwargs):
+            yield chunk
 
     async def get_df(self) -> DataFrame:
         """Get a pandas DataFrame from an ArcGIS FeatureLayer.
@@ -215,13 +408,25 @@ class FeatureLayer:
         """
         from restgdf.adapters.pandas import arows_to_dataframe
 
-        return await arows_to_dataframe(self.row_dict_generator())
+        return await arows_to_dataframe(self.stream_rows())
 
     async def row_dict_generator(
         self,
         **kwargs,
     ) -> AsyncIterable[dict]:
-        """Asynchronously yield rows from a GeoDataFrame as dictionaries."""
+        """Asynchronously yield rows from a GeoDataFrame as dictionaries.
+
+        .. deprecated:: 2.0
+            Use :meth:`stream_rows` instead. This method emits a
+            :class:`DeprecationWarning` and continues to delegate to the
+            module-level ``row_dict_generator`` helper for backwards
+            compatibility with existing ``unittest.mock.patch`` targets.
+            Scheduled for removal in a future release.
+        """
+        _warn_deprecated(
+            "FeatureLayer.row_dict_generator is deprecated; "
+            "use FeatureLayer.stream_rows instead.",
+        )
         merged_kwargs = {**self.kwargs, **kwargs}
         if "data" in self.kwargs or "data" in kwargs:
             merged_kwargs["data"] = default_data(

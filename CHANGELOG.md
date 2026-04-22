@@ -7,6 +7,51 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Added
 
+- `FeatureLayer.iter_pages` (BL-24): low-level async generator yielding raw
+  ArcGIS query-page envelopes. Parameters: `order` (``"request"`` default /
+  ``"completion"``), `max_concurrent_pages` (optional `asyncio.Semaphore`
+  bound), and `on_truncation` (``"raise"`` default / ``"ignore"`` /
+  ``"split"``). The ``"split"`` strategy bisects the predicate's OID list
+  via `get_object_ids` and recurses up to depth 32 before raising.
+  Truncated pages under ``"ignore"`` log a structured warning on the
+  `restgdf.pagination` logger and continue.
+- `FeatureLayer.iter_features` / `FeatureLayer.stream_features` (Q-A11):
+  flatten `iter_pages` into individual ArcGIS feature dicts. The two names
+  are deliberate aliases — ``stream_features`` is the canonical public
+  entrypoint, ``iter_features`` is the lower-level iterator primitive.
+- `FeatureLayer.stream_feature_batches` (Q-A11): yields one list of raw
+  feature dicts per page; mirrors the page boundaries produced by
+  `iter_pages`.
+- `FeatureLayer.stream_rows` (Q-A11): yields row-shaped dicts
+  (`attributes` merged with raw `geometry`). Pandas/GeoPandas-free;
+  safe on a base install.
+- `FeatureLayer.stream_gdf_chunks` (Q-A11): yields `GeoDataFrame` chunks
+  over the optional geo stack; each chunk inherits
+  `attrs["spatial_reference"]` (R-65).
+- R-61 telemetry wiring: `FeatureLayer.iter_pages` emits **exactly one**
+  ``feature_layer.stream`` INTERNAL parent span wrapping the per-page
+  loop when telemetry is enabled; no restgdf-owned per-page spans are
+  emitted. The span is no-op when
+  ``RESTGDF_TELEMETRY_ENABLED`` is unset. The span is constructed inside
+  `restgdf.utils.getgdf._iter_pages_raw` so the featurelayer package
+  itself does not import `feature_layer_stream_span`.
+- R-65 spatial-reference propagation on every GeoDataFrame entrypoint:
+  `restgdf.utils.getgdf.get_gdf`, `FeatureLayer.get_gdf`,
+  `FeatureLayer.sample_gdf`, `FeatureLayer.head_gdf`, and
+  `chunk_generator`/`FeatureLayer.stream_gdf_chunks` all stamp
+  `gdf.attrs["spatial_reference"]` with the raw dict read from the
+  layer's metadata envelope (`extent.spatialReference` preferred, top-level
+  `spatialReference` fallback). Normalization uses
+  `restgdf.utils._metadata.normalize_spatial_reference`.
+
+### Deprecated
+
+- `FeatureLayer.row_dict_generator` is deprecated in favor of
+  `FeatureLayer.stream_rows`; it now emits a `DeprecationWarning` and
+  continues to delegate to the module-level `row_dict_generator` helper
+  for backwards compatibility with existing ``unittest.mock.patch`` call
+  sites.
+
 - `restgdf.ResilienceConfig` — frozen pydantic sub-config controlling the
   optional stamina-based retry wrapper and per-service-root token-bucket
   rate limiter. Disabled by default; opt-in via
