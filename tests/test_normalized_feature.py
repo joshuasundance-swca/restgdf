@@ -53,7 +53,7 @@ def test_point_feature_hoists_object_id() -> None:
     assert feature.geometry is not None
     assert feature.geometry.type == "point"
     assert feature.geometry.coords == {"x": 1.0, "y": 2.0}
-    assert feature.geometry.spatial_reference == {"wkid": 4326}
+    assert feature.geometry.spatial_reference == 4326
 
 
 def test_polygon_feature_type_inferred() -> None:
@@ -187,7 +187,7 @@ def test_server_sr_wins_over_kwarg() -> None:
     )
     feature = next(iter_normalized_features(response, sr=4326))
     assert feature.geometry is not None
-    assert feature.geometry.spatial_reference == {"wkid": 3857}
+    assert feature.geometry.spatial_reference == 3857
 
 
 def test_non_mapping_feature_entry_is_skipped() -> None:
