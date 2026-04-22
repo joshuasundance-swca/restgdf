@@ -27,8 +27,26 @@ All notable changes to restgdf are documented here. This project follows
   Invalid coercions and validator rejections raise
   `RestgdfResponseError` with the underlying `pydantic.ValidationError`
   preserved as `__cause__` (BL-18).
-
-### Added
+- `restgdf.adapters` subpackage (BL-34): thin facades over existing core
+  generators and dependency gates. Four lazily-loaded submodules —
+  `restgdf.adapters.dict` (`feature_to_row`, `features_to_rows`, plus
+  `as_dict`/`as_json_dict` re-exports), `restgdf.adapters.stream`
+  (`iter_feature_batches`, `iter_rows`, `iter_gdf_chunks`),
+  `restgdf.adapters.pandas` (`rows_to_dataframe`, `arows_to_dataframe`), and
+  `restgdf.adapters.geopandas` (`rows_to_geodataframe`,
+  `arows_to_geodataframe`). All submodules are base-install safe at import
+  time; pandas / geopandas are required only at call time and raise
+  `OptionalDependencyError` when missing.
+- `FeatureLayer.get_df()` — async pandas-first tabular accessor (Q-S6). Sibling
+  to `get_gdf()` that returns a `pandas.DataFrame` built from the same row
+  stream and does **not** require the geo extra.
+- Taxonomy + observability contract tests (BL-37) in
+  `tests/test_taxonomy_contract.py` asserting `errors.__all__` shape and that
+  `get_logger(suffix)` emits a structured record for every
+  `LOGGER_SUFFIXES` entry.
+- Minimal-install contract test (BL-38) in `tests/test_minimal_install.py`
+  guarding against accidental import of `pandas` / `geopandas` / `pyogrio`
+  when users install the base package without extras.
 
 - `restgdf.utils._concurrency.bounded_gather(*aws, semaphore)` — internal
   helper that caps concurrent fan-out via an `asyncio.BoundedSemaphore`

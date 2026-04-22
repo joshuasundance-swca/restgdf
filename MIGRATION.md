@@ -354,6 +354,36 @@ No behavior change for existing consumers. Byte-exact pagination
 fixtures in ``tests/test_getgdf.py`` and
 ``tests/test_characterization.py`` stay green unchanged.
 
+### phase-2d
+
+**Additive — no breaking changes.** Phase-2d introduces a new
+``restgdf.adapters`` subpackage of thin facades over existing core generators
+and dependency gates, plus a pandas-first tabular accessor on ``FeatureLayer``.
+
+- New subpackage ``restgdf.adapters`` (lazily loaded via PEP 562) with four
+  submodules:
+  - ``restgdf.adapters.dict`` — ``feature_to_row``, ``features_to_rows`` and
+    re-exports of ``as_dict`` / ``as_json_dict``. Pure-Python, base-install safe.
+  - ``restgdf.adapters.stream`` — async-iterator facades ``iter_feature_batches``,
+    ``iter_rows``, ``iter_gdf_chunks`` over the existing generator helpers.
+    Base-install safe at import time; ``iter_gdf_chunks`` requires the geo
+    extra at call time.
+  - ``restgdf.adapters.pandas`` — ``rows_to_dataframe`` (sync) and
+    ``arows_to_dataframe`` (async) that call ``require_pandas(...)`` before
+    materialization. No pandas import at module load.
+  - ``restgdf.adapters.geopandas`` — ``rows_to_geodataframe`` and
+    ``arows_to_geodataframe`` that call ``require_geo_stack(...)`` before
+    materialization. No geopandas/pyogrio import at module load.
+- New ``FeatureLayer.get_df()`` async method — pandas-first sibling to
+  ``get_gdf()``. Returns a ``pandas.DataFrame`` built from the same row stream;
+  raises ``OptionalDependencyError`` (with ``extra="pandas"``) if pandas is not
+  installed. Geopandas is **not** required for this path.
+
+The adapters are additive facades; no existing public API changes shape. The
+contract gates (BL-37 taxonomy + observability, BL-38 minimal-install) are
+exercised by ``tests/test_taxonomy_contract.py`` and
+``tests/test_minimal_install.py``.
+
 ## Upcoming: restgdf 2.x to 3.x optional Geo extras
 
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This

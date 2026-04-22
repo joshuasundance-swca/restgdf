@@ -78,7 +78,8 @@ jobs:
             tests/test_lazy_imports.py \
             tests/test_public_api.py \
             tests/test_models_queries.py \
-            tests/test_base_install.py
+            tests/test_base_install.py \
+            tests/test_minimal_install.py
 
   network:
     name: pytest-network

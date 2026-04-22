@@ -201,6 +201,22 @@ class FeatureLayer:
             self.gdf = await get_gdf(self.url, self.session, **self.kwargs)
         return self.gdf
 
+    async def get_df(self) -> DataFrame:
+        """Get a pandas DataFrame from an ArcGIS FeatureLayer.
+
+        Tabular row view: attributes plus any raw ``geometry`` dict returned
+        by the server, with no geopandas/pyogrio dependency. Raises
+        :class:`restgdf.errors.OptionalDependencyError` when ``pandas`` is
+        not installed.
+
+        This is the pandas-only counterpart to :meth:`get_gdf` — prefer it
+        when callers only need tabular access and want to avoid the full geo
+        dependency stack.
+        """
+        from restgdf.adapters.pandas import arows_to_dataframe
+
+        return await arows_to_dataframe(self.row_dict_generator())
+
     async def row_dict_generator(
         self,
         **kwargs,
