@@ -85,6 +85,87 @@ async def test_iter_pages_emits_exactly_one_internal_parent_span(
 
 
 @pytest.mark.asyncio
+async def test_iter_pages_early_break_still_closes_span(
+    memory_exporter,
+    monkeypatch,
+    caplog,
+):
+    """rd-gate2 HIGH #1: span must close cleanly when consumer breaks early.
+
+    The span lifetime must not rely on an asyncio context token that crosses
+    ``yield`` boundaries; otherwise cancellation/early-break triggers OTel's
+    "Failed to detach context" error.
+    """
+    monkeypatch.setenv("RESTGDF_TELEMETRY_ENABLED", "1")
+    reset_config_cache()
+
+    layer = _make_layer()
+    layer.session = _ScriptedSession(
+        [
+            {"features": [{"attributes": {"OBJECTID": 1}}]},
+            {"features": [{"attributes": {"OBJECTID": 2}}]},
+            {"features": [{"attributes": {"OBJECTID": 3}}]},
+        ],
+    )
+
+    caplog.set_level("ERROR", logger="opentelemetry.context")
+    with patch(
+        "restgdf.utils.getgdf.get_query_data_batches",
+        new=AsyncMock(return_value=[{"resultOffset": o} for o in (0, 1, 2)]),
+    ):
+        async for _p in layer.iter_pages(order="request"):
+            break
+
+    finished = memory_exporter.get_finished_spans()
+    parents = [s for s in finished if s.name == "feature_layer.stream"]
+    assert len(parents) == 1, f"expected exactly 1 finished parent span, got {len(parents)}"
+
+    detach_errors = [
+        rec for rec in caplog.records if "Failed to detach context" in rec.getMessage()
+    ]
+    assert detach_errors == [], (
+        f"OTel detach-context errors leaked across yield boundary: "
+        f"{[r.getMessage() for r in detach_errors]}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_iter_pages_aclose_closes_span(memory_exporter, monkeypatch, caplog):
+    """rd-gate2 HIGH #1: explicit ``aclose()`` must end the span cleanly."""
+    monkeypatch.setenv("RESTGDF_TELEMETRY_ENABLED", "1")
+    reset_config_cache()
+
+    layer = _make_layer()
+    layer.session = _ScriptedSession(
+        [
+            {"features": [{"attributes": {"OBJECTID": 1}}]},
+            {"features": [{"attributes": {"OBJECTID": 2}}]},
+        ],
+    )
+
+    caplog.set_level("ERROR", logger="opentelemetry.context")
+    with patch(
+        "restgdf.utils.getgdf.get_query_data_batches",
+        new=AsyncMock(return_value=[{"resultOffset": o} for o in (0, 1)]),
+    ):
+        gen = layer.iter_pages(order="request")
+        await gen.__anext__()
+        await gen.aclose()
+
+    finished = memory_exporter.get_finished_spans()
+    parents = [s for s in finished if s.name == "feature_layer.stream"]
+    assert len(parents) == 1, f"expected exactly 1 finished parent span, got {len(parents)}"
+
+    detach_errors = [
+        rec for rec in caplog.records if "Failed to detach context" in rec.getMessage()
+    ]
+    assert detach_errors == [], (
+        f"OTel detach-context errors leaked on aclose(): "
+        f"{[r.getMessage() for r in detach_errors]}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_iter_pages_is_noop_when_telemetry_disabled(
     memory_exporter,
     monkeypatch,
