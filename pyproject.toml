@@ -116,11 +116,21 @@ tag_message = "{new_version}"
 tag_scope = "default"
 tag = true
 push = true
+# Stamps today's UTC date into CITATION.cff `date-released` before the
+# bump commit. SemVer `version_pattern` has no date tokens, so this is
+# the only way to keep `date-released` in sync via bumpver. The hook is
+# exec'd directly by bumpver (see site-packages/bumpver/hooks.py); the
+# file needs a shebang + executable bit on POSIX, and the standard .py
+# association on Windows (py launcher).
+pre_commit_hook = "scripts/bumpver_stamp_date.py"
 
 [tool.bumpver.file_patterns]
 "pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
 "restgdf/__init__.py" = ['__version__ = "{version}"']
-"CITATION.cff" = ['version: {version}']
+# Anchor the CITATION.cff pattern to avoid accidentally matching the
+# `cff-version: 1.2.0` schema-version line, which contains `version: ...`
+# as a substring. See https://github.com/mbarkhau/bumpver/issues/215.
+"CITATION.cff" = ['^version: {version}$']
 
 
 [tool.coverage.run]

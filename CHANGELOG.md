@@ -270,6 +270,11 @@ All notable changes to restgdf are documented here. This project follows
   `dev` extra. New `tests/test_crawl_property_hypothesis.py` scaffold
   and `tests/_mocks/aioresponses_helpers.py` shared fixtures (BL-39,
   R-62 scope).
+- `bumpver` `pre_commit_hook` (`scripts/bumpver_stamp_date.py`)
+  auto-stamps `CITATION.cff::date-released` to the release date on
+  every `bumpver update`, keeping the citation metadata in lock-step
+  with `version:`. New `test_citation_cff_date_released_is_iso_8601`
+  pins the ISO-8601 date format (BL-40 follow-up).
 
 ### Changed
 
@@ -390,6 +395,12 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Fixed
 
+- `bumpver` file pattern for `CITATION.cff` anchored to
+  `^version: {version}$` (was unanchored `version: {version}`),
+  preventing a latent release-time defect where the regex would
+  silently rewrite `cff-version: 1.2.0` to the new release version
+  on every `bumpver update`. Discovered via `bumpver update --dry`
+  during the CITATION auto-stamp work.
 - `ArcGISTokenSession.update_token` now forwards the session's
   `verify_ssl` flag as `ssl=` on the `/generateToken` POST.
   Previously the flag was honoured for feature / query requests but
