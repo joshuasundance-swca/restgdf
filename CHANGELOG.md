@@ -82,6 +82,7 @@ All notable changes to restgdf are documented here. This project follows
   `refresh_threshold_seconds` alias), so plain construction no longer
   fires a `DeprecationWarning`. `token_refresh_threshold` is resynced
   from the validated config after construction.
+- **BREAKING** `getgdf` / `_get_sub_features` now raise `restgdf.errors.PaginationError` (not `RuntimeError`) on `exceededTransferLimit=true`. `PaginationError` carries `batch_index` and `page_size`. See MIGRATION.md § Unreleased migration notes / phase-1b-bl08. (BL-08)
 
 ### Deprecated
 
