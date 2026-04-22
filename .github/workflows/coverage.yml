@@ -30,7 +30,7 @@ jobs:
         cache: pip
     - name: Install Python libraries
       run: |
-        pip install --user -r requirements.txt "setuptools>=61" ".[dev]"
+        pip install --user -r requirements.txt "setuptools>=61" ".[dev,geo,resilience,telemetry]"
     - name: "Run coverage"
       run: |
         coverage run
