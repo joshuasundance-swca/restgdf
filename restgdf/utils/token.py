@@ -32,6 +32,16 @@ from restgdf.errors import (
 
 _auth_logger = logging.getLogger("restgdf.auth")
 
+
+def _utc_now() -> datetime.datetime:
+    """Return the current tz-aware UTC datetime.
+
+    Exposed as a module-level function so tests can monkeypatch it
+    to control wall-clock time without freezing the real clock.
+    """
+    return datetime.datetime.now(datetime.timezone.utc)
+
+
 __all__ = [
     "AGOLUserPass",
     "ArcGISTokenSession",
@@ -137,6 +147,20 @@ class ArcGISTokenSession:
         }
 
     @property
+    def expires_at(self) -> datetime.datetime | None:
+        """Return the token expiry as a tz-aware UTC :class:`~datetime.datetime`.
+
+        ArcGIS returns ``expires`` in either seconds or milliseconds
+        since the Unix epoch — values above ``1e11`` are treated as
+        milliseconds and divided by 1000.  Returns ``None`` when no
+        expiry is set.
+        """
+        if self.expires is None:
+            return None
+        epoch = self.expires / 1000 if self.expires > 1e11 else self.expires
+        return datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc)
+
+    @property
     def _transport(self) -> str:
         """Return the wire transport mode: ``'header'``, ``'body'``, or ``'query'``."""
         if self.config is not None and hasattr(self.config, "transport"):
@@ -210,13 +234,10 @@ class ArcGISTokenSession:
             return False
         if not self.token or not self.expires:
             return True
-        expires_at = self.expires / 1000 if self.expires > 1e11 else self.expires
-        expires_dt = datetime.datetime.fromtimestamp(
-            expires_at,
-            tz=datetime.timezone.utc,
-        )
-        now_dt = datetime.datetime.now(datetime.timezone.utc)
-        return (expires_dt - now_dt).total_seconds() < self.token_refresh_threshold
+        ea = self.expires_at
+        if ea is None:
+            return True
+        return (ea - _utc_now()).total_seconds() < self.token_refresh_threshold
 
     async def update_token_if_needed(self) -> None:
         """Ensure the token is valid and refresh if necessary.
