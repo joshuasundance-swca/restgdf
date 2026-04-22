@@ -35,14 +35,16 @@ downward; nothing in a lower layer imports from a higher one.
 │ 4. Typed response models (restgdf/models/)                   │
 │    Pydantic v2 models for layer metadata, query responses    │
 ├──────────────────────────────────────────────────────────────┤
-│ 3. Transport & auth (restgdf/transport/, restgdf/auth/)      │
-│    aiohttp session wiring, token sessions, retry policies    │
+│ 3. Transport & auth (restgdf/utils/_http.py, utils/token.py) │
+│    aiohttp session wiring, token sessions, verb selection    │
+│    Optional: restgdf/resilience/ (stamina retry + rate limit)│
 ├──────────────────────────────────────────────────────────────┤
-│ 2. Errors & protocols (restgdf/errors.py)                    │
-│    RestgdfError hierarchy, structured error detail types     │
+│ 2. Errors & protocols (restgdf/errors.py,                    │
+│    restgdf/_client/_protocols.py)                            │
+│    RestgdfError hierarchy; AsyncHTTPSession Protocol (BL-17) │
 ├──────────────────────────────────────────────────────────────┤
-│ 1. Config & logging (restgdf/config.py, restgdf/_logging.py) │
-│    Settings, env loading, logger names                       │
+│ 1. Config & logging (restgdf/_config.py, restgdf/_logging.py)│
+│    Config, env loading, logger names                         │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -103,17 +105,22 @@ request bodies are redacted at the transport layer.
 
 ## Config precedence
 
-`restgdf.config.Settings` (Pydantic v2) resolves values in this order,
-highest precedence first:
+`restgdf.Config` (Pydantic v2, defined in `restgdf/_config.py`) resolves
+values in this order, highest precedence first:
 
 1. **Explicit constructor arguments** (`FeatureLayer.from_url(timeout=…)`).
-2. **`Settings(...)` instance passed explicitly**.
+2. **`Config(...)` instance passed explicitly**.
 3. **Process environment variables** (`RESTGDF_*`).
 4. **`.env` file** in the working directory, if present.
-5. **Library defaults** (see `Settings.model_fields`).
+5. **Library defaults** (see `Config.model_fields`).
 
-Token-session settings (`TokenSessionConfig`) follow the same order but
-are stored on the session object, not globally.
+The legacy `restgdf.Settings` name is retained as a deprecation alias
+over `Config`; both resolve to the same cached instance via
+`restgdf.get_config()` / `restgdf.get_settings()`.
+
+Token-session settings (`TokenSessionConfig` in
+`restgdf/_models/credentials.py`) follow the same precedence but are
+stored on the session object, not globally.
 
 ## Session ownership
 

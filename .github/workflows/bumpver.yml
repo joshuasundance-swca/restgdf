@@ -44,7 +44,7 @@ jobs:
       # that will be published.
       run: |
         python -m pip install --upgrade pip
-        python -m pip install -e ".[dev,resilience,telemetry]"
+        python -m pip install -e ".[dev,geo,resilience,telemetry]"
     - name: Run offline test suite on the to-be-tagged commit
       # BL-42: if any test fails, abort BEFORE pushing the tag so a
       # broken commit never makes it onto the release branch.

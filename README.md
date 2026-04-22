@@ -109,8 +109,8 @@ pip install restgdf[resilience]
 
 This adds `stamina` and `aiolimiter`. Wrap any `AsyncHTTPSession` with
 `restgdf.resilience.ResilientSession` and configure via
-`RestgdfResponseError` or `RESTGDF_RESILIENCE_ENABLED=1`. See
-[`MIGRATION.md`](MIGRATION.md) for details.
+`restgdf.resilience.ResilienceConfig` or `RESTGDF_RESILIENCE_ENABLED=1`.
+See [`MIGRATION.md`](MIGRATION.md) for details.
 
 `gpd.read_file(url, driver="ESRIJSON")` does not account for max record count
 limitations, so large services get truncated at the server's

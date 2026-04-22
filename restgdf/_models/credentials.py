@@ -55,7 +55,7 @@ class TokenSessionConfig(StrictModel):
     clients need.
 
     Refresh semantics (BL-04 / R-36, R-37):
-      * ``refresh_leeway_seconds`` (default ``60``) — how far in
+      * ``refresh_leeway_seconds`` (default ``120``) — how far in
         advance of the token's expiry the session eagerly refreshes.
       * ``clock_skew_seconds`` (default ``30``, capped at ``30`` when
         derived from the legacy alias) — extra padding for client /

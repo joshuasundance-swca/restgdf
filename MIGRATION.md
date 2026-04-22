@@ -101,7 +101,11 @@ guide follows at the bottom unchanged.
 - `refresh_threshold_seconds` on `TokenSessionConfig` is retained as a
   deprecation alias; reads/writes emit `DeprecationWarning`. Migrate to
   the explicit `refresh_leeway_seconds` + `clock_skew_seconds` split
-  (defaults `60` + `30`, sum preserved).
+  (defaults `120` + `30`, total `150` seconds). When the legacy alias
+  is passed to the constructor, the total is split as
+  `clock_skew_seconds = min(30, total)` and
+  `refresh_leeway_seconds = total - clock_skew_seconds` so existing
+  tunings survive.
 
 **Streaming**
 
