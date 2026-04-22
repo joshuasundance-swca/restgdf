@@ -292,6 +292,16 @@ All notable changes to restgdf are documented here. This project follows
 
 #### Non-breaking
 
+- `FeatureLayer.where(new_where)` is now a cheap in-memory builder:
+  when the parent layer has already resolved its metadata / feature
+  count via `prep()` / `from_url()`, the refined child reuses those
+  caches and issues **no** second metadata GET (`?f=json`) or
+  feature-count POST (`returnCountOnly=true`). The new
+  `where_clause` is still threaded through `data["where"]` so
+  subsequent query / streaming calls honour it. The refined layer's
+  `.count` attribute reflects the *parent's* count until the caller
+  explicitly calls `get_feature_count()` on the refined layer
+  (BL-46).
 - `ArcGISTokenSession.token_needs_update` refactored to use
   `expires_at` and `_utc_now()` instead of inline epoch arithmetic
   (BL-16).

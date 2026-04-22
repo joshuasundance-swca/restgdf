@@ -570,16 +570,45 @@ class FeatureLayer:
         return await self.get_nested_count(fields)
 
     async def where(self, wherestr: str) -> FeatureLayer:
-        """Create a new Rest object with a where clause."""
+        """Create a refined ``FeatureLayer`` bound to ``wherestr``.
+
+        BL-46: when the current instance has already resolved its
+        metadata / feature-count via :meth:`prep`, the refined child
+        reuses those caches and skips the second prep round-trip
+        (no metadata GET, no feature-count POST). The refined layer's
+        ``count`` therefore reflects the *parent's* ``where`` filter;
+        callers who need a count scoped to the refined ``where_clause``
+        must re-prep the refined layer (e.g. by calling
+        ``await FeatureLayer.from_url(refined.url, where=...)``).
+        """
         wherestr_plus = (
             wherestr if self.wherestr == "1=1" else f"{self.wherestr} AND {wherestr}"
         )
-        return await FeatureLayer.from_url(
+        if not hasattr(self, "metadata"):
+            return await FeatureLayer.from_url(
+                self.url,
+                session=self.session,
+                where=wherestr_plus,
+                **self.kwargs,
+            )
+
+        refined_kwargs = {k: v for k, v in self.kwargs.items() if k != "data"}
+        refined_data = {
+            k: v for k, v in self.kwargs.get("data", {}).items() if k != "where"
+        }
+        refined = FeatureLayer(
             self.url,
             session=self.session,
             where=wherestr_plus,
-            **self.kwargs,
+            data=refined_data,
+            **refined_kwargs,
         )
+        refined.metadata = self.metadata
+        refined.name = self.name
+        refined.fields = self.fields
+        refined.object_id_field = self.object_id_field
+        refined.count = self.count
+        return refined
 
     def __repr__(self) -> str:
         """Return a string representation of the Rest object."""
