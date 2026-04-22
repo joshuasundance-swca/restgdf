@@ -240,6 +240,7 @@ def test_module_lists_full_public_api() -> None:
         "AuthNotAttachedError",
         "AuthenticationError",
         "ConfigurationError",
+        "FieldDoesNotExistError",
         "InvalidCredentialsError",
         "OptionalDependencyError",
         "OutputConversionError",
@@ -255,3 +256,29 @@ def test_module_lists_full_public_api() -> None:
         "TransportError",
     }
     assert exported == expected
+
+
+# ---------------------------------------------------------------------------
+# BL-09: FieldDoesNotExistError MRO
+# ---------------------------------------------------------------------------
+from restgdf.errors import FieldDoesNotExistError  # noqa: E402
+
+
+def test_fde_mro_chain() -> None:
+    assert FieldDoesNotExistError.__mro__ == (
+        FieldDoesNotExistError,
+        SchemaValidationError,
+        RestgdfResponseError,
+        RestgdfError,
+        ValueError,
+        Exception,
+        BaseException,
+        object,
+    )
+
+
+def test_fde_is_not_indexerror() -> None:
+    """R-02 hard break: IndexError shim is removed."""
+    assert not issubclass(FieldDoesNotExistError, IndexError)
+    exc = FieldDoesNotExistError("test")
+    assert not isinstance(exc, IndexError)
