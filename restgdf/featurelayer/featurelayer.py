@@ -573,13 +573,12 @@ class FeatureLayer:
         """Create a refined ``FeatureLayer`` bound to ``wherestr``.
 
         BL-46: when the current instance has already resolved its
-        metadata / feature-count via :meth:`prep`, the refined child
-        reuses those caches and skips the second prep round-trip
-        (no metadata GET, no feature-count POST). The refined layer's
-        ``count`` therefore reflects the *parent's* ``where`` filter;
-        callers who need a count scoped to the refined ``where_clause``
-        must re-prep the refined layer (e.g. by calling
-        ``await FeatureLayer.from_url(refined.url, where=...)``).
+        schema via :meth:`prep`, the refined child reuses the parent's
+        cached ``metadata`` / ``name`` / ``fields`` / ``object_id_field``
+        so the expensive metadata GET (``?f=json``) is not re-issued.
+        The feature-count POST is still issued, but scoped to the
+        refined ``where_clause`` so ``refined.count`` is correct for
+        the refined filter.
         """
         wherestr_plus = (
             wherestr if self.wherestr == "1=1" else f"{self.wherestr} AND {wherestr}"
@@ -606,8 +605,13 @@ class FeatureLayer:
         refined.metadata = self.metadata
         refined.name = self.name
         refined.fields = self.fields
+        refined._fieldtypes_frame = None
         refined.object_id_field = self.object_id_field
-        refined.count = self.count
+        refined.count = await get_feature_count(
+            refined.url,
+            refined.session,
+            **refined.kwargs,
+        )
         return refined
 
     def __repr__(self) -> str:

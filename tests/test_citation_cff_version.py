@@ -16,7 +16,7 @@ from pathlib import Path
 import restgdf
 
 _CFF_VERSION_RE = re.compile(
-    r"^version:\s*(?P<version>\S+?)\s*$",
+    r"^\s*version:\s*(?P<version>\S+?)\s*$",
     re.MULTILINE,
 )
 

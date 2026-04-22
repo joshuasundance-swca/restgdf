@@ -83,15 +83,17 @@ implementation in a single commit.
 All commands assume the project root and an activated venv (or invoke
 `.venv\Scripts\python.exe` directly on Windows).
 
-| # | Command                                                                                      | Purpose                        |
-|---|----------------------------------------------------------------------------------------------|--------------------------------|
-| 1 | `python -m pre_commit run --all-files`                                                        | Linters / formatters           |
-| 2 | `python -m coverage run -m pytest -q -m "not network"`                                        | Offline test suite             |
-| 3 | `python -m coverage report --fail-under=97`                                                   | Coverage floor                 |
-| 4 | `python -m sphinx -n -W --keep-going -b html docs docs/_build/html`                           | Docs build (warns as errors)   |
-| 5 | `python -m build` (after clearing `dist/`)                                                    | Wheel + sdist build            |
-| 6 | `python -m twine check --strict dist/*`                                                       | Packaging metadata sanity      |
-| 7 | `python -m pytest -q tests/test_compat.py`                                                    | 2.x legacy surface still works |
+Gates mirror plan.md §2 exactly:
+
+| # | Command                                                                                      | Purpose                                 |
+|---|----------------------------------------------------------------------------------------------|-----------------------------------------|
+| 1 | `python -m pytest -q -m "not network"`                                                       | Offline test suite (0 xfail regression) |
+| 2 | `python -m coverage run -m pytest -q -m "not network" && python -m coverage report --fail-under=97` | Coverage floor ≥ 97%              |
+| 3 | `python -m pre_commit run --all-files`                                                       | Linters / formatters / mypy             |
+| 4 | `python -m sphinx -n -W --keep-going -b html docs docs/_build/html`                          | Docs build (warnings-as-errors)         |
+| 5 | Base-install smoke: `pip install .` (no extras), then `from restgdf import FeatureLayer` and run a metadata/query path | Light-core contract (BL-38) |
+| 6 | `python -m pytest -q tests/test_compat.py`                                                   | 2.x legacy patch-seam stays stable      |
+| 7 | `python -m build && python -m twine check --strict dist/*`                                   | Packaging metadata sanity               |
 
 CI will re-run the same gates; running them locally saves round-trips.
 
@@ -101,7 +103,7 @@ When adding a runtime dependency, think first about whether it belongs
 in the core or behind an extra. restgdf ships with a deliberately thin
 light core (`aiohttp`, `pydantic`) plus opt-in extras:
 
-- `resilience` — `backoff`-based retry on transient network / HTTP 5xx.
+- `resilience` — `stamina`-based retry on transient network / HTTP 5xx.
 - `telemetry` — OpenTelemetry tracing hooks.
 - `geo` — `geopandas` / `pyogrio` GeoDataFrame conversion.
 - `dev` — testing + linting + docs (not shipped to end users).

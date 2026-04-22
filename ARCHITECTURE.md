@@ -132,21 +132,24 @@ rule: the token session only closes what it created.
 
 ## Streaming shapes
 
-`FeatureLayer` exposes four pagination shapes. All four support
+`FeatureLayer` exposes four pagination shapes. The first three share
+the modern `iter_pages`-backed pipeline with
 `on_truncation="raise" | "ignore" | "split"` and
-`max_concurrent_pages` for parallelism.
+`max_concurrent_pages` knobs; the fourth (`stream_gdf_chunks`) is a
+legacy `chunk_generator`-backed path retained for geo workflows.
 
-| Method                        | Element shape                    | Use when…                                  |
-|-------------------------------|----------------------------------|--------------------------------------------|
-| `stream_features`             | one `Feature` per iteration      | you want the raw REST feature objects      |
-| `stream_feature_batches`      | one `list[Feature]` per page     | you want to bulk-process per-page          |
-| `stream_rows`                 | one `dict[str, Any]` per feature | you want attributes without the envelope   |
-| `get_features()` (eager)      | returns the full list in memory  | small layers; compatibility with 2.x       |
+| Method                   | Element shape                    | Pipeline        | Use when…                                        |
+|--------------------------|----------------------------------|-----------------|--------------------------------------------------|
+| `stream_features`        | one `Feature` per iteration      | `iter_pages`    | you want the raw REST feature objects            |
+| `stream_feature_batches` | one `list[Feature]` per page     | `iter_pages`    | you want to bulk-process per-page                |
+| `stream_rows`            | one `dict[str, Any]` per feature | `iter_pages`    | you want attributes without the envelope         |
+| `stream_gdf_chunks`      | one `GeoDataFrame` per chunk     | `chunk_generator` | you want geo chunks (requires `restgdf[geo]`)  |
 
-`stream_*` methods default to `order="request"` (yield in request
-order, keeping memory bounded) and can optionally yield in
-`order="completion"` order when downstream code doesn't care about
-ordering.
+The three `iter_pages`-backed methods default to `order="request"`
+(yield in request order, keeping memory bounded) and can optionally
+yield in `order="completion"` order when downstream code doesn't care
+about ordering. `stream_gdf_chunks` preserves its legacy ordering
+semantics.
 
 `on_truncation="split"` recursively subdivides the OID range when
 ArcGIS returns `exceededTransferLimit=true`, up to 32 levels deep, and
@@ -157,7 +160,7 @@ tune `page_size`.
 
 ```
 restgdf                    # light core: aiohttp + pydantic
-restgdf[resilience]        # + backoff      (retry on transient errors)
+restgdf[resilience]        # + stamina      (retry on transient errors)
 restgdf[telemetry]         # + opentelemetry-api/sdk (tracing spans)
 restgdf[geo]               # + geopandas/pyogrio (GeoDataFrame conversion)
 restgdf[dev]               # + pytest, pre-commit, sphinx, twine, build
