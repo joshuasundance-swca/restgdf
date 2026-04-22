@@ -62,6 +62,7 @@ _EXPECTED_CALLABLES = {
 }
 
 _EXPECTED_MODULES = {
+    "adapters",
     "compat",
     "utils",
 }

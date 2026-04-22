@@ -6,7 +6,7 @@ import importlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from . import compat, utils
+    from . import adapters, compat, utils
     from ._config import (
         AuthConfig,
         ConcurrencyConfig,
@@ -96,6 +96,7 @@ __all__ = [
     "TokenSessionConfig",
     "TransportConfig",
     "TransportError",
+    "adapters",
     "compat",
     "get_config",
     "get_settings",
@@ -163,6 +164,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
     "ArcGISTokenSession": ("restgdf.utils.token", "ArcGISTokenSession"),
     "Directory": ("restgdf.directory.directory", "Directory"),
     "FeatureLayer": ("restgdf.featurelayer.featurelayer", "FeatureLayer"),
+    "adapters": ("restgdf.adapters", None),
     "compat": ("restgdf.compat", None),
     "utils": ("restgdf.utils", None),
 }
