@@ -570,16 +570,49 @@ class FeatureLayer:
         return await self.get_nested_count(fields)
 
     async def where(self, wherestr: str) -> FeatureLayer:
-        """Create a new Rest object with a where clause."""
+        """Create a refined ``FeatureLayer`` bound to ``wherestr``.
+
+        BL-46: when the current instance has already resolved its
+        schema via :meth:`prep`, the refined child reuses the parent's
+        cached ``metadata`` / ``name`` / ``fields`` / ``object_id_field``
+        so the expensive metadata GET (``?f=json``) is not re-issued.
+        The feature-count POST is still issued, but scoped to the
+        refined ``where_clause`` so ``refined.count`` is correct for
+        the refined filter.
+        """
         wherestr_plus = (
             wherestr if self.wherestr == "1=1" else f"{self.wherestr} AND {wherestr}"
         )
-        return await FeatureLayer.from_url(
+        if not hasattr(self, "metadata"):
+            return await FeatureLayer.from_url(
+                self.url,
+                session=self.session,
+                where=wherestr_plus,
+                **self.kwargs,
+            )
+
+        refined_kwargs = {k: v for k, v in self.kwargs.items() if k != "data"}
+        refined_data = {
+            k: v for k, v in self.kwargs.get("data", {}).items() if k != "where"
+        }
+        refined = FeatureLayer(
             self.url,
             session=self.session,
             where=wherestr_plus,
-            **self.kwargs,
+            data=refined_data,
+            **refined_kwargs,
         )
+        refined.metadata = self.metadata
+        refined.name = self.name
+        refined.fields = self.fields
+        refined._fieldtypes_frame = None
+        refined.object_id_field = self.object_id_field
+        refined.count = await get_feature_count(
+            refined.url,
+            refined.session,
+            **refined.kwargs,
+        )
+        return refined
 
     def __repr__(self) -> str:
         """Return a string representation of the Rest object."""
