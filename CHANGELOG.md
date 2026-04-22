@@ -66,6 +66,25 @@ All notable changes to restgdf are documented here. This project follows
   and standard `extra=` envelope helper `build_log_extra` (BL-26). Existing
   `get_drift_logger` / `restgdf.schema_drift` contract unchanged. Call-site
   migration to the new factory ships in later phases.
+- `restgdf._client._protocols.AsyncHTTPSession` — `@runtime_checkable`
+  `typing.Protocol` capturing the `get` / `post` / `close` / `closed`
+  surface restgdf transport sessions rely on; re-exported from
+  `restgdf._client`. `isinstance(aiohttp.ClientSession(), AsyncHTTPSession)`
+  holds at runtime. Phase-2b ships the Protocol only; call-site
+  annotation widening lands in later phases (BL-17).
+- `restgdf._models._drift.FieldSetDriftObserver` — observer class that
+  tracks attribute-key appearance/disappearance across feature-page
+  batches and emits deduped `field_appeared` / `field_disappeared`
+  records through the existing `restgdf.schema_drift` logger. Empty
+  pages are skipped; observation only, never blocking. Runtime wiring
+  into the pagination loop is deferred (BL-27).
+- `restgdf._models.responses.NormalizedGeometry`,
+  `NormalizedFeature`, and `iter_normalized_features(response, *,
+  oid_field=None, sr=None)` — typed intermediate feature/geometry
+  models plus an iterator over `FeaturesResponse.features`. Wire-level
+  `features: list[dict]` stays for perf; normalization is opt-in.
+  Geometry `type` is heuristically inferred from shape; `object_id` is
+  `int`-coerced from `attributes[oid_field]` (BL-28).
 
 ### Changed
 
