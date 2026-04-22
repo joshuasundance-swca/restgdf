@@ -838,3 +838,6 @@ library expects a plain `str`, unwrap explicitly with
   truncates the URL at `FeatureServer`/`MapServer`/`ImageServer`/
   `SceneServer` to derive a per-endpoint rate-limit key. Cooldown is
   separate from the token bucket — 429 back-off does NOT drain tokens.
+- **Tracing recipe (BL-33).** New `docs/recipes/tracing.md` documents
+  structured observability, error-attribute inspection, and OpenTelemetry
+  integration with the resilience extra.

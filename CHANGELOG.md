@@ -35,6 +35,9 @@ All notable changes to restgdf are documented here. This project follows
   ``_service_root(url)`` derives the rate-limit key by truncating at the
   first ``FeatureServer``/``MapServer``/``ImageServer``/``SceneServer``
   path segment (BL-52).
+- ``docs/recipes/tracing.md`` — recipe for structured observability,
+  error-attribute inspection, and OpenTelemetry integration with the
+  resilience extra (BL-33).
 - `restgdf.Config` — frozen pydantic 2.x aggregate of seven frozen
   sub-configs (`TransportConfig`, `TimeoutConfig`, `RetryConfig`,
   `LimiterConfig`, `ConcurrencyConfig`, `AuthConfig`, `TelemetryConfig`)

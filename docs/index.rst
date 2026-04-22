@@ -145,6 +145,13 @@ Explore the docs
 .. toctree::
    :hidden:
    :maxdepth: 1
+   :caption: Recipes
+
+   recipes/tracing
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
    :caption: Project
 
    migration
