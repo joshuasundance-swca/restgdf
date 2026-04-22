@@ -97,7 +97,7 @@ async def _feature_batch_generator(
     url: str,
     session: ClientSession | ArcGISTokenSession,
     **kwargs,
-) -> AsyncGenerator[list[dict[str, Any]], None]:
+) -> AsyncGenerator[list[dict[str, Any]]]:
     """Yield raw ArcGIS feature batches without requiring pandas/geopandas."""
     query_data_batches = await get_query_data_batches(url, session, **kwargs)
     tasks = {
@@ -251,7 +251,7 @@ async def chunk_generator(
     url: str,
     session: ClientSession | ArcGISTokenSession,
     **kwargs,
-) -> AsyncGenerator[GeoDataFrame, None]:
+) -> AsyncGenerator[GeoDataFrame]:
     """
     Asynchronously yield GeoDataFrames from a FeatureLayer in chunks.
     This function retrieves GeoDataFrames in chunks based on the offset range
@@ -285,7 +285,7 @@ async def row_dict_generator(
     url: str,
     session: ClientSession | ArcGISTokenSession,
     **kwargs,
-) -> AsyncGenerator[dict, None]:
+) -> AsyncGenerator[dict]:
     """Yield row-shaped dicts from an ArcGIS FeatureLayer.
 
     .. deprecated:: 2.0
@@ -447,7 +447,7 @@ async def _resolve_page(
     depth: int,
     max_depth: int,
     request_kwargs: dict[str, Any],
-) -> AsyncGenerator[dict[str, Any], None]:
+) -> AsyncGenerator[dict[str, Any]]:
     """Yield ``page`` (and any sub-pages) honoring ``on_truncation``."""
     envelope = _parse_response(
         FeaturesResponse,
@@ -542,7 +542,7 @@ async def _iter_pages_raw(
     span_out_fields: Any = None,
     span_where: str | None = None,
     **kwargs,
-) -> AsyncGenerator[dict[str, Any], None]:
+) -> AsyncGenerator[dict[str, Any]]:
     """Yield raw ArcGIS page envelopes for a FeatureLayer query.
 
     Implements the streaming primitive that powers
