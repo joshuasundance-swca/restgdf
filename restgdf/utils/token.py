@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import logging
 from dataclasses import dataclass, field
 
 import aiohttp
@@ -28,6 +29,8 @@ from restgdf.errors import (
     AuthenticationError,
     TokenExpiredError,
 )
+
+_auth_logger = logging.getLogger("restgdf.auth")
 
 __all__ = [
     "AGOLUserPass",
@@ -176,19 +179,30 @@ class ArcGISTokenSession:
         so malformed/error envelopes raise
         :class:`~restgdf._models.RestgdfResponseError` instead of
         ``KeyError`` deep in caller code paths.
+
+        Emits structured log events:
+        * ``auth.refresh.start`` — before the POST
+        * ``auth.refresh.success`` — after successful token update
+        * ``auth.refresh.failure`` — on any exception
         """
-        async with self.session.post(
-            self.token_url,
-            data=self.token_request_payload,
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=default_timeout(),
-            ssl=self.verify_ssl,
-        ) as resp:
-            resp.raise_for_status()
-            data = await resp.json()
-        envelope = _parse_response(TokenResponse, data, context=self.token_url)
-        self.token = envelope.token
-        self.expires = envelope.expires
+        _auth_logger.debug("auth.refresh.start url=%s", self.token_url)
+        try:
+            async with self.session.post(
+                self.token_url,
+                data=self.token_request_payload,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=default_timeout(),
+                ssl=self.verify_ssl,
+            ) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+            envelope = _parse_response(TokenResponse, data, context=self.token_url)
+            self.token = envelope.token
+            self.expires = envelope.expires
+            _auth_logger.debug("auth.refresh.success url=%s", self.token_url)
+        except Exception:
+            _auth_logger.debug("auth.refresh.failure url=%s", self.token_url)
+            raise
 
     def token_needs_update(self) -> bool:
         """Check if the token needs to be updated."""
