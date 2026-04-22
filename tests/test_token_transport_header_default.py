@@ -98,5 +98,5 @@ class TestTokenSessionTransportHeader:
             expires=9999999999999,
         )
         h: dict = {}
-        session.update_headers(h)
-        assert h["X-Esri-Authorization"] == "Bearer abc123"
+        result = session.update_headers(h)
+        assert result["X-Esri-Authorization"] == "Bearer abc123"

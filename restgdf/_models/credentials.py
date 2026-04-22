@@ -22,6 +22,7 @@ operator-visible bug, not schema drift.
 from __future__ import annotations
 
 import warnings
+from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 
@@ -71,7 +72,11 @@ class TokenSessionConfig(StrictModel):
 
     token_url: str
     credentials: AGOLUserPass
-    refresh_leeway_seconds: int = Field(default=60, ge=0)
+    transport: Literal["header", "body", "query"] = "header"
+    header_name: str = Field(default="X-Esri-Authorization", min_length=1)
+    referer: str | None = None
+    token: SecretStr | None = None
+    refresh_leeway_seconds: int = Field(default=120, ge=0)
     clock_skew_seconds: int = Field(default=30, ge=0)
     verify_ssl: bool = True
 

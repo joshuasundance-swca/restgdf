@@ -20,12 +20,12 @@ def _creds() -> AGOLUserPass:
     return AGOLUserPass(username="u", password="p")
 
 
-def test_new_fields_default_to_60_and_30():
+def test_new_fields_default_to_120_and_30():
     cfg = TokenSessionConfig(
         token_url="https://example.com/generateToken",
         credentials=_creds(),
     )
-    assert cfg.refresh_leeway_seconds == 60
+    assert cfg.refresh_leeway_seconds == 120
     assert cfg.clock_skew_seconds == 30
 
 
@@ -36,7 +36,7 @@ def test_alias_read_returns_sum_and_warns():
     )
     with pytest.warns(DeprecationWarning, match="refresh_threshold_seconds"):
         value = cfg.refresh_threshold_seconds
-    assert value == 90
+    assert value == 150
 
 
 def test_alias_write_roundtrip_small_total():

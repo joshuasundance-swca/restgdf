@@ -130,11 +130,25 @@ class ArcGISTokenSession:
         }
 
     @property
+    def _transport(self) -> str:
+        """Return the wire transport mode: ``'header'``, ``'body'``, or ``'query'``."""
+        if self.config is not None and hasattr(self.config, "transport"):
+            return self.config.transport
+        return "header"
+
+    @property
+    def _header_name(self) -> str:
+        """Return the header key for header-mode transport."""
+        if self.config is not None and hasattr(self.config, "header_name"):
+            return self.config.header_name
+        return "X-Esri-Authorization"
+
+    @property
     def auth_headers(self) -> dict[str, str]:
         """Return authentication headers with the token if available."""
         headers: dict[str, str] = {}
-        if self.token:
-            headers["Authorization"] = f"Bearer {self.token}"
+        if self.token and self._transport == "header":
+            headers[self._header_name] = f"Bearer {self.token}"
         return headers
 
     def update_headers(self, headers: dict | None = None) -> dict:
@@ -146,7 +160,7 @@ class ArcGISTokenSession:
     def update_dict(self, input_dict: dict | None = None) -> dict:
         """Return a request payload/query dict merged with the active token."""
         output_dict = dict(input_dict or {})
-        if self.token and "token" not in output_dict:
+        if self.token and self._transport in ("body", "query") and "token" not in output_dict:
             output_dict["token"] = self.token
         return output_dict
 
