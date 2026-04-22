@@ -60,6 +60,41 @@ jobs:
       - name: Run tests
         run: python -m pytest -q -m "not network"
 
+  install_combinations:
+    name: install-${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: base
+            extras: ""
+          - label: geo
+            extras: "[geo]"
+          - label: resilience
+            extras: "[resilience]"
+          - label: telemetry
+            extras: "[telemetry]"
+          - label: geo-resilience-telemetry
+            extras: "[geo,resilience,telemetry]"
+          - label: dev
+            extras: "[dev]"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package (extras=${{ matrix.label }})
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".${{ matrix.extras }}"
+      - name: Import smoke test
+        run: python -c "import restgdf; print(restgdf.__version__)"
+      - name: Check dependency consistency
+        run: python -m pip check
+
   base_install:
     name: pytest-base-install
     runs-on: ubuntu-latest
@@ -128,13 +163,13 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [lint, test, base_install, network, docs]
+    needs: [lint, test, install_combinations, base_install, network, docs]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate job results
         run: |
-          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
-            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} base-install=${{ needs.base_install.result }} network=${{ needs.network.result }} docs=${{ needs.docs.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} network=${{ needs.network.result }} docs=${{ needs.docs.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."
