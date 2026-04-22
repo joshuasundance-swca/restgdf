@@ -269,6 +269,40 @@ phase-2a ships the new surface and the deprecation shims only. Consumer
 wiring (swapping ``get_settings()`` call sites inside ``restgdf.utils`` for
 ``get_config()``) is deferred to phase-3 per R-44.
 
+### phase-2b
+
+**Additive — no breaking changes.** New public APIs for the 3.0 transport,
+observability, and normalization tracks:
+
+- ``restgdf._client._protocols.AsyncHTTPSession`` — a
+  :class:`typing.Protocol` (``@runtime_checkable``) capturing the
+  ``get`` / ``post`` / ``close`` / ``closed`` surface restgdf call sites
+  rely on. ``isinstance(aiohttp.ClientSession(), AsyncHTTPSession)``
+  holds at runtime. The Protocol is re-exported from
+  ``restgdf._client``. Phase-2b ships the Protocol only; call-site
+  annotation widening (from
+  ``aiohttp.ClientSession | ArcGISTokenSession``) lands in later
+  phases (BL-17).
+- ``restgdf._models._drift.FieldSetDriftObserver`` — observer class
+  that tracks attribute-key appearance/disappearance across feature-
+  page batches. Emits deduped ``field_appeared`` / ``field_disappeared``
+  records via the existing ``restgdf.schema_drift`` logger. Empty pages
+  are skipped to avoid false-positive storms. Observation-only; never
+  blocking. Runtime wiring into the pagination loop is deferred
+  (BL-27).
+- ``restgdf._models.responses.NormalizedGeometry`` /
+  ``NormalizedFeature`` + ``iter_normalized_features(response, *,
+  oid_field=None, sr=None)``. Wire-level ``FeaturesResponse.features``
+  stays ``list[dict]`` for perf; normalization is opt-in via the
+  iterator. ``NormalizedGeometry.type`` is heuristically inferred from
+  the geometry dict shape (``point`` / ``multipoint`` / ``polyline`` /
+  ``polygon`` / ``envelope`` / ``None``). ``object_id`` is hoisted
+  from ``attributes[oid_field]`` via ``int(value)`` and tolerates
+  unparsable values by leaving ``object_id=None``. ``sr`` kwarg fills
+  spatial reference only when the server did not provide one (BL-28).
+
+No existing APIs or behaviors change. ``__version__`` unchanged.
+
 ## Upcoming: restgdf 2.x to 3.x optional Geo extras
 
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This

@@ -21,6 +21,7 @@ pathological server does not spam the log.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable, Mapping
 from typing import Any, TypeVar
 
 from pydantic import BaseModel, ConfigDict, ValidationError
@@ -266,7 +267,108 @@ def _parse_response(
     return result
 
 
+class FieldSetDriftObserver:
+    """Observe attribute-key drift across feature-page batches (BL-27).
+
+    Establishes an attribute-key baseline from the first ``learn_pages``
+    pages delivered to :meth:`observe_page`, then on every later page
+    emits deduped drift records via :func:`_log_drift` under
+    ``model_name=f"FieldSetDriftObserver[{context}]"``:
+
+    * ``kind="field_appeared"`` — key present in any feature on the
+      current page and never seen on a baseline or prior page.
+    * ``kind="field_disappeared"`` — key in the observed set that is
+      present in *zero* features on the current page.
+
+    Pages that yield zero mapping-shaped features (e.g. an empty
+    response batch) are skipped entirely — no "disappeared" records are
+    emitted, to avoid false-positive storms on transient empty pages.
+
+    A feature is expected to be a mapping with an ``attributes`` sub-
+    mapping; non-mapping feature entries and features whose
+    ``attributes`` is missing or not a mapping are silently ignored for
+    key-extraction purposes. The observer never raises and never mutates
+    input; it is strictly observability.
+
+    ``learn_pages`` is page-granular by design (``observe_page`` is the
+    call-site surface). This is a deliberate simplification of the
+    plan-domain §4.3 "first N features" phrasing — a feature-count
+    threshold would require cross-page buffering with no observability
+    benefit.
+
+    Runtime wiring (invoking this observer from the pagination loop) is
+    deferred; phase-2b ships the class definition only.
+
+    Parameters
+    ----------
+    context
+        Operator-visible label for the layer/service/call-site being
+        observed. Rendered into the drift log's ``model_name`` so
+        records stay self-describing.
+    learn_pages
+        Number of leading pages treated as baseline (default ``1``).
+        Must be ``>= 1``.
+    """
+
+    def __init__(self, *, context: str, learn_pages: int = 1) -> None:
+        if learn_pages < 1:
+            raise ValueError("learn_pages must be >= 1")
+        self._context = context
+        self._model_name = f"FieldSetDriftObserver[{context}]"
+        self._learn_pages = learn_pages
+        self._pages_seen = 0
+        self._observed: set[str] = set()
+
+    @staticmethod
+    def _page_keys(features: Iterable[Mapping[str, Any]]) -> set[str]:
+        keys: set[str] = set()
+        for feature in features:
+            if not isinstance(feature, Mapping):
+                continue
+            attributes = feature.get("attributes")
+            if not isinstance(attributes, Mapping):
+                continue
+            for name in attributes.keys():
+                if isinstance(name, str):
+                    keys.add(name)
+        return keys
+
+    def observe_page(self, features: Iterable[Mapping[str, Any]]) -> None:
+        """Record the attribute-key set of a single feature page."""
+        page_keys = self._page_keys(features)
+        if not page_keys:
+            # Empty page (no mapping-shaped features or no attributes).
+            # Do not emit drift — an empty batch is not evidence that
+            # previously-seen fields have been removed from the schema.
+            return
+
+        if self._pages_seen < self._learn_pages:
+            self._observed.update(page_keys)
+            self._pages_seen += 1
+            return
+
+        for appeared in page_keys - self._observed:
+            _log_drift(
+                model_name=self._model_name,
+                path=appeared,
+                kind="field_appeared",
+                sample=appeared,
+                level=logging.INFO,
+            )
+        for disappeared in self._observed - page_keys:
+            _log_drift(
+                model_name=self._model_name,
+                path=disappeared,
+                kind="field_disappeared",
+                sample=disappeared,
+                level=logging.INFO,
+            )
+        self._observed.update(page_keys)
+        self._pages_seen += 1
+
+
 __all__ = [
+    "FieldSetDriftObserver",
     "PermissiveModel",
     "StrictModel",
     "_parse_response",
