@@ -198,6 +198,32 @@ service returns `exceededTransferLimit=true` on a query batch; they now raise
 
 Rationale: ties into the BL-06 exception taxonomy landed in phase-1c.
 
+### phase-1d
+
+**Additive — no breaking changes.** New public APIs in ``restgdf._logging``:
+
+- ``get_logger(suffix: str = "")`` returns a named ``restgdf.<suffix>`` logger with a
+  ``NullHandler`` attached. ``suffix`` must be ``""`` or one of ``LOGGER_SUFFIXES``
+  (``transport``, ``retry``, ``limiter``, ``concurrency``, ``auth``,
+  ``pagination``, ``normalization``, ``schema_drift``); unknown suffixes raise
+  ``ValueError``.
+- ``build_log_extra(*, service_root=None, layer_id=None, operation=None,
+  page_index=None, page_size=None, retry_attempt=None, retry_delay_s=None,
+  limiter_wait_s=None, timeout_category=None, result_count=None,
+  exception_type=None)`` returns a normalized ``extra=`` envelope for
+  ``logger.log(..., extra=...)`` call sites; ``None`` values are dropped. The
+  keyword list is the contract; unknown keys raise ``TypeError`` from the
+  signature. ``service_root`` is URL-scrubbed internally so ``?token=…`` values
+  never appear in logs.
+
+``get_drift_logger`` and the ``restgdf.schema_drift`` logger name remain unchanged;
+``get_drift_logger()`` is now a thin alias for ``get_logger("schema_drift")``.
+
+No behavior change for existing consumers. Call-site migration to the new
+factory (for ``restgdf.transport`` / ``retry`` / ``limiter`` / ``concurrency`` /
+``auth`` / ``pagination`` / ``normalization``) happens in later 3.0 phases
+(BL-11 / BL-15 / BL-27 / BL-31 / BL-32 / BL-33); phase-1d ships the surface only.
+
 ## Upcoming: restgdf 2.x to 3.x optional Geo extras
 
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This

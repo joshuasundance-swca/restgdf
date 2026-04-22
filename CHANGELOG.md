@@ -41,6 +41,10 @@ All notable changes to restgdf are documented here. This project follows
   `TokenSessionConfig.clock_skew_seconds` (default `30`) — explicit
   integer fields (`ge=0`) replacing the implicit semantics of the
   previous single `refresh_threshold_seconds` knob (BL-04).
+- `restgdf._logging`: add library-wide logger factory `get_logger(suffix)` (BL-25)
+  and standard `extra=` envelope helper `build_log_extra` (BL-26). Existing
+  `get_drift_logger` / `restgdf.schema_drift` contract unchanged. Call-site
+  migration to the new factory ships in later phases.
 
 ### Changed
 
