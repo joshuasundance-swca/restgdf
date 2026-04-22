@@ -34,18 +34,21 @@ restgdf 3.0. Everything below ships alongside the 2.0 surface on the
 same `main` until the version number is rolled.
 
 - **Streaming APIs.** `FeatureLayer.stream_features`,
-  `stream_feature_batches`, `stream_rows`, and `stream_gdf_chunks`
-  expose ArcGIS pagination as async generators with
-  `on_truncation="raise" | "ignore" | "split"` and
-  `order="request" | "completion"` knobs. `stream_rows` works on the
-  base install; `stream_gdf_chunks` needs `restgdf[geo]`.
+  `stream_feature_batches`, and `stream_rows` expose ArcGIS
+  pagination as async generators with
+  `on_truncation="raise" | "ignore" | "split"`,
+  `order="request" | "completion"`, and `max_concurrent_pages` knobs,
+  plus an R-61 `feature_layer.stream` parent span when telemetry is
+  enabled. `stream_gdf_chunks` is the legacy `GeoDataFrame`-per-page
+  shape (requires `restgdf[geo]`, completion-order only, no shared
+  knobs). `stream_rows` works on the base install.
 - **Pandas-first output.** `FeatureLayer.get_df()` returns a
   `pandas.DataFrame` without requiring the geo extra, sibling to
   `get_gdf()`.
 - **Output adapters.** `restgdf.adapters.{dict,stream,pandas,geopandas}`
   compose the streaming primitives into tabular shapes.
 - **Nested config.** `restgdf.Config` / `restgdf.get_config()` replace
-  the flat `Settings` object with seven frozen sub-configs and
+  the flat `Settings` object with eight frozen sub-configs and
   `RESTGDF_<CATEGORY>_<FIELD>` env vars. The old flat variables keep
   working with a `DeprecationWarning`.
 - **Error taxonomy.** `restgdf.errors` exposes `RestgdfError`,
@@ -230,7 +233,9 @@ async def main():
             if len(page_sizes) == 3:
                 break
 
-        # 3. GeoDataFrame chunks (requires `restgdf[geo]`)
+        # 3. GeoDataFrame chunks (requires `restgdf[geo]`; note that
+        # stream_gdf_chunks does *not* accept on_truncation / order /
+        # max_concurrent_pages — it yields in completion order).
         chunk_shapes = []
         async for chunk in oh.stream_gdf_chunks():
             chunk_shapes.append(chunk.shape)
@@ -245,7 +250,8 @@ first_feature, page_sizes, chunk_shapes = asyncio.run(main())
 
 See the [streaming recipe](https://restgdf.readthedocs.io/en/latest/recipes/streaming.html)
 for the full matrix of `on_truncation`, `order`, and
-`max_concurrent_pages` combinations.
+`max_concurrent_pages` combinations on the `iter_pages`-based shapes
+(`stream_features`, `stream_feature_batches`, `stream_rows`).
 
 ## GeoDataFrame workflows (`restgdf[geo]`)
 

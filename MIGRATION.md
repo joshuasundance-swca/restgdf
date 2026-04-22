@@ -19,15 +19,19 @@ guide follows at the bottom unchanged.
   OpenTelemetry respectively. All extras compose with each other and
   with `restgdf[geo]`.
 - **Streaming:** `FeatureLayer` grows three canonical streaming shapes
-  (`stream_features` / `stream_feature_batches` / `stream_gdf_chunks`)
-  on top of `iter_pages`, with `on_truncation` / `order` /
-  `max_concurrent_pages` knobs. `row_dict_generator` is deprecated in
-  favour of `stream_rows`. See `docs/recipes/streaming.md`.
+  on top of `iter_pages` (`stream_features` / `stream_feature_batches`
+  / `stream_rows`) with shared `on_truncation` / `order` /
+  `max_concurrent_pages` knobs and the R-61 `feature_layer.stream`
+  parent span. `stream_gdf_chunks` remains as the legacy
+  `GeoDataFrame`-per-page shape (requires `restgdf[geo]`, backed by
+  `chunk_generator`, completion-order only, does not take the shared
+  knobs). `row_dict_generator` is deprecated in favour of
+  `stream_rows`. See `docs/recipes/streaming.md`.
 - **Errors:** Single taxonomy rooted at `restgdf.errors.RestgdfError`
   (public). Every class additively multi-inherits the matching builtin
   (`ValueError`, `TimeoutError`, `PermissionError`, `IndexError`,
   `ModuleNotFoundError`) so existing `except` clauses keep catching.
-- **Configuration:** `restgdf.Config` (seven frozen sub-configs) now
+- **Configuration:** `restgdf.Config` (eight frozen sub-configs) now
   supersedes the flat `Settings`. Six `RESTGDF_*` env vars are aliased
   to structured `RESTGDF_<CATEGORY>_<FIELD>` names; the old names still
   work and emit `DeprecationWarning` on read.
@@ -80,7 +84,7 @@ guide follows at the bottom unchanged.
   `except RestgdfError:`.
 - The legacy `FIELDDOESNOTEXIST` sentinel (and its re-export through
   `restgdf.utils.getinfo`) is gone. Call sites must now
-  `except FieldDoesNotExistError` (new `ArcGISServiceError` subclass).
+  `except FieldDoesNotExistError` (new `SchemaValidationError` subclass).
 - Metadata/query/crawl helpers that decode a successful JSON body
   matching the ArcGIS `{"error": {...}}` envelope now raise
   `RestgdfResponseError` immediately with `raw` attached, instead of
@@ -118,9 +122,9 @@ RestgdfError
 │   └── OptionalDependencyError(ConfigurationError, ModuleNotFoundError)
 ├── RestgdfResponseError(RestgdfError, ValueError)
 │   ├── SchemaValidationError
-│   ├── ArcGISServiceError
-│   │   ├── PaginationError(ArcGISServiceError, IndexError)  # .batch_index, .page_size
 │   │   └── FieldDoesNotExistError
+│   ├── ArcGISServiceError
+│   │   └── PaginationError(ArcGISServiceError, IndexError)  # .batch_index, .page_size
 │   └── AuthenticationError(RestgdfResponseError, PermissionError)
 │       ├── InvalidCredentialsError        # HTTP 401
 │       ├── TokenExpiredError              # HTTP 498 after refresh
@@ -151,7 +155,8 @@ RestgdfError
 | `stream_gdf_chunks`       | `GeoDataFrame` per page             | `restgdf[geo]` |
 | `iter_pages` (low-level)  | raw page envelope                   | base           |
 
-Shared knobs on every method:
+`stream_features`, `stream_feature_batches`, `stream_rows`, and
+`iter_pages` share these knobs:
 
 - `on_truncation: "raise" | "ignore" | "split"` (default `"raise"`).
 - `order: "request" | "completion"` (default `"request"`; `"completion"`
@@ -159,6 +164,14 @@ Shared knobs on every method:
   writers).
 - `max_concurrent_pages: int | None` (default `None` — bounded only by
   `ConcurrencyConfig.max_concurrent_requests`).
+
+`stream_gdf_chunks` is backed by the legacy `chunk_generator` pipeline
+(pyogrio + ESRIJSON/GeoJSON parsing) rather than `iter_pages`. It
+yields chunks in completion order and does **not** accept
+`on_truncation`, `order`, or `max_concurrent_pages`, and it does not
+emit the R-61 `feature_layer.stream` parent span. For geo output with
+the full knob set, compose `stream_rows` or `stream_features` with
+your own geometry assembly, or use `get_gdf` / `get_gdf_list`.
 
 Each `GeoDataFrame` yielded by `stream_gdf_chunks` carries the layer's
 spatial reference in `gdf.attrs["spatial_reference"]` (R-65).
@@ -333,7 +346,7 @@ happen before the 3.0 final release.
 
 ### Configuration
 
-`restgdf.Config` composes seven frozen pydantic sub-configs:
+`restgdf.Config` composes eight frozen pydantic sub-configs:
 
 - `TransportConfig` — user-agent, default headers, verify-SSL.
 - `TimeoutConfig` — `total_s` (default `30.0`); replaces the flat
@@ -349,6 +362,10 @@ happen before the 3.0 final release.
   (default `30`), `referer`, credentials.
 - `TelemetryConfig` — `enabled` (default `False`), log level, span
   attributes.
+- `ResilienceConfig` — opt-in wrapper for the stamina-based retry
+  policy and per-service-root token-bucket rate limiter. Disabled by
+  default (`enabled=False`); toggle via `RESTGDF_RESILIENCE_ENABLED=1`
+  or an explicit `ResilienceConfig(enabled=True, ...)`.
 
 Use `restgdf.get_config()` to resolve the process-wide cached instance
 and `restgdf.reset_config_cache()` to clear it (tests, long-running

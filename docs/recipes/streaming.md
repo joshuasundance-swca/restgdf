@@ -1,9 +1,14 @@
 # Streaming features
 
-`restgdf` 3.0 exposes three canonical streaming shapes on every
-{class}`~restgdf.FeatureLayer`. All three are built on top of the same
-low-level `iter_pages` primitive, share the same knobs, and are safe to
-use on a base install unless explicitly noted.
+`restgdf` 3.0 exposes four streaming shapes on every
+{class}`~restgdf.FeatureLayer`. Three of them (`stream_features`,
+`stream_feature_batches`, `stream_rows`) are built on top of the same
+low-level `iter_pages` primitive and share its knobs. The fourth
+(`stream_gdf_chunks`) is the legacy `GeoDataFrame`-per-page shape
+backed by `chunk_generator`; it yields in completion order, does not
+accept `on_truncation` / `order` / `max_concurrent_pages`, and does
+not emit the R-61 `feature_layer.stream` parent span. All four are
+safe to use on a base install unless explicitly noted.
 
 | Method                              | Yields                             | Install |
 | ----------------------------------- | ---------------------------------- | ------- |
@@ -72,6 +77,17 @@ Install the extra first:
 pip install "restgdf[geo]"
 ```
 
+:::{note}
+`stream_gdf_chunks` is backed by the legacy `chunk_generator`
+pipeline, **not** `iter_pages`. It yields chunks in **completion
+order** and does not accept `on_truncation`, `order`, or
+`max_concurrent_pages`, and it does not emit the
+`feature_layer.stream` parent span. If you need those knobs on geo
+output, compose `stream_rows` or `stream_features` with your own
+geometry assembly, or call `get_gdf` / `get_gdf_list` for a single-
+shot batch.
+:::
+
 `stream_rows` is the row-shaped sibling of `stream_features`: each item
 is `{**feature["attributes"], "geometry": feature.get("geometry")}`. Use
 it to feed the pandas/geopandas adapters without loading an entire layer
@@ -81,7 +97,8 @@ into memory.
 
 ArcGIS responses can set `exceededTransferLimit=true` when the server
 could not pack every matching feature into a single page. The three
-`stream_*` methods and `iter_pages` accept `on_truncation`:
+`stream_features`, `stream_feature_batches`, `stream_rows`, and
+`iter_pages` accept `on_truncation`:
 
 ```python
 # Default: raise — safest for correctness-sensitive pipelines.
@@ -142,9 +159,11 @@ wins.
 
 ## What about `iter_pages`?
 
-`iter_pages` is the low-level generator every `stream_*` composes on
-top of. Reach for it when you need the full response envelope
-(`exceededTransferLimit`, pagination tokens, or server-side warnings):
+`iter_pages` is the low-level generator that the three
+`iter_pages`-based shapes (`stream_features`, `stream_feature_batches`,
+`stream_rows`) compose on top of. Reach for it when you need the full
+response envelope (`exceededTransferLimit`, pagination tokens, or
+server-side warnings):
 
 ```python
 async for page in layer.iter_pages(on_truncation="ignore"):
