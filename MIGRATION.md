@@ -811,3 +811,33 @@ Remove the filter once all imports are updated.
 `str(creds.password)` returns `"**********"`, not the password. If some
 library expects a plain `str`, unwrap explicitly with
 `creds.password.get_secret_value()`.
+
+### phase-3a
+
+- **Resilience extra (BL-31).** New optional extra `pip install
+  restgdf[resilience]` adds stamina + aiolimiter. The
+  `restgdf.resilience.ResilientSession` adapter wraps any
+  `AsyncHTTPSession` with stamina-based retry (429/5xx awareness,
+  configurable max-attempts) and per-service-root token-bucket rate
+  limiting. Controlled by `restgdf.ResilienceConfig` (a new peer
+  sub-config on `Config.resilience`). Disabled by default; opt-in via
+  `RESTGDF_RESILIENCE_ENABLED=1` or by constructing `ResilienceConfig(enabled=True)`.
+  When disabled, `ResilientSession` is a zero-overhead pass-through.
+- **Error-attribute population (BL-36).** `RestgdfResponseError`,
+  `TransportError`, `RestgdfTimeoutError`, and `RateLimitError` now
+  accept optional `url`, `status_code`, `request_id`, and `timeout_kind`
+  keyword arguments. All default to `None`, so existing call sites are
+  unaffected. The resilience retry wrapper populates these attributes
+  automatically.
+- **Retry-After parsing (Q-A12).** `RateLimitError.retry_after` is now
+  populated from the server's `Retry-After` header (integer-seconds or
+  RFC 7231 HTTP-date) when the resilience retry wrapper raises a 429.
+- **429-aware token bucket (BL-52).** Per-service-root rate limiting via
+  `LimiterRegistry` (backed by `aiolimiter.AsyncLimiter`) and separate
+  `CooldownRegistry` for 429 back-off. The `_service_root()` helper
+  truncates the URL at `FeatureServer`/`MapServer`/`ImageServer`/
+  `SceneServer` to derive a per-endpoint rate-limit key. Cooldown is
+  separate from the token bucket — 429 back-off does NOT drain tokens.
+- **Tracing recipe (BL-33).** New `docs/recipes/tracing.md` documents
+  structured observability, error-attribute inspection, and OpenTelemetry
+  integration with the resilience extra.

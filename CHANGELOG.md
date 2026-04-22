@@ -7,6 +7,37 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Added
 
+- `restgdf.ResilienceConfig` — frozen pydantic sub-config controlling the
+  optional stamina-based retry wrapper and per-service-root token-bucket
+  rate limiter. Disabled by default; opt-in via
+  `RESTGDF_RESILIENCE_ENABLED=1` or constructing explicitly. Fields:
+  `enabled`, `rate_per_service_root_per_second`,
+  `respect_retry_after_max_s`, `fallback_retry_after_seconds`, `backend`.
+  Exposed via `restgdf.Config.resilience` and in top-level `__all__` (BL-31).
+- `restgdf.resilience.ResilientSession` — retry + rate-limit adapter
+  implementing the `AsyncHTTPSession` protocol. Stamina-based retry with
+  429/5xx awareness. Pure pass-through when `ResilienceConfig.enabled=False`.
+  Requires the `resilience` extra: `pip install restgdf[resilience]` (BL-31).
+- `[project.optional-dependencies] resilience` extra in pyproject.toml:
+  `stamina>=24.2`, `aiolimiter>=1.1` (BL-31).
+- Error-attribute population (BL-36): `RestgdfResponseError` now carries
+  optional `url`, `status_code`, and `request_id` attributes (kw-only,
+  default ``None``). `TransportError` gains `url` and `status_code`.
+  `RestgdfTimeoutError` gains `timeout_kind` (``"total"``, ``"connect"``,
+  or ``"read"``). `RateLimitError` gains `url` and `status_code` alongside
+  existing `retry_after`. All new attrs are backward-compatible — existing
+  call sites that omit them get ``None`` defaults.
+- `_parse_retry_after(value)` helper in `restgdf.resilience._errors`
+  parses integer-seconds and RFC 7231 HTTP-date ``Retry-After`` header
+  values into ``float | None`` (Q-A12).
+- Per-service-root token-bucket rate limiting via ``LimiterRegistry`` and
+  429-cooldown via ``CooldownRegistry`` in ``restgdf.resilience._limiter``.
+  ``_service_root(url)`` derives the rate-limit key by truncating at the
+  first ``FeatureServer``/``MapServer``/``ImageServer``/``SceneServer``
+  path segment (BL-52).
+- ``docs/recipes/tracing.md`` — recipe for structured observability,
+  error-attribute inspection, and OpenTelemetry integration with the
+  resilience extra (BL-33).
 - `restgdf.Config` — frozen pydantic 2.x aggregate of seven frozen
   sub-configs (`TransportConfig`, `TimeoutConfig`, `RetryConfig`,
   `LimiterConfig`, `ConcurrencyConfig`, `AuthConfig`, `TelemetryConfig`)

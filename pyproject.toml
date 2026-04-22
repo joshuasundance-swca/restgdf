@@ -74,6 +74,11 @@ geo = [
     "pyogrio",
 ]
 
+resilience = [
+    "stamina>=24.2",
+    "aiolimiter>=1.1",
+]
+
 dev = [
     "bumpver",
     "coverage",

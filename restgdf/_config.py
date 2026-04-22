@@ -157,6 +157,23 @@ class TelemetryConfig(BaseModel):
         return upper
 
 
+class ResilienceConfig(BaseModel):
+    """Resilience adapter configuration (BL-31).
+
+    Controls the optional stamina-based retry wrapper and per-service-root
+    token-bucket rate limiter. Disabled by default; callers opt in via
+    ``RESTGDF_RESILIENCE_ENABLED=1`` or by constructing explicitly.
+    """
+
+    model_config = _FROZEN
+
+    enabled: bool = False
+    rate_per_service_root_per_second: float | None = Field(default=None, gt=0)
+    respect_retry_after_max_s: float = Field(default=60.0, gt=0)
+    fallback_retry_after_seconds: float = Field(default=5.0, gt=0)
+    backend: str = "stamina"
+
+
 _Caster = Callable[[str], Any]
 
 
@@ -190,6 +207,23 @@ _NEW_ENV_SPEC: tuple[tuple[str, str, _Caster], ...] = (
     ("RESTGDF_TELEMETRY_ENABLED", "telemetry.enabled", _parse_bool),
     ("RESTGDF_TELEMETRY_SERVICE_NAME", "telemetry.service_name", str),
     ("RESTGDF_TELEMETRY_LOG_LEVEL", "telemetry.log_level", str),
+    ("RESTGDF_RESILIENCE_ENABLED", "resilience.enabled", _parse_bool),
+    (
+        "RESTGDF_RESILIENCE_RATE_PER_SERVICE_ROOT_PER_SECOND",
+        "resilience.rate_per_service_root_per_second",
+        float,
+    ),
+    (
+        "RESTGDF_RESILIENCE_RESPECT_RETRY_AFTER_MAX_S",
+        "resilience.respect_retry_after_max_s",
+        float,
+    ),
+    (
+        "RESTGDF_RESILIENCE_FALLBACK_RETRY_AFTER_SECONDS",
+        "resilience.fallback_retry_after_seconds",
+        float,
+    ),
+    ("RESTGDF_RESILIENCE_BACKEND", "resilience.backend", str),
 )
 
 
@@ -244,6 +278,7 @@ class Config(BaseModel):
     concurrency: ConcurrencyConfig = Field(default_factory=ConcurrencyConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
+    resilience: ResilienceConfig = Field(default_factory=ResilienceConfig)
 
     @classmethod
     def from_env(
@@ -285,6 +320,7 @@ class Config(BaseModel):
             "concurrency": {},
             "auth": {},
             "telemetry": {},
+            "resilience": {},
         }
 
         def _assign(dotted: str, value: Any) -> None:
@@ -335,6 +371,7 @@ class Config(BaseModel):
                 concurrency=ConcurrencyConfig(**sub_kwargs["concurrency"]),
                 auth=AuthConfig(**sub_kwargs["auth"]),
                 telemetry=TelemetryConfig(**sub_kwargs["telemetry"]),
+                resilience=ResilienceConfig(**sub_kwargs["resilience"]),
             )
         except ValidationError as exc:
             raise RestgdfResponseError(
@@ -374,6 +411,7 @@ __all__ = [
     "ConcurrencyConfig",
     "Config",
     "LimiterConfig",
+    "ResilienceConfig",
     "RetryConfig",
     "TelemetryConfig",
     "TimeoutConfig",
