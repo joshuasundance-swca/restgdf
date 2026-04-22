@@ -34,6 +34,9 @@ jobs:
     - name: "Run coverage"
       run: |
         coverage run
+        # Print the report to the workflow log so threshold failures are
+        # visible; the same invocation also writes the markdown copy.
+        coverage report -m --precision=2
         coverage report -m --format=markdown > COVERAGE.md
         coverage html
         coverage json -o coverage.json
