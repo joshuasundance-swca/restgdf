@@ -406,6 +406,16 @@ Point your coding agent or RAG pipeline at `llms-full.txt` for the entire
 reference in a single file, or at `llms.txt` for a concise table of
 contents.
 
+## For contributors
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) — local setup, PR checklist,
+  commit conventions, gate suite.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — module layout, exception
+  taxonomy, logger hierarchy, config precedence, session ownership,
+  streaming shapes, extras matrix.
+- [CHANGELOG.md](CHANGELOG.md) — every user-visible change.
+- [MIGRATION.md](MIGRATION.md) — upgrading from 2.x to 3.x.
+
 # Uses
 
 - [restgdf_api](https://github.com/joshuasundance-swca/restgdf_api)
