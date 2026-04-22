@@ -276,17 +276,20 @@ async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
     GeoDataFrame = require_geodataframe("GeoDataFrame concatenation")
     concat = require_pandas_concat("GeoDataFrame concatenation")
     crs = gdfs[0].crs
+    saved_attrs = dict(gdfs[0].attrs)
 
     if not all(gdf.crs == crs for gdf in gdfs):
         raise ValueError("gdfs must have the same crs")
 
-    return reduce(
+    result = reduce(
         lambda gdf1, gdf2: GeoDataFrame(
             concat([gdf1, gdf2], ignore_index=True),
             crs=gdf1.crs,
         ),
         gdfs,
     )
+    result.attrs.update(saved_attrs)
+    return result
 
 
 async def gdf_by_concat(
