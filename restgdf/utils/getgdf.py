@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from aiohttp import ClientSession
 
+from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._logging import get_logger
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse, LayerMetadata
@@ -37,7 +38,6 @@ from restgdf.utils._optional import (
     require_pyogrio_list_drivers,
 )
 from restgdf.utils._pagination import build_pagination_plan
-from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list
 
 if TYPE_CHECKING:
@@ -66,7 +66,7 @@ def _get_supported_drivers() -> dict[str, str]:
 
 async def _get_sub_features(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     query_data: dict,
     *,
     batch_index: int | None = None,
@@ -95,7 +95,7 @@ async def _get_sub_features(
 
 async def _feature_batch_generator(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> AsyncGenerator[list[dict[str, Any]]]:
     """Yield raw ArcGIS feature batches without requiring pandas/geopandas."""
@@ -146,7 +146,7 @@ def chunk_values(values: list[int], chunk_size: int) -> list[list[int]]:
 
 async def get_query_data_batches(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> list[dict]:
     """Build query payloads for each request needed to read a layer."""
@@ -206,7 +206,7 @@ async def get_query_data_batches(
 
 async def get_sub_gdf(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     query_data: dict,
     **kwargs,
 ) -> GeoDataFrame:
@@ -234,7 +234,7 @@ async def get_sub_gdf(
 
 async def get_gdf_list(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> list[GeoDataFrame]:
     _require_geo_query_support("get_gdf_list()")
@@ -249,7 +249,7 @@ async def get_gdf_list(
 
 async def chunk_generator(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> AsyncGenerator[GeoDataFrame]:
     """
@@ -283,7 +283,7 @@ async def chunk_generator(
 
 async def row_dict_generator(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> AsyncGenerator[dict]:
     """Yield row-shaped dicts from an ArcGIS FeatureLayer.
@@ -320,7 +320,7 @@ async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
 
 async def gdf_by_concat(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> GeoDataFrame:
     _require_geo_query_support("gdf_by_concat()")
@@ -395,7 +395,7 @@ def _extract_raw_spatial_reference(
 async def _apply_spatial_reference_attr(
     gdf: GeoDataFrame,
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> None:
     """Stamp ``gdf.attrs['spatial_reference']`` from layer metadata (R-65).
@@ -420,7 +420,7 @@ async def _apply_spatial_reference_attr(
 
 async def _fetch_page_dict(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     query_data: Mapping[str, Any],
     **kwargs,
 ) -> dict[str, Any]:
@@ -439,7 +439,7 @@ async def _fetch_page_dict(
 
 async def _resolve_page(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     page: dict[str, Any],
     query_data: Mapping[str, Any],
     *,
@@ -532,7 +532,7 @@ async def _resolve_page(
 
 async def _iter_pages_raw(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     *,
     order: Literal["request", "completion"] = "request",
     max_concurrent_pages: int | None = None,

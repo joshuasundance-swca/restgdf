@@ -72,7 +72,7 @@ async def test_get_df_returns_pandas_dataframe_when_pandas_available() -> None:
 
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Test/FeatureServer/0",
-        session=session,
+        session=session,  # type: ignore[arg-type]
     )
 
     with patch(
@@ -119,7 +119,7 @@ async def test_get_df_raises_optional_dependency_error_without_pandas(
     )
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Test/FeatureServer/0",
-        session=session,
+        session=session,  # type: ignore[arg-type]
     )
 
     with patch(

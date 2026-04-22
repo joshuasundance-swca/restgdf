@@ -8,15 +8,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from aiohttp import ClientSession
 
+from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._client.request import build_conservative_query_data
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse
 from restgdf.utils._deprecations import deprecated_alias
 from restgdf.utils._http import default_headers, default_timeout
 from restgdf.utils._optional import require_pandas_dataframe
-from restgdf.utils.token import ArcGISTokenSession
 
 if TYPE_CHECKING:
     from pandas import DataFrame
@@ -50,7 +49,7 @@ def _sorted_scalar_values(values: list[Any | None]) -> list[Any | None]:
 async def get_unique_values(
     url: str,
     fields: tuple | str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     sortby: str | None = None,
     **kwargs,
 ) -> list | DataFrame:
@@ -108,7 +107,7 @@ async def get_unique_values(
 async def get_value_counts(
     url: str,
     field: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> DataFrame:
     """Get the value counts for a field."""
@@ -146,7 +145,7 @@ async def get_value_counts(
 async def nested_count(
     url: str,
     fields,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> DataFrame:
     """Get the nested value counts for a field."""
