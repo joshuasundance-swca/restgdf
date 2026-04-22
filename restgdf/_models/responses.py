@@ -14,6 +14,7 @@ alongside these in this module.
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
+from datetime import datetime, timezone
 from typing import Any
 
 from pydantic import AliasChoices, Field, PrivateAttr, field_validator
@@ -259,6 +260,7 @@ class FeaturesResponse(PermissiveModel):
         alias="objectIdFieldName",
         validation_alias=AliasChoices("objectIdFieldName", "object_id_field_name"),
     )
+    fields: list[FieldSpec] | None = None
     features: list[dict[str, Any]] = Field(default_factory=list)
     exceeded_transfer_limit: bool | None = Field(
         default=None,
@@ -376,11 +378,46 @@ def _infer_geometry_type(geometry: Mapping[str, Any]) -> str | None:
     return None
 
 
+_ESRI_DATE_TYPES: frozenset[str] = frozenset({
+    "esriFieldTypeDate",
+    "esriFieldTypeTimeOnly",
+    "esriFieldTypeDateOnly",
+})
+
+
+def _epoch_ms_to_iso(value: Any) -> str | None:
+    """Convert an ArcGIS epoch-millisecond value to ISO-8601 UTC string.
+
+    Returns ``None`` when ``value`` is ``None`` or not convertible.
+    No ``datetime.utcfromtimestamp`` (deprecated).
+    """
+    if value is None:
+        return None
+    try:
+        epoch_s = int(value) / 1000.0
+        return datetime.fromtimestamp(epoch_s, tz=timezone.utc).isoformat()
+    except (ValueError, TypeError, OverflowError, OSError):
+        return None
+
+
+def _resolve_date_fields(
+    fields: list[FieldSpec] | None,
+) -> frozenset[str]:
+    """Return the set of field names whose type is an Esri date type."""
+    if not fields:
+        return frozenset()
+    return frozenset(
+        f.name for f in fields
+        if f.name is not None and f.type in _ESRI_DATE_TYPES
+    )
+
+
 def iter_normalized_features(
     response: FeaturesResponse,
     *,
     oid_field: str | None = None,
     sr: int | str | dict[str, Any] | None = None,
+    normalize_dates: bool = False,
 ) -> Iterator[NormalizedFeature]:
     """Yield :class:`NormalizedFeature` for each entry in ``response.features``.
 
@@ -400,6 +437,10 @@ def iter_normalized_features(
         Fallback spatial reference applied when the raw geometry does
         not already carry one. A server-provided ``spatialReference``
         always wins.
+    normalize_dates
+        When ``True``, epoch-millisecond values in ``esriFieldTypeDate``
+        fields are converted to ISO-8601 UTC strings. Defaults to
+        ``False`` to preserve the raw wire shape.
 
     Normalization is best-effort: missing geometry, missing attributes,
     and non-mapping feature entries are silently tolerated (iteration
@@ -409,6 +450,9 @@ def iter_normalized_features(
     iterator; they land with BL-29 when metadata context is available.
     """
     resolved_oid_field = oid_field or response.object_id_field_name
+    date_fields: frozenset[str] = (
+        _resolve_date_fields(response.fields) if normalize_dates else frozenset()
+    )
     for raw in response.features:
         if not isinstance(raw, Mapping):
             continue
@@ -418,6 +462,14 @@ def iter_normalized_features(
             attributes = dict(attributes_raw)
         else:
             attributes = {}
+
+        # BL-54: convert epoch-ms date fields to ISO-8601 UTC strings
+        if date_fields and attributes:
+            for fname in date_fields:
+                if fname in attributes and attributes[fname] is not None:
+                    converted = _epoch_ms_to_iso(attributes[fname])
+                    if converted is not None:
+                        attributes[fname] = converted
 
         geometry_raw = raw.get("geometry")
         geometry: NormalizedGeometry | None
