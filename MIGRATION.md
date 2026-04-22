@@ -17,6 +17,15 @@
   signature changed — leaf helpers (`get_metadata`, `get_feature_count`)
   remain semaphore-free; the cap is enforced at the three internal
   `asyncio.gather` sites only.
+- **Single-flight token refresh (BL-03).** `ArcGISTokenSession` now
+  guards `update_token_if_needed` with a lazily-initialized per-instance
+  `asyncio.Lock` and double-checks `token_needs_update()` inside the
+  lock. Under N concurrent request paths that would previously have
+  each issued their own `/generateToken` POST, restgdf now issues
+  exactly one. Happy-path behavior (no contention, no expiry) is
+  unchanged. The lock field is excluded from `repr`/`compare` and
+  defaults to `None` so instances constructed outside a running event
+  loop (e.g. at import time) do not emit a deprecation warning.
 
 # Upcoming: restgdf 2.x to 3.x optional Geo extras
 

@@ -11,6 +11,7 @@ the import path is unchanged but the constructor is keyword-only.
 
 from __future__ import annotations
 
+import asyncio
 import datetime
 from dataclasses import dataclass, field
 
@@ -63,6 +64,12 @@ class ArcGISTokenSession:
     expires: int | float | None = None
     verify_ssl: bool = True
     config: TokenSessionConfig | None = field(default=None, repr=False)
+    _refresh_lock: asyncio.Lock | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        compare=False,
+    )
 
     def __post_init__(self) -> None:
         if self.credentials is not None:
@@ -151,9 +158,24 @@ class ArcGISTokenSession:
         return (expires_dt - now_dt).total_seconds() < self.token_refresh_threshold
 
     async def update_token_if_needed(self) -> None:
-        """Ensure the token is valid and refresh if necessary."""
-        if self.token_needs_update():
-            await self.update_token()
+        """Ensure the token is valid and refresh if necessary.
+
+        BL-03: concurrent callers racing on an expired token collapse onto
+        a single ``/generateToken`` POST via a lazily-initialized
+        per-instance :class:`asyncio.Lock` with a double-checked
+        :meth:`token_needs_update` inside the lock (plan.md §3c R-18,
+        kickoff phase-1a §10.4). The lock is created here — not in
+        ``__post_init__`` — so instances constructed outside a running
+        event loop (e.g. at import time or inside a sync test) never
+        trigger ``DeprecationWarning: There is no current event loop``.
+        """
+        if not self.token_needs_update():
+            return
+        if self._refresh_lock is None:
+            self._refresh_lock = asyncio.Lock()
+        async with self._refresh_lock:
+            if self.token_needs_update():
+                await self.update_token()
 
     async def get(
         self,

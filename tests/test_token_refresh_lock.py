@@ -114,8 +114,10 @@ def test_refresh_lock_is_lazy_and_excluded_from_repr_copy_pickle():
     # Field must exist and default to None pre-use (lazy init).
     assert hasattr(s, "_refresh_lock")
     assert s._refresh_lock is None
-    # Lock should not appear in repr.
-    assert "_refresh_lock" not in repr(s)
+    # Lock should not appear in repr (search for the field-assignment
+    # fragment so the test module's own path doesn't trigger a false
+    # positive on bare "_refresh_lock" substring).
+    assert "_refresh_lock=" not in repr(s)
     # copy.copy must not fail (locks aren't copyable, so they must be
     # excluded / None at construction).
     copy.copy(s)

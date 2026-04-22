@@ -24,6 +24,11 @@ All notable changes to restgdf are documented here. This project follows
   `asyncio.gather` fan-out through `bounded_gather` with a per-call
   `asyncio.BoundedSemaphore`. Saturation semantics = wait (no new
   exception) (BL-01).
+- `ArcGISTokenSession.update_token_if_needed` now collapses concurrent
+  refresh attempts onto a single `/generateToken` POST via a
+  lazily-initialized per-instance `asyncio.Lock` with a double-checked
+  `token_needs_update()` inside the lock. The new `_refresh_lock` field
+  is `init=False`, `repr=False`, `compare=False` (BL-03).
 
 ## [2.0.0] - 2026-04-20
 
