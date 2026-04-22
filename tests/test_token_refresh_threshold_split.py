@@ -118,3 +118,85 @@ def test_explicit_new_fields_coexist_without_alias_warning():
         )
     assert cfg.refresh_leeway_seconds == 120
     assert cfg.clock_skew_seconds == 15
+
+
+# ---------------------------------------------------------------------------
+# Runtime wiring: ArcGISTokenSession must actually honor the split fields.
+# ---------------------------------------------------------------------------
+
+
+def _expires_in_seconds(seconds: float) -> float:
+    import datetime as _dt
+
+    return (
+        _dt.datetime.now(_dt.timezone.utc) + _dt.timedelta(seconds=seconds)
+    ).timestamp()
+
+
+def test_ts_config_split_fields_drive_refresh_threshold():
+    """Explicit split fields must be honored by ``token_needs_update``."""
+    from restgdf.utils.token import ArcGISTokenSession
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", DeprecationWarning)
+        cfg = TokenSessionConfig(
+            token_url="https://example.com/generateToken",
+            credentials=_creds(),
+            refresh_leeway_seconds=90,
+            clock_skew_seconds=30,
+        )
+
+    class _Sess:
+        pass
+
+    ts = ArcGISTokenSession(
+        session=_Sess(),  # type: ignore[arg-type]
+        credentials=_creds(),
+        config=cfg,
+        token="existing",
+        expires=_expires_in_seconds(80),
+    )
+    # Effective threshold must be 120s (90 + 30), so 80s-to-expiry needs refresh.
+    assert ts.token_needs_update() is True
+
+
+def test_dataclass_token_refresh_threshold_drives_runtime():
+    """``AGTS(token_refresh_threshold=120)`` must drive refresh at 80s left."""
+    from restgdf.utils.token import ArcGISTokenSession
+
+    class _Sess:
+        pass
+
+    ts = ArcGISTokenSession(
+        session=_Sess(),  # type: ignore[arg-type]
+        credentials=_creds(),
+        token_refresh_threshold=120,
+        token="existing",
+        expires=_expires_in_seconds(80),
+    )
+    assert ts.token_needs_update() is True
+
+
+def test_ts_config_legacy_alias_drives_runtime():
+    """Legacy ``refresh_threshold_seconds=120`` alias path must still wire."""
+    from restgdf.utils.token import ArcGISTokenSession
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+        cfg = TokenSessionConfig(
+            token_url="https://example.com/generateToken",
+            credentials=_creds(),
+            refresh_threshold_seconds=120,
+        )
+
+    class _Sess:
+        pass
+
+    ts = ArcGISTokenSession(
+        session=_Sess(),  # type: ignore[arg-type]
+        credentials=_creds(),
+        config=cfg,
+        token="existing",
+        expires=_expires_in_seconds(80),
+    )
+    assert ts.token_needs_update() is True
