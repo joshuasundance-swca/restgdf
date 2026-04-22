@@ -811,3 +811,15 @@ Remove the filter once all imports are updated.
 `str(creds.password)` returns `"**********"`, not the password. If some
 library expects a plain `str`, unwrap explicitly with
 `creds.password.get_secret_value()`.
+
+### phase-3a
+
+- **Resilience extra (BL-31).** New optional extra `pip install
+  restgdf[resilience]` adds stamina + aiolimiter. The
+  `restgdf.resilience.ResilientSession` adapter wraps any
+  `AsyncHTTPSession` with stamina-based retry (429/5xx awareness,
+  configurable max-attempts) and per-service-root token-bucket rate
+  limiting. Controlled by `restgdf.ResilienceConfig` (a new peer
+  sub-config on `Config.resilience`). Disabled by default; opt-in via
+  `RESTGDF_RESILIENCE_ENABLED=1` or by constructing `ResilienceConfig(enabled=True)`.
+  When disabled, `ResilientSession` is a zero-overhead pass-through.

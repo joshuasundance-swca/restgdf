@@ -7,6 +7,19 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Added
 
+- `restgdf.ResilienceConfig` — frozen pydantic sub-config controlling the
+  optional stamina-based retry wrapper and per-service-root token-bucket
+  rate limiter. Disabled by default; opt-in via
+  `RESTGDF_RESILIENCE_ENABLED=1` or constructing explicitly. Fields:
+  `enabled`, `rate_per_service_root_per_second`,
+  `respect_retry_after_max_s`, `fallback_retry_after_seconds`, `backend`.
+  Exposed via `restgdf.Config.resilience` and in top-level `__all__` (BL-31).
+- `restgdf.resilience.ResilientSession` — retry + rate-limit adapter
+  implementing the `AsyncHTTPSession` protocol. Stamina-based retry with
+  429/5xx awareness. Pure pass-through when `ResilienceConfig.enabled=False`.
+  Requires the `resilience` extra: `pip install restgdf[resilience]` (BL-31).
+- `[project.optional-dependencies] resilience` extra in pyproject.toml:
+  `stamina>=24.2`, `aiolimiter>=1.1` (BL-31).
 - `restgdf.Config` — frozen pydantic 2.x aggregate of seven frozen
   sub-configs (`TransportConfig`, `TimeoutConfig`, `RetryConfig`,
   `LimiterConfig`, `ConcurrencyConfig`, `AuthConfig`, `TelemetryConfig`)

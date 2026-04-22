@@ -40,6 +40,7 @@ _EXPECTED_CLASSES = {
     "OutputConversionError",
     "PaginationError",
     "RateLimitError",
+    "ResilienceConfig",
     "RestgdfError",
     "RestgdfResponseError",
     "RestgdfTimeoutError",

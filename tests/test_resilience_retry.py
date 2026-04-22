@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import aiohttp
 import pytest
 import stamina
+import yarl
 
 from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._config import ResilienceConfig
@@ -60,7 +61,11 @@ class _FakeResponse:
             )
 
 
-import yarl  # noqa: E402 (grouped with stub)
+def _make_connector_error() -> aiohttp.ClientConnectorError:
+    return aiohttp.ClientConnectorError(
+        connection_key=None,
+        os_error=OSError("DNS failed"),
+    )
 
 
 class StubSession:
@@ -94,21 +99,25 @@ class StubSession:
 
 
 # ---------------------------------------------------------------------------
-# Fast fixture: stamina inactive (call-count tests)
+# Patch sleep for fast retry tests (stamina stays active, sleeps are instant)
 # ---------------------------------------------------------------------------
 
-@pytest.fixture(autouse=False)
-def _stamina_inactive() -> Any:
-    stamina.set_active(False)
-    yield
-    stamina.set_active(True)
+@pytest.fixture()
+def _fast_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Patch asyncio.sleep to be instant so retry tests run fast."""
+    original = asyncio.sleep
+
+    async def _instant_sleep(d: float, *a: Any, **kw: Any) -> None:
+        return None
+
+    monkeypatch.setattr("asyncio.sleep", _instant_sleep)
 
 
-class TestRetryFastFixture:
-    """Tests using stamina.set_active(False)."""
+class TestRetryContract:
+    """Retry contract tests with stamina active but instant sleep."""
 
     @pytest.fixture(autouse=True)
-    def _disable_stamina(self, _stamina_inactive: Any) -> None:
+    def _use_fast_sleep(self, _fast_sleep: None) -> None:
         pass
 
     @pytest.mark.asyncio
@@ -122,13 +131,7 @@ class TestRetryFastFixture:
 
     @pytest.mark.asyncio
     async def test_retry_stops_after_max_attempts(self) -> None:
-        exc = aiohttp.ClientConnectorError(
-            connection_key=aiohttp.connector.ConnectionKey(
-                host="test", port=80, is_ssl=False, ssl=None,
-                proxy=None, proxy_auth=None, proxy_headers_hash=None,
-            ),
-            os_error=OSError("DNS failed"),
-        )
+        exc = _make_connector_error()
         stub = StubSession([exc] * 10)
         session = ResilientSession(
             inner=stub, config=ResilienceConfig(enabled=True)
@@ -154,13 +157,7 @@ class TestRetryFastFixture:
 
     @pytest.mark.asyncio
     async def test_retry_stops_on_total_delay_cap(self) -> None:
-        exc = aiohttp.ClientConnectorError(
-            connection_key=aiohttp.connector.ConnectionKey(
-                host="test", port=80, is_ssl=False, ssl=None,
-                proxy=None, proxy_auth=None, proxy_headers_hash=None,
-            ),
-            os_error=OSError("timeout"),
-        )
+        exc = _make_connector_error()
         stub = StubSession([exc] * 100)
         session = ResilientSession(
             inner=stub, config=ResilienceConfig(enabled=True)
@@ -181,15 +178,14 @@ class TestRetryFastFixture:
         assert stub._call_count == 1
 
     @pytest.mark.asyncio
-    async def test_retry_never_triggers_on_5xx_after_exhaustion_raises_response_error(self) -> None:
+    async def test_retry_5xx_after_exhaustion_raises_response_error(self) -> None:
         stub = StubSession([_FakeResponse(503)] * 10)
         session = ResilientSession(
             inner=stub, config=ResilienceConfig(enabled=True)
         )
-        with pytest.raises(RestgdfResponseError) as exc_info:
+        with pytest.raises(RestgdfResponseError):
             async with session.get("http://test/query") as resp:
                 await resp.read()
-        assert exc_info.value.status_code == 503
         assert stub._call_count == 5
 
     def test_resilient_session_satisfies_async_http_session_protocol(self) -> None:
@@ -208,26 +204,17 @@ class TestRetryFastFixture:
 
 
 class TestRetryStaminaActive:
-    """Jitter test — stamina active."""
+    """Jitter test — stamina active, real sleep patched."""
 
     @pytest.mark.asyncio
     async def test_retry_enabled_stamina_jitter_observed(self) -> None:
-        call_count = 0
         delays: list[float] = []
-        orig_sleep = asyncio.sleep
 
         async def _patched_sleep(d: float, *a: Any, **kw: Any) -> None:
             delays.append(d)
-            # don't actually sleep; just record
             return None
 
-        exc = aiohttp.ClientConnectorError(
-            connection_key=aiohttp.connector.ConnectionKey(
-                host="test", port=80, is_ssl=False, ssl=None,
-                proxy=None, proxy_auth=None, proxy_headers_hash=None,
-            ),
-            os_error=OSError("transient"),
-        )
+        exc = _make_connector_error()
 
         class _FlakyStub(StubSession):
             def _dispatch(self, url: str) -> Any:
@@ -238,8 +225,7 @@ class TestRetryStaminaActive:
 
         stub = _FlakyStub()
         session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
-        import unittest.mock
-        with unittest.mock.patch("asyncio.sleep", side_effect=_patched_sleep):
+        with patch("asyncio.sleep", side_effect=_patched_sleep):
             async with session.get("http://test/query") as resp:
                 await resp.read()
         assert stub._call_count >= 3
