@@ -30,6 +30,11 @@ All notable changes to restgdf are documented here. This project follows
 - `_parse_retry_after(value)` helper in `restgdf.resilience._errors`
   parses integer-seconds and RFC 7231 HTTP-date ``Retry-After`` header
   values into ``float | None`` (Q-A12).
+- Per-service-root token-bucket rate limiting via ``LimiterRegistry`` and
+  429-cooldown via ``CooldownRegistry`` in ``restgdf.resilience._limiter``.
+  ``_service_root(url)`` derives the rate-limit key by truncating at the
+  first ``FeatureServer``/``MapServer``/``ImageServer``/``SceneServer``
+  path segment (BL-52).
 - `restgdf.Config` — frozen pydantic 2.x aggregate of seven frozen
   sub-configs (`TransportConfig`, `TimeoutConfig`, `RetryConfig`,
   `LimiterConfig`, `ConcurrencyConfig`, `AuthConfig`, `TelemetryConfig`)

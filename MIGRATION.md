@@ -832,3 +832,9 @@ library expects a plain `str`, unwrap explicitly with
 - **Retry-After parsing (Q-A12).** `RateLimitError.retry_after` is now
   populated from the server's `Retry-After` header (integer-seconds or
   RFC 7231 HTTP-date) when the resilience retry wrapper raises a 429.
+- **429-aware token bucket (BL-52).** Per-service-root rate limiting via
+  `LimiterRegistry` (backed by `aiolimiter.AsyncLimiter`) and separate
+  `CooldownRegistry` for 429 back-off. The `_service_root()` helper
+  truncates the URL at `FeatureServer`/`MapServer`/`ImageServer`/
+  `SceneServer` to derive a per-endpoint rate-limit key. Cooldown is
+  separate from the token bucket — 429 back-off does NOT drain tokens.
