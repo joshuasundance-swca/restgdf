@@ -23,7 +23,11 @@ from restgdf._models.credentials import AGOLUserPass, TokenSessionConfig
 from restgdf._models.responses import TokenResponse
 from restgdf.utils._http import default_timeout
 
-from restgdf.errors import AuthenticationError
+from restgdf.errors import (
+    AuthNotAttachedError,
+    AuthenticationError,
+    TokenExpiredError,
+)
 
 __all__ = [
     "AGOLUserPass",
@@ -220,6 +224,72 @@ class ArcGISTokenSession:
             if self.token_needs_update():
                 await self.update_token()
 
+    async def _call_with_auth_retry(
+        self,
+        method: str,
+        url: str,
+        payload_key: str,
+        payload: dict | None,
+        headers: dict | None,
+        **kwargs,
+    ) -> aiohttp.ClientResponse:
+        """Execute *method* with reactive 498/499 handling.
+
+        * **498** (Invalid Token): single-flight refresh via ``_refresh_lock``,
+          then retry exactly once. If the retry also returns 498,
+          raise :class:`TokenExpiredError`.
+        * **499** (Token Required): raise :class:`AuthNotAttachedError`
+          immediately — no refresh, no retry.
+        """
+        await self.update_token_if_needed()
+
+        has_explicit_token = "token" in (payload or {})
+        request_headers = (
+            self.update_headers(headers) if not has_explicit_token
+            else dict(headers or {})
+        )
+        request_payload = self.update_dict(payload)
+        kwargs.setdefault("timeout", default_timeout())
+
+        session_method = getattr(self.session, method)
+        resp = await session_method(
+            url, **{payload_key: request_payload}, headers=request_headers, **kwargs,
+        )
+
+        status = getattr(resp, "status", 200)
+
+        if status == 499:
+            raise AuthNotAttachedError(
+                f"499 Token Required from {url}",
+                context="response_status",
+            )
+
+        if status == 498:
+            # Single-flight refresh, then retry exactly once.
+            if self._refresh_lock is None:
+                self._refresh_lock = asyncio.Lock()
+            async with self._refresh_lock:
+                await self.update_token()
+
+            # Rebuild auth for the retry.
+            request_headers = (
+                self.update_headers(headers) if not has_explicit_token
+                else dict(headers or {})
+            )
+            request_payload = self.update_dict(payload)
+            resp = await session_method(
+                url, **{payload_key: request_payload},
+                headers=request_headers, **kwargs,
+            )
+            if getattr(resp, "status", 200) == 498:
+                raise TokenExpiredError(
+                    f"Token still invalid after refresh for {url}",
+                    context="retry_exhausted",
+                    attempt=2,
+                )
+
+        return resp
+
     async def get(
         self,
         url: str,
@@ -228,21 +298,8 @@ class ArcGISTokenSession:
         **kwargs,
     ) -> aiohttp.ClientResponse:
         """Make a GET request to the specified URL with the token."""
-        await self.update_token_if_needed()
-        request_headers = (
-            self.update_headers(
-                headers,
-            )
-            if "token" not in (params or {})
-            else dict(headers or {})
-        )
-        request_params = self.update_dict(params)
-        kwargs.setdefault("timeout", default_timeout())
-        return await self.session.get(
-            url,
-            params=request_params,
-            headers=request_headers,
-            **kwargs,
+        return await self._call_with_auth_retry(
+            "get", url, "params", params, headers, **kwargs,
         )
 
     async def post(
@@ -253,21 +310,8 @@ class ArcGISTokenSession:
         **kwargs,
     ) -> aiohttp.ClientResponse:
         """Make a POST request to the specified URL with the token."""
-        await self.update_token_if_needed()
-        request_headers = (
-            self.update_headers(
-                headers,
-            )
-            if "token" not in (data or {})
-            else dict(headers or {})
-        )
-        request_data = self.update_dict(data)
-        kwargs.setdefault("timeout", default_timeout())
-        return await self.session.post(
-            url,
-            data=request_data,
-            headers=request_headers,
-            **kwargs,
+        return await self._call_with_auth_retry(
+            "post", url, "data", data, headers, **kwargs,
         )
 
     async def __aenter__(self) -> ArcGISTokenSession:
