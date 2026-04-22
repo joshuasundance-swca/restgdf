@@ -161,13 +161,17 @@ class ArcGISTokenSession:
                 context="token_request_payload",
                 raw=None,
             )
-        return {
+        referer = getattr(self.config, "referer", None) if self.config else None
+        payload = {
             "f": "json",
-            "client": "requestip",
+            "client": "referer" if referer else "requestip",
             "username": self.credentials.username,
             # Unwrap SecretStr only at the HTTP-POST boundary.
             "password": self.credentials.password.get_secret_value(),
         }
+        if referer:
+            payload["referer"] = referer
+        return payload
 
     @property
     def expires_at(self) -> datetime.datetime | None:
