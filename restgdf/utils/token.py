@@ -73,22 +73,41 @@ class ArcGISTokenSession:
     )
 
     def __post_init__(self) -> None:
+        if self.config is not None:
+            # Caller supplied a validated config -- respect it and sync the
+            # legacy dataclass mirror so ``token_needs_update`` stays in step.
+            self.credentials = self.config.credentials
+            self.token_url = self.config.token_url
+            self.verify_ssl = self.config.verify_ssl
+            self.token_refresh_threshold = (
+                self.config.refresh_leeway_seconds + self.config.clock_skew_seconds
+            )
+            return
         if self.credentials is not None:
-            # Validate config via TokenSessionConfig. Pass the already-
-            # validated credentials instance directly; pydantic accepts
-            # a model instance for a model-typed field without re-
-            # validating the SecretStr password.
+            # Derive the split fields from the dataclass-level
+            # ``token_refresh_threshold`` using the same rule the
+            # ``TokenSessionConfig`` model-validator applies for the
+            # deprecated alias (skew capped at 30, leeway gets the
+            # remainder). Passing the new fields directly avoids firing
+            # the alias ``DeprecationWarning`` on every construction.
+            total = int(self.token_refresh_threshold)
+            skew = min(30, total) if total >= 0 else 0
+            leeway = max(0, total - skew)
             self.config = _parse_response(
                 TokenSessionConfig,
                 {
                     "token_url": self.token_url,
                     "credentials": self.credentials,
-                    "refresh_threshold_seconds": self.token_refresh_threshold,
+                    "refresh_leeway_seconds": leeway,
+                    "clock_skew_seconds": skew,
                     "verify_ssl": self.verify_ssl,
                 },
                 context="ArcGISTokenSession",
             )
             self.credentials = self.config.credentials
+            self.token_refresh_threshold = (
+                self.config.refresh_leeway_seconds + self.config.clock_skew_seconds
+            )
 
     @property
     def token_request_payload(self) -> dict:
