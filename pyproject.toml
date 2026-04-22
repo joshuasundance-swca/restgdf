@@ -85,8 +85,11 @@ telemetry = [
 ]
 
 dev = [
+    "aioresponses",
     "bumpver",
     "coverage",
+    "hypothesis",
+    "opentelemetry-sdk",
     "pre-commit",
     "pytest",
     "pytest-asyncio",
