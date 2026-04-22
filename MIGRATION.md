@@ -28,6 +28,43 @@ Call-sites in `restgdf.utils.getgdf` are intentionally unmigrated in
 phase-1b and will move in a follow-up slice. Callers that already pass
 an explicit `timeout=` kwarg continue to override the default.
 
+### Token refresh threshold split into leeway + clock skew (BL-04)
+
+`TokenSessionConfig` now exposes two explicit fields:
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `refresh_leeway_seconds` | `int` (≥ 0) | `60` | How far in advance of the token expiry to refresh. |
+| `clock_skew_seconds` | `int` (≥ 0) | `30` | Extra padding for client/server clock drift. |
+
+`refresh_threshold_seconds` is retained as a **deprecation alias**:
+
+- **Reads** emit `DeprecationWarning` and return
+  `refresh_leeway_seconds + clock_skew_seconds`.
+- **Writes** via the constructor kwarg emit `DeprecationWarning`, then
+  split the supplied total: `clock_skew_seconds = min(30, total)` and
+  `refresh_leeway_seconds = total - clock_skew_seconds`. Negative
+  totals are rejected by the `ge=0` field constraint.
+
+Migrate existing configuration eagerly:
+
+```python
+# before
+TokenSessionConfig(token_url=..., credentials=..., refresh_threshold_seconds=90)
+
+# after
+TokenSessionConfig(
+    token_url=...,
+    credentials=...,
+    refresh_leeway_seconds=60,
+    clock_skew_seconds=30,
+)
+```
+
+The alias will be removed in a future release (no earlier than 3.0
+final) — coordinate with the `restgdf._compat` migration planned for
+phase-1c (BL-56) which will centralise the warning helper.
+
 ---
 
 # Upcoming: restgdf 2.x to 3.x optional Geo extras

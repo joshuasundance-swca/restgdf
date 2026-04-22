@@ -7,6 +7,8 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Added
 
+### Added
+
 - `restgdf.utils._concurrency.bounded_gather(*aws, semaphore)` — internal
   helper that caps concurrent fan-out via an `asyncio.BoundedSemaphore`
   while preserving `asyncio.gather` result ordering and
@@ -35,6 +37,10 @@ All notable changes to restgdf are documented here. This project follows
   point before raising `AttributeError`, letting future phases register
   removed top-level names with a `DeprecationWarning` + migration
   message. Mapping is empty in this release (BL-57).
+- `TokenSessionConfig.refresh_leeway_seconds` (default `60`) and
+  `TokenSessionConfig.clock_skew_seconds` (default `30`) — explicit
+  integer fields (`ge=0`) replacing the implicit semantics of the
+  previous single `refresh_threshold_seconds` knob (BL-04).
 
 ### Changed
 
@@ -67,6 +73,16 @@ All notable changes to restgdf are documented here. This project follows
   `aiohttp.ClientTimeout` sized from `Settings.timeout_seconds` (float,
   default `30.0`, overridable via `RESTGDF_TIMEOUT_SECONDS`). Callers
   that already pass `timeout=` keep precedence (BL-02).
+
+### Deprecated
+
+- `TokenSessionConfig.refresh_threshold_seconds` is now a read/write
+  alias that emits `DeprecationWarning`. Reads return
+  `refresh_leeway_seconds + clock_skew_seconds`; constructor writes
+  split the supplied total into
+  `clock_skew_seconds = min(30, total)` and
+  `refresh_leeway_seconds = total - clock_skew_seconds`. Migrate to the
+  explicit field pair before a future release drops the alias.
 
 ## [2.0.0] - 2026-04-20
 
