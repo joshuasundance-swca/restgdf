@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-import os
 
 import pytest
 from pydantic import ValidationError
 
 from restgdf._config import Config, ResilienceConfig, get_config, reset_config_cache
-from restgdf.errors import ConfigurationError
+from restgdf.errors import ConfigurationError, RestgdfResponseError
 
 
 class TestResilienceConfig:
@@ -29,9 +28,7 @@ class TestResilienceConfig:
         assert a.resilience is not b.resilience
         assert a.resilience == b.resilience
 
-    def test_resilience_env_var_enables(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_resilience_env_var_enables(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("RESTGDF_RESILIENCE_ENABLED", "1")
         reset_config_cache()
         try:
@@ -41,7 +38,8 @@ class TestResilienceConfig:
             reset_config_cache()
 
     def test_resilience_rate_env_var_coerces_float(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("RESTGDF_RESILIENCE_RATE_PER_SERVICE_ROOT_PER_SECOND", "5.5")
         reset_config_cache()
@@ -52,7 +50,8 @@ class TestResilienceConfig:
             reset_config_cache()
 
     def test_resilience_rate_env_var_rejects_nonpositive(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("RESTGDF_RESILIENCE_RATE_PER_SERVICE_ROOT_PER_SECOND", "0")
         reset_config_cache()

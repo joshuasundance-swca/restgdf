@@ -2,21 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import aiohttp
 import pytest
-import stamina
 import yarl
 
 from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._config import ResilienceConfig
 from restgdf.errors import (
-    RateLimitError,
     RestgdfResponseError,
-    RestgdfTimeoutError,
     TransportError,
 )
 from restgdf.resilience import ResilientSession
@@ -26,10 +22,16 @@ from restgdf.resilience import ResilientSession
 # Stubs
 # ---------------------------------------------------------------------------
 
+
 class _FakeResponse:
     """Minimal response stub."""
 
-    def __init__(self, status: int, headers: dict[str, str] | None = None, body: bytes = b"ok") -> None:
+    def __init__(
+        self,
+        status: int,
+        headers: dict[str, str] | None = None,
+        body: bytes = b"ok",
+    ) -> None:
         self.status = status
         self.headers = headers or {}
         self._body = body
@@ -40,7 +42,7 @@ class _FakeResponse:
     async def json(self, **kw: Any) -> dict[str, Any]:
         return {"status": "ok"}
 
-    async def __aenter__(self) -> "_FakeResponse":
+    async def __aenter__(self) -> _FakeResponse:
         return self
 
     async def __aexit__(self, *args: Any) -> None:
@@ -71,7 +73,10 @@ def _make_connector_error() -> aiohttp.ClientConnectorError:
 class StubSession:
     """Minimal AsyncHTTPSession stub with call counting."""
 
-    def __init__(self, responses: list[_FakeResponse | Exception] | None = None) -> None:
+    def __init__(
+        self,
+        responses: list[_FakeResponse | Exception] | None = None,
+    ) -> None:
         self._responses = list(responses or [])
         self._call_count = 0
         self._closed = False
@@ -102,10 +107,10 @@ class StubSession:
 # Patch sleep for fast retry tests (stamina stays active, sleeps are instant)
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture()
 def _fast_sleep(monkeypatch: pytest.MonkeyPatch) -> None:
     """Patch asyncio.sleep to be instant so retry tests run fast."""
-    original = asyncio.sleep
 
     async def _instant_sleep(d: float, *a: Any, **kw: Any) -> None:
         return None
@@ -133,9 +138,7 @@ class TestRetryContract:
     async def test_retry_stops_after_max_attempts(self) -> None:
         exc = _make_connector_error()
         stub = StubSession([exc] * 10)
-        session = ResilientSession(
-            inner=stub, config=ResilienceConfig(enabled=True)
-        )
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
         with pytest.raises(TransportError):
             async with session.get("http://test/query") as resp:
                 await resp.read()
@@ -143,25 +146,23 @@ class TestRetryContract:
 
     @pytest.mark.asyncio
     async def test_retry_triggers_on_429_and_503(self) -> None:
-        stub = StubSession([
-            _FakeResponse(429, {"Retry-After": "0"}),
-            _FakeResponse(503),
-            _FakeResponse(200),
-        ])
-        session = ResilientSession(
-            inner=stub, config=ResilienceConfig(enabled=True)
+        stub = StubSession(
+            [
+                _FakeResponse(429, {"Retry-After": "0"}),
+                _FakeResponse(503),
+                _FakeResponse(200),
+            ],
         )
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
         async with session.get("http://test/query") as resp:
-            body = await resp.read()
+            await resp.read()
         assert stub._call_count == 3
 
     @pytest.mark.asyncio
     async def test_retry_stops_on_total_delay_cap(self) -> None:
         exc = _make_connector_error()
         stub = StubSession([exc] * 100)
-        session = ResilientSession(
-            inner=stub, config=ResilienceConfig(enabled=True)
-        )
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
         with pytest.raises(TransportError):
             async with session.get("http://test/query") as resp:
                 await resp.read()
@@ -169,9 +170,7 @@ class TestRetryContract:
     @pytest.mark.asyncio
     async def test_retry_never_triggers_on_4xx_non_429(self) -> None:
         stub = StubSession([_FakeResponse(400)])
-        session = ResilientSession(
-            inner=stub, config=ResilienceConfig(enabled=True)
-        )
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
         with pytest.raises(RestgdfResponseError):
             async with session.get("http://test/query") as resp:
                 await resp.read()
@@ -180,9 +179,7 @@ class TestRetryContract:
     @pytest.mark.asyncio
     async def test_retry_5xx_after_exhaustion_raises_response_error(self) -> None:
         stub = StubSession([_FakeResponse(503)] * 10)
-        session = ResilientSession(
-            inner=stub, config=ResilienceConfig(enabled=True)
-        )
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
         with pytest.raises(RestgdfResponseError):
             async with session.get("http://test/query") as resp:
                 await resp.read()

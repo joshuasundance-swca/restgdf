@@ -8,7 +8,6 @@ helpers ``_epoch_ms_to_iso``, ``_resolve_date_fields``,
 
 from __future__ import annotations
 
-import pytest
 
 from restgdf._models.responses import (
     FeaturesResponse,
@@ -41,13 +40,10 @@ class TestEpochMsToIso:
         assert _epoch_ms_to_iso("not-a-number") is None
 
     def test_negative_epoch(self):
-        # Before 1970 — may return None on Windows (OSError on negative ts)
-        import sys
-        result = _epoch_ms_to_iso(-86400000)
-        if sys.platform == "win32":
-            assert result is None or result == "1969-12-31T00:00:00+00:00"
-        else:
-            assert result == "1969-12-31T00:00:00+00:00"
+        # Before 1970 — must be stable across platforms (RD gate-2 round-2 HIGH #2).
+        # _epoch_ms_to_iso uses an epoch anchor + timedelta so Windows does not
+        # regress on negative epoch-ms values the way ``fromtimestamp`` does.
+        assert _epoch_ms_to_iso(-86400000) == "1969-12-31T00:00:00+00:00"
 
     def test_float_epoch(self):
         result = _epoch_ms_to_iso(1705320000000.0)
@@ -56,6 +52,12 @@ class TestEpochMsToIso:
     def test_string_numeric(self):
         result = _epoch_ms_to_iso("1705320000000")
         assert result == "2024-01-15T12:00:00+00:00"
+
+    def test_overflow_returns_none(self):
+        # ``timedelta(milliseconds=...)`` overflows for extreme values;
+        # _epoch_ms_to_iso swallows OverflowError and returns None
+        # instead of propagating a platform-specific failure.
+        assert _epoch_ms_to_iso(10**30) is None
 
 
 class TestResolveDateFields:

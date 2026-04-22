@@ -20,8 +20,6 @@ from restgdf.utils._optional import require_pandas_dataframe
 if TYPE_CHECKING:
     from pandas import DataFrame
 
-FIELDDOESNOTEXIST: IndexError = IndexError("Field does not exist")
-
 LayerMetadataLike = Union[LayerMetadata, Mapping[str, Any]]
 
 

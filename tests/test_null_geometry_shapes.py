@@ -14,7 +14,6 @@ emptiness or sentinel NaN values.
 
 from __future__ import annotations
 
-import pytest
 
 from restgdf._models.responses import (
     FeaturesResponse,
@@ -54,4 +53,15 @@ class TestNullGeometryShapes:
 
     def test_shape5_x_nan_y_nan(self):
         geo = _single_feature_geometry({"x": "NaN", "y": "NaN"})
-        assert geo is None, f"{{x:'NaN', y:'NaN'}} should yield None geometry, got {geo}"
+        assert (
+            geo is None
+        ), f"{{x:'NaN', y:'NaN'}} should yield None geometry, got {geo}"
+
+    def test_shape6_spatial_reference_only(self):
+        """A dict with ONLY SR / has-z / has-m keys and no coordinate keys
+        is a degenerate null geometry (``coord_keys`` empty at
+        ``_is_null_geometry``). Covers the short-circuit branch."""
+        geo = _single_feature_geometry(
+            {"spatialReference": {"wkid": 4326}, "hasZ": False},
+        )
+        assert geo is None, f"SR-only dict should yield None geometry, got {geo}"

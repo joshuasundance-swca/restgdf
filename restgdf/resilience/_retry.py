@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import contextlib
 from typing import Any
 
 import aiohttp
 import stamina
-import yarl
 
 from restgdf._config import ResilienceConfig
 from restgdf._logging import get_logger
@@ -77,7 +75,7 @@ class ResilientSession:
             return self._inner.post(url, **kwargs)
         return self._retried_request("post", url, **kwargs)
 
-    def _retried_request(self, method: str, url: str, **kwargs: Any) -> _ResponseCtx:
+    def _retried_request(self, method: str, url: str, **kwargs: Any) -> Any:
         return _RetriedCtx(self, method, url, kwargs)
 
     def _reset_limiters(self) -> None:
@@ -92,7 +90,13 @@ class _RetriedCtx:
 
     __slots__ = ("_session", "_method", "_url", "_kwargs", "_resp")
 
-    def __init__(self, session: ResilientSession, method: str, url: str, kwargs: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        session: ResilientSession,
+        method: str,
+        url: str,
+        kwargs: dict[str, Any],
+    ) -> None:
         self._session = session
         self._method = method
         self._url = url
@@ -170,7 +174,11 @@ async def _do_retried_request(
             # Set cooldown on 429 so the next retry waits
             if resp.status == 429 and cooldown is not None:
                 ra = _parse_retry_after(headers.get("Retry-After", ""))
-                cd = min(ra, config.respect_retry_after_max_s) if ra else config.fallback_retry_after_seconds
+                cd = (
+                    min(ra, config.respect_retry_after_max_s)
+                    if ra
+                    else config.fallback_retry_after_seconds
+                )
                 cooldown.set_cooldown(svc_root, cd)
             raise _RetryableHTTPError(resp.status, headers)
 

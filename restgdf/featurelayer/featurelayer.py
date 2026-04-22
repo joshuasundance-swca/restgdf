@@ -244,7 +244,10 @@ class FeatureLayer:
                 not isinstance(fields, str)
                 and any(field not in self.fields for field in fields)
             ):
-                raise FieldDoesNotExistError(fields, context="FeatureLayer.get_unique_values")
+                raise FieldDoesNotExistError(
+                    fields,
+                    context="FeatureLayer.get_unique_values",
+                )
             self.uniquevalues[cache_key] = await get_unique_values(
                 self.url,
                 fields,
@@ -258,7 +261,10 @@ class FeatureLayer:
         """Get the value counts for a field."""
         if field not in self.valuecounts:
             if field not in self.fields:
-                raise FieldDoesNotExistError(field, context="FeatureLayer.get_value_counts")
+                raise FieldDoesNotExistError(
+                    field,
+                    context="FeatureLayer.get_value_counts",
+                )
             self.valuecounts[field] = await get_value_counts(
                 self.url,
                 field,
@@ -271,7 +277,10 @@ class FeatureLayer:
         """Get the nested value counts for a field."""
         if fields not in self.nestedcount:
             if any(field not in self.fields for field in fields):
-                raise FieldDoesNotExistError(fields, context="FeatureLayer.get_nested_count")
+                raise FieldDoesNotExistError(
+                    fields,
+                    context="FeatureLayer.get_nested_count",
+                )
             self.nestedcount[fields] = await nested_count(
                 self.url,
                 fields,

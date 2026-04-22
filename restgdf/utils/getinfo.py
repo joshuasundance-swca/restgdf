@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ServerTimeoutError
 from pydantic import BaseModel
 
 from restgdf.utils._http import (
@@ -93,9 +93,20 @@ async def _feature_count_with_timeout(
     """Fetch feature count with inline bounded retry.
 
     BL-51: inline-only retry (R-59 — no restgdf.resilience imports).
-    On repeated ``asyncio.TimeoutError`` or server 5xx, retries up to
-    ``max_attempts`` with exponential back-off. When all attempts are
-    exhausted on a timeout, wraps as :class:`RestgdfTimeoutError`.
+    Retries ONLY on timeout failures:
+
+    * :class:`asyncio.TimeoutError` / :class:`TimeoutError`
+    * :class:`aiohttp.ServerTimeoutError`
+
+    Connection-level failures (disconnect, reset, DNS failure),
+    deterministic failures (:class:`~restgdf.errors.RestgdfResponseError`,
+    schema mismatches), and any other exception fail fast on the first
+    attempt without retry so real bugs and transport errors are not
+    masked or misreported as timeouts.
+
+    When all retry attempts are exhausted, wraps the last timeout as
+    :class:`~restgdf.errors.RestgdfTimeoutError` with the original
+    exception preserved as ``__cause__``.
     """
     kwargs: dict[str, Any] = {}
     if token is not None:
@@ -107,14 +118,14 @@ async def _feature_count_with_timeout(
     for attempt in range(max_attempts):
         try:
             return await get_feature_count(url, session, **kwargs)
-        except (asyncio.TimeoutError, TimeoutError) as exc:
+        except (
+            asyncio.TimeoutError,
+            TimeoutError,
+            ServerTimeoutError,
+        ) as exc:
             last_exc = exc
-        except Exception as exc:
-            last_exc = exc
-            if attempt >= max_attempts - 1:
-                raise
         if attempt < max_attempts - 1:
-            await asyncio.sleep(0.1 * (2 ** attempt))
+            await asyncio.sleep(0.1 * (2**attempt))
 
     raise RestgdfTimeoutError(
         f"feature_count for {url} timed out after {max_attempts} attempts",

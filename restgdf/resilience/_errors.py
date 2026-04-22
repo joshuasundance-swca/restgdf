@@ -12,7 +12,7 @@ def _parse_retry_after(value: str) -> float | None:
     Supports both integer-seconds (``"120"``) and RFC 7231 HTTP-date
     formats (``"Sun, 06 Nov 1994 08:49:37 GMT"``).
 
-    Returns ``None`` for empty, unparseable, or negative values.
+    Returns ``None`` for empty, unparsable, or negative values.
     """
     if not value or not value.strip():
         return None

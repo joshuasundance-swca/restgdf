@@ -8,11 +8,9 @@ After BL-23 green:
 
 from __future__ import annotations
 
-import pytest
 
 from restgdf._models.responses import (
     FeaturesResponse,
-    NormalizedGeometry,
     iter_normalized_features,
 )
 
@@ -31,7 +29,12 @@ def _features_response(features, sr=None):
 def test_sr_wkid_normalizes_to_int():
     """{"wkid": 4326} → spatial_reference == 4326."""
     response = _features_response(
-        [{"attributes": {"OBJECTID": 1}, "geometry": {"x": 1, "y": 2, "spatialReference": {"wkid": 4326}}}],
+        [
+            {
+                "attributes": {"OBJECTID": 1},
+                "geometry": {"x": 1, "y": 2, "spatialReference": {"wkid": 4326}},
+            },
+        ],
     )
     feat = next(iter_normalized_features(response))
     assert feat.geometry is not None
@@ -42,7 +45,16 @@ def test_sr_wkid_normalizes_to_int():
 def test_sr_latestwkid_preferred_over_wkid():
     """latestWkid takes precedence when both are present."""
     response = _features_response(
-        [{"attributes": {}, "geometry": {"x": 1, "y": 2, "spatialReference": {"wkid": 102100, "latestWkid": 3857}}}],
+        [
+            {
+                "attributes": {},
+                "geometry": {
+                    "x": 1,
+                    "y": 2,
+                    "spatialReference": {"wkid": 102100, "latestWkid": 3857},
+                },
+            },
+        ],
     )
     feat = next(iter_normalized_features(response))
     assert feat.geometry is not None
@@ -69,7 +81,16 @@ def test_sr_kwarg_fills_as_int():
 def test_raw_sr_preserved_as_private_attr():
     """_raw_spatial_reference preserves the original dict."""
     response = _features_response(
-        [{"attributes": {}, "geometry": {"x": 1, "y": 2, "spatialReference": {"wkid": 4326, "latestWkid": 4326}}}],
+        [
+            {
+                "attributes": {},
+                "geometry": {
+                    "x": 1,
+                    "y": 2,
+                    "spatialReference": {"wkid": 4326, "latestWkid": 4326},
+                },
+            },
+        ],
     )
     feat = next(iter_normalized_features(response))
     assert feat.geometry is not None

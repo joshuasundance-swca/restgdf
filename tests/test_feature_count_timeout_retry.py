@@ -54,7 +54,10 @@ async def test_feature_count_chains_timeout_cause():
                     None,
                     max_attempts=2,
                 )
-            assert isinstance(exc_info.value.__cause__, (asyncio.TimeoutError, TimeoutError))
+            assert isinstance(
+                exc_info.value.__cause__,
+                (asyncio.TimeoutError, TimeoutError),
+            )
 
 
 @pytest.mark.asyncio
@@ -93,3 +96,64 @@ async def test_feature_count_single_success_no_retry():
                 max_attempts=3,
             )
             assert result == 100
+
+
+@pytest.mark.asyncio
+async def test_feature_count_does_not_retry_on_non_transient():
+    """Deterministic failure (e.g., 4xx / RestgdfResponseError) must NOT
+    be retried — it propagates on the first attempt (BL-51 narrowing)."""
+    from restgdf.errors import RestgdfResponseError
+
+    call_count = {"n": 0}
+    original = _feature_count_with_timeout.__globals__["get_feature_count"]
+
+    async def _raising(*args, **kwargs):
+        call_count["n"] += 1
+        raise RestgdfResponseError("HTTP 400 Bad Request")
+
+    _feature_count_with_timeout.__globals__["get_feature_count"] = _raising
+    try:
+        async with ClientSession() as session:
+            with pytest.raises(RestgdfResponseError):
+                await _feature_count_with_timeout(
+                    session,
+                    "https://svc.example/0",
+                    None,
+                    max_attempts=3,
+                )
+        assert (
+            call_count["n"] == 1
+        ), f"non-transient error retried {call_count['n']} times; expected 1"
+    finally:
+        _feature_count_with_timeout.__globals__["get_feature_count"] = original
+
+
+@pytest.mark.asyncio
+async def test_feature_count_does_not_retry_on_connection_error():
+    """BL-51 narrowing (RD gate-2 round-2 HIGH #1): ClientConnectionError
+    is NOT a timeout and must NOT be retried, so real transport failures
+    are not silently misreported as ``RestgdfTimeoutError``."""
+    from aiohttp import ClientConnectionError
+
+    call_count = {"n": 0}
+    original = _feature_count_with_timeout.__globals__["get_feature_count"]
+
+    async def _raising(*args, **kwargs):
+        call_count["n"] += 1
+        raise ClientConnectionError("connection reset")
+
+    _feature_count_with_timeout.__globals__["get_feature_count"] = _raising
+    try:
+        async with ClientSession() as session:
+            with pytest.raises(ClientConnectionError):
+                await _feature_count_with_timeout(
+                    session,
+                    "https://svc.example/0",
+                    None,
+                    max_attempts=3,
+                )
+        assert (
+            call_count["n"] == 1
+        ), f"ClientConnectionError retried {call_count['n']} times; expected 1"
+    finally:
+        _feature_count_with_timeout.__globals__["get_feature_count"] = original

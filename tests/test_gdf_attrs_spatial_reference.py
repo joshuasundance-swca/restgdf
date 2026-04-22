@@ -34,9 +34,9 @@ async def test_concat_gdfs_propagates_spatial_reference_attr():
 
     result = await concat_gdfs([gdf1, gdf2])
 
-    assert "spatial_reference" in result.attrs, (
-        "concat_gdfs must propagate .attrs['spatial_reference']"
-    )
+    assert (
+        "spatial_reference" in result.attrs
+    ), "concat_gdfs must propagate .attrs['spatial_reference']"
     assert result.attrs["spatial_reference"] == raw_sr
 
 

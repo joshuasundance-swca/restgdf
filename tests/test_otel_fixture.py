@@ -17,7 +17,9 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 from tests._telemetry_utils import memory_exporter  # noqa: F401  (re-export)
 
 
-def test_otel_fixture_captures_spans(memory_exporter: InMemorySpanExporter):
+def test_otel_fixture_captures_spans(
+    memory_exporter: InMemorySpanExporter,  # noqa: F811
+):
     """Sanity test: fixture captures spans emitted during the test."""
     tracer = trace.get_tracer("test")
     with tracer.start_as_current_span("test-span"):

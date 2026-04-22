@@ -131,10 +131,13 @@ class FieldDoesNotExistError(SchemaValidationError):
 
     Attributes
     ----------
-    field_name : str | tuple[str, ...] | None
+    field_name : ``str | tuple[str, ...] | None``
         The field(s) that failed resolution.
-    context : str | None
-        Call-site identifier (e.g. ``"FeatureLayer.get_unique_values"``).
+    context : ``str``
+        Call-site identifier (e.g. ``"FeatureLayer.get_unique_values"``);
+        defaults to ``"FieldDoesNotExistError"`` when the caller passes
+        ``None``, matching the parent :class:`RestgdfResponseError`
+        contract where ``context`` is always a non-``None`` string.
     """
 
     def __init__(
@@ -145,11 +148,12 @@ class FieldDoesNotExistError(SchemaValidationError):
         message: str | None = None,
     ) -> None:
         self.field_name = field_name
-        self.context = context
         if message is None:
             if field_name is None:
                 message = (
-                    f"Field does not exist ({context})" if context else "Field does not exist"
+                    f"Field does not exist ({context})"
+                    if context
+                    else "Field does not exist"
                 )
             else:
                 message = f"Field does not exist: {field_name!r}"

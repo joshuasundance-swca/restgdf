@@ -14,7 +14,7 @@ alongside these in this module.
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from pydantic import AliasChoices, Field, PrivateAttr, field_validator
@@ -351,7 +351,19 @@ def _is_null_geometry(geo: Mapping[str, Any]) -> bool:
     """
     if not geo:
         return True
-    coord_keys = {k for k in geo if k not in {"spatialReference", "spatial_reference", "hasZ", "has_z", "hasM", "has_m"}}
+    coord_keys = {
+        k
+        for k in geo
+        if k
+        not in {
+            "spatialReference",
+            "spatial_reference",
+            "hasZ",
+            "has_z",
+            "hasM",
+            "has_m",
+        }
+    }
     if not coord_keys:
         return True
     for k in coord_keys:
@@ -378,25 +390,35 @@ def _infer_geometry_type(geometry: Mapping[str, Any]) -> str | None:
     return None
 
 
-_ESRI_DATE_TYPES: frozenset[str] = frozenset({
-    "esriFieldTypeDate",
-    "esriFieldTypeTimeOnly",
-    "esriFieldTypeDateOnly",
-})
+_ESRI_DATE_TYPES: frozenset[str] = frozenset(
+    {
+        "esriFieldTypeDate",
+        "esriFieldTypeTimeOnly",
+        "esriFieldTypeDateOnly",
+    },
+)
+
+
+_EPOCH_UTC = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
 def _epoch_ms_to_iso(value: Any) -> str | None:
     """Convert an ArcGIS epoch-millisecond value to ISO-8601 UTC string.
 
     Returns ``None`` when ``value`` is ``None`` or not convertible.
-    No ``datetime.utcfromtimestamp`` (deprecated).
+    Uses an epoch anchor plus :class:`~datetime.timedelta` so behaviour
+    is stable across platforms (``datetime.fromtimestamp`` raises
+    ``OSError`` for negative values on Windows).
     """
     if value is None:
         return None
     try:
-        epoch_s = int(value) / 1000.0
-        return datetime.fromtimestamp(epoch_s, tz=timezone.utc).isoformat()
-    except (ValueError, TypeError, OverflowError, OSError):
+        ms = int(value)
+    except (ValueError, TypeError):
+        return None
+    try:
+        return (_EPOCH_UTC + timedelta(milliseconds=ms)).isoformat()
+    except OverflowError:
         return None
 
 
@@ -407,8 +429,7 @@ def _resolve_date_fields(
     if not fields:
         return frozenset()
     return frozenset(
-        f.name for f in fields
-        if f.name is not None and f.type in _ESRI_DATE_TYPES
+        f.name for f in fields if f.name is not None and f.type in _ESRI_DATE_TYPES
     )
 
 

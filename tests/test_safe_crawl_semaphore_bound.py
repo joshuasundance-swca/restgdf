@@ -50,8 +50,7 @@ def _install_counting_fakes(monkeypatch, *, layer_count: int = 20):
                 }
             return {
                 "services": [
-                    {"name": f"Svc{i}", "type": "FeatureServer"}
-                    for i in range(3)
+                    {"name": f"Svc{i}", "type": "FeatureServer"} for i in range(3)
                 ],
                 "folders": [],
             }

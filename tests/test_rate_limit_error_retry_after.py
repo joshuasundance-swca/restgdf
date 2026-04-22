@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
-from restgdf.errors import RateLimitError
-
 
 class TestRateLimitErrorRetryAfter:
     """Q-A12: RateLimitError.retry_after population from _parse_retry_after."""
