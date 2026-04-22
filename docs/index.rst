@@ -144,6 +144,21 @@ Explore the docs
 
 .. toctree::
    :hidden:
+   :maxdepth: 2
+   :caption: Recipes
+
+   recipes/observability
+   recipes/streaming
+
+.. toctree::
+   :hidden:
+   :maxdepth: 1
+   :caption: Recipes
+
+   recipes/tracing
+
+.. toctree::
+   :hidden:
    :maxdepth: 1
    :caption: Project
 

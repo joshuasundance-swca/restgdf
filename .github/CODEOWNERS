@@ -1,0 +1,11 @@
+# restgdf CODEOWNERS — BL-60
+#
+# Solo-maintainer stub. Every path in this repository is owned by
+# @joshuasundance-swca; PRs automatically request review from the
+# maintainer. External contributors can be added here on a per-path
+# basis (for example `docs/ @some-reviewer`) without changing any
+# other infrastructure.
+#
+# Docs: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+*   @joshuasundance-swca

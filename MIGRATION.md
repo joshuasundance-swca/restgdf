@@ -1,50 +1,505 @@
-# Upcoming: restgdf 2.x to 3.x optional Geo extras
+# restgdf migration guide
 
-restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This
-new top section documents the next planned breaking change: GeoPandas-backed
-and pandas-backed workflows move behind the `restgdf[geo]` extra instead of
-coming along for the ride in a default install.
+## Unreleased migration notes
 
-A plain `pip install restgdf` will continue to cover the async REST client,
-typed pydantic models, raw-row iteration, directory crawling, and token/session
-helpers. Install `restgdf[geo]` when you want `geopandas`, `pandas`,
-`pyogrio`, or the GeoDataFrame/tabular helpers that depend on them.
+The 3.0 release reshapes install surface, error taxonomy, configuration,
+authentication, observability, and streaming on top of the typed
+pydantic models that landed in 2.0. Everything below is consolidated
+across the phase-1 through phase-4 work tracks — the preserved 1.x → 2.0
+guide follows at the bottom unchanged.
 
-## Why 3.x is making this split
+### Summary
 
-- **Keep the default install light.** Many users only need typed metadata,
-  count/object-id helpers, raw feature rows, crawl utilities, or token auth.
-- **Avoid heavy compiled dependencies when they are not needed.** CI jobs,
-  serverless deployments, and minimal containers should not need the geo stack
-  unless they actually materialize GeoDataFrames.
-- **Make dependency intent explicit.** Geo workflows stay fully supported, but
-  they become an opt-in install choice rather than an implicit one.
+- **Install surface:** `pip install restgdf` is now a light-core install
+  (typed metadata, raw rows, directory crawl, token/session helpers).
+  GeoPandas/pandas/pyogrio move behind `pip install "restgdf[geo]"`.
+  New optional extras `restgdf[resilience]` (stamina + aiolimiter) and
+  `restgdf[telemetry]` (opentelemetry-api + aiohttp client
+  instrumentation) opt callers into retry/rate-limiting and
+  OpenTelemetry respectively. All extras compose with each other and
+  with `restgdf[geo]`.
+- **Streaming:** `FeatureLayer` grows three canonical streaming shapes
+  on top of `iter_pages` (`stream_features` / `stream_feature_batches`
+  / `stream_rows`) with shared `on_truncation` / `order` /
+  `max_concurrent_pages` knobs and the R-61 `feature_layer.stream`
+  parent span. `stream_gdf_chunks` remains as the legacy
+  `GeoDataFrame`-per-page shape (requires `restgdf[geo]`, backed by
+  `chunk_generator`, completion-order only, does not take the shared
+  knobs). `row_dict_generator` is deprecated in favour of
+  `stream_rows`. See `docs/recipes/streaming.md`.
+- **Errors:** Single taxonomy rooted at `restgdf.errors.RestgdfError`
+  (public). Every class additively multi-inherits the matching builtin
+  (`ValueError`, `TimeoutError`, `PermissionError`, `IndexError`,
+  `ModuleNotFoundError`) so existing `except` clauses keep catching.
+- **Configuration:** `restgdf.Config` (eight frozen sub-configs) now
+  supersedes the flat `Settings`. Six `RESTGDF_*` env vars are aliased
+  to structured `RESTGDF_<CATEGORY>_<FIELD>` names; the old names still
+  work and emit `DeprecationWarning` on read.
+- **Authentication:** Default wire transport is now header-based
+  (`X-Esri-Authorization`); token refresh is single-flight, bounded-
+  retry, reactive on 498/499, and emits structured `restgdf.auth` log
+  events. `expires_at` is a tz-aware UTC `datetime`.
+- **Observability:** Named loggers under `restgdf.<suffix>`
+  (`transport` / `retry` / `limiter` / `concurrency` / `auth` /
+  `pagination` / `normalization` / `schema_drift`) each attached with a
+  `NullHandler`. Telemetry emits exactly one INTERNAL
+  `feature_layer.stream` parent span per `iter_pages` call.
+- **Public API additions:** adapters subpackage, pandas-first
+  `FeatureLayer.get_df()`, `NormalizedGeometry` / `NormalizedFeature`
+  iterator, `AdvancedQueryCapabilities` typed companion,
+  `PaginationPlan` / `build_pagination_plan`, pure-helper
+  `normalize_spatial_reference` and `normalize_date_fields`, and
+  `ResilientSession` / `RestgdfInstrumentor`.
+- **Version strings are frozen at `2.0.0`** until the 3.0 cut so the
+  taxonomy/contract tests (`tests/test_compat.py`) stay green through
+  the rewrite.
 
-## Install changes
+### Breaking changes
 
-| Workflow | Install command |
-|---|---|
-| Typed metadata/models, count/object-id helpers, raw row dictionaries, directory crawl, and token/session helpers | `pip install restgdf` |
-| `FeatureLayer.get_gdf()`, `sample_gdf()`, `head_gdf()`, `fieldtypes`, `get_fields_frame()`, multi-field `get_unique_values()`, `get_value_counts()`, `get_nested_count()`, and `restgdf.utils.getgdf` helpers | `pip install "restgdf[geo]"` |
+**Install**
 
-If you manage dependencies in `requirements.txt`, `pyproject.toml`, lockfiles,
-or deployment manifests, update geo-enabled environments to request
-`restgdf[geo]` explicitly instead of assuming `geopandas`, `pandas`, or
-`pyogrio` arrive transitively.
+- `pip install restgdf` no longer guarantees that `geopandas`,
+  `pandas`, or `pyogrio` are importable.
+- GeoDataFrame and pandas-backed helpers — `FeatureLayer.get_gdf()`,
+  `sample_gdf()`, `head_gdf()`, `fieldtypes`, `get_fields_frame()`,
+  multi-field `get_unique_values()`, `get_value_counts()`,
+  `get_nested_count()`, and `restgdf.utils.getgdf` helpers — now require
+  `pip install "restgdf[geo]"` and raise `OptionalDependencyError`
+  (subclass of `ConfigurationError` / `ModuleNotFoundError`) with an
+  install hint when the optional stack is missing.
+- Light-core workflows keep working without the geo stack: typed
+  response models, `FeatureLayer.from_url`, `.metadata`, `.count`,
+  `.get_oids()`, raw row iteration, directory crawling, and token
+  helpers.
 
-## Breaking changes
+**Errors**
 
-- `pip install restgdf` no longer guarantees that `geopandas`, `pandas`, or
-  `pyogrio` are importable.
-- GeoDataFrame and pandas-backed helpers now require `restgdf[geo]` and raise
-  `ModuleNotFoundError` with an install hint when the optional stack is
-  missing.
-- Light-core workflows keep working without the geo stack: typed response
-  models, `FeatureLayer.from_url`, `.metadata`, `.count`, `.get_oids()`,
-  `row_dict_generator()`, single-field `get_unique_values()`, directory
-  crawling, and token helpers remain part of the base install.
+- `getgdf` / `_get_sub_features` raise
+  `restgdf.errors.PaginationError` instead of `RuntimeError` when a
+  page reports `exceededTransferLimit=true`. The exception now carries
+  `batch_index` and `page_size` attributes. `PaginationError` multi-
+  inherits `IndexError` (2.x behavior preserved) but no longer
+  multi-inherits `RuntimeError` — migrate `except RuntimeError:` call
+  sites to `except PaginationError:` / `except ArcGISServiceError:` /
+  `except RestgdfError:`.
+- The legacy `FIELDDOESNOTEXIST` sentinel (and its re-export through
+  `restgdf.utils.getinfo`) is gone. Call sites must now
+  `except FieldDoesNotExistError` (new `SchemaValidationError` subclass).
+- Metadata/query/crawl helpers that decode a successful JSON body
+  matching the ArcGIS `{"error": {...}}` envelope now raise
+  `RestgdfResponseError` immediately with `raw` attached, instead of
+  silently treating it as schema drift.
 
-The preserved 1.x → 2.0 migration guide starts here.
+**Auth**
+
+- `ArcGISTokenSession` now defaults to sending the token via the
+  `X-Esri-Authorization` header. If your server requires the legacy
+  body/query transport, set `AuthConfig(transport="body")` or
+  `TokenSessionConfig(transport="body")`.
+- `refresh_leeway_seconds` default raised from **60 → 120** — proactive
+  token refresh now fires two minutes before expiry instead of one.
+- `refresh_threshold_seconds` on `TokenSessionConfig` is retained as a
+  deprecation alias; reads/writes emit `DeprecationWarning`. Migrate to
+  the explicit `refresh_leeway_seconds` + `clock_skew_seconds` split
+  (defaults `120` + `30`, total `150` seconds). When the legacy alias
+  is passed to the constructor, the total is split as
+  `clock_skew_seconds = min(30, total)` and
+  `refresh_leeway_seconds = total - clock_skew_seconds` so existing
+  tunings survive.
+
+**Streaming**
+
+- `FeatureLayer.row_dict_generator` emits `DeprecationWarning`. It
+  delegates to `stream_rows`; migrate at your convenience.
+- All `stream_*` methods default to `on_truncation="raise"`. Callers
+  that previously silently ignored `exceededTransferLimit=true` must
+  either opt into `on_truncation="ignore"` (warn-and-continue) or
+  `on_truncation="split"` (OID-bisect and recurse, up to 32 levels).
+
+### New public APIs
+
+**Errors** (`restgdf.errors`)
+
+```
+RestgdfError
+├── ConfigurationError(RestgdfError, ValueError)
+│   └── OptionalDependencyError(ConfigurationError, ModuleNotFoundError)
+├── RestgdfResponseError(RestgdfError, ValueError)
+│   ├── SchemaValidationError
+│   │   └── FieldDoesNotExistError
+│   ├── ArcGISServiceError
+│   │   └── PaginationError(ArcGISServiceError, IndexError)  # .batch_index, .page_size
+│   └── AuthenticationError(RestgdfResponseError, PermissionError)
+│       ├── InvalidCredentialsError        # HTTP 401
+│       ├── TokenExpiredError              # HTTP 498 after refresh
+│       ├── TokenRequiredError
+│       ├── TokenRefreshFailedError        # /generateToken retries exhausted
+│       └── AuthNotAttachedError           # HTTP 499
+├── TransportError
+│   ├── RestgdfTimeoutError(TransportError, TimeoutError)
+│   └── RateLimitError(TransportError)     # .retry_after
+└── OutputConversionError
+```
+
+- All classes re-export from the top-level `restgdf` package.
+- `RestgdfResponseError`, `TransportError`, `RestgdfTimeoutError`, and
+  `RateLimitError` now accept optional `url`, `status_code`,
+  `request_id`, and `timeout_kind` kwargs (all default to `None`).
+- `RateLimitError.retry_after` is populated from the server's
+  `Retry-After` header (integer seconds or RFC 7231 HTTP-date) by the
+  resilience wrapper.
+
+**Streaming** (`FeatureLayer`)
+
+| Method                    | Yields                              | Install        |
+| ------------------------- | ----------------------------------- | -------------- |
+| `stream_features`         | one raw ArcGIS feature dict         | base           |
+| `stream_feature_batches`  | `list[feature_dict]` per page       | base           |
+| `stream_rows`             | row-shaped dict (attrs + geometry)  | base           |
+| `stream_gdf_chunks`       | `GeoDataFrame` per page             | `restgdf[geo]` |
+| `iter_pages` (low-level)  | raw page envelope                   | base           |
+
+`stream_features`, `stream_feature_batches`, `stream_rows`, and
+`iter_pages` share these knobs:
+
+- `on_truncation: "raise" | "ignore" | "split"` (default `"raise"`).
+- `order: "request" | "completion"` (default `"request"`; `"completion"`
+  may interleave pages — do not use for append-ordered downstream
+  writers).
+- `max_concurrent_pages: int | None` (default `None` — bounded only by
+  `ConcurrencyConfig.max_concurrent_requests`).
+
+`stream_gdf_chunks` is backed by the legacy `chunk_generator` pipeline
+(pyogrio + ESRIJSON/GeoJSON parsing) rather than `iter_pages`. It
+yields chunks in completion order and does **not** accept
+`on_truncation`, `order`, or `max_concurrent_pages`, and it does not
+emit the R-61 `feature_layer.stream` parent span. For geo output with
+the full knob set, compose `stream_rows` or `stream_features` with
+your own geometry assembly, or use `get_gdf` / `get_gdf_list`.
+
+Each `GeoDataFrame` yielded by `stream_gdf_chunks` carries the layer's
+spatial reference in `gdf.attrs["spatial_reference"]` (R-65).
+
+See `docs/recipes/streaming.md` for copy-pasteable examples.
+
+**Adapters** (`restgdf.adapters`, lazy-loaded via PEP 562)
+
+- `restgdf.adapters.dict` — `feature_to_row`, `features_to_rows`,
+  re-exports `as_dict` / `as_json_dict`. Pure-Python, base-install safe.
+- `restgdf.adapters.stream` — async iterators `iter_feature_batches`,
+  `iter_rows`, `iter_gdf_chunks` wrapping the core generator helpers.
+  `iter_gdf_chunks` requires the geo extra at call time.
+- `restgdf.adapters.pandas` — `rows_to_dataframe` (sync) +
+  `arows_to_dataframe` (async). Calls `require_pandas(...)` before
+  materialization; no pandas import at module load.
+- `restgdf.adapters.geopandas` — `rows_to_geodataframe` +
+  `arows_to_geodataframe`. Calls `require_geo_stack(...)` before
+  materialization; no geopandas/pyogrio import at module load.
+
+**Tabular output** (`FeatureLayer.get_df`)
+
+Pandas-first sibling to `get_gdf()`. Returns a `pandas.DataFrame` built
+from the same row stream; raises `OptionalDependencyError`
+(`extra="pandas"`) if pandas is missing. Geopandas is **not** required.
+
+**Response normalization** (`restgdf._models.responses`)
+
+- `NormalizedGeometry` / `NormalizedFeature` + `iter_normalized_features(
+  response, *, oid_field=None, sr=None)`.
+- Wire-level `FeaturesResponse.features` stays `list[dict]` for perf;
+  normalization is opt-in via the iterator.
+- `NormalizedGeometry.type` is inferred heuristically from the geometry
+  dict shape (`point` / `multipoint` / `polyline` / `polygon` /
+  `envelope` / `None`). `object_id` is hoisted from
+  `attributes[oid_field]` via `int(value)` and tolerates unparsable
+  values by leaving `object_id=None`.
+
+**Metadata helpers** (`restgdf.utils._metadata`)
+
+- `normalize_spatial_reference(sr)` — pure helper returning
+  `(epsg_int | None, raw_dict | None)`. Prefers `latestWkid` over
+  `wkid` for EPSG-consuming clients; preserves the original
+  `{wkid, latestWkid}` mapping as the raw component for round-trip
+  fidelity.
+- `normalize_date_fields(features, fields)` — converts ArcGIS
+  `esriFieldTypeDate` epoch-ms integers to ISO-8601 UTC strings.
+  Defaults preserve the integer representation; opt in with
+  `normalize_dates=True` on the adapter layer.
+- `GeoDataFrame.attrs["spatial_reference"]` propagation through
+  `concat_gdfs` and `stream_gdf_chunks`.
+
+**Pagination** (`restgdf.utils._pagination`, re-exported via
+`restgdf.utils.getinfo`)
+
+- Frozen `PaginationPlan` dataclass + sync
+  `build_pagination_plan(total_records, max_record_count, *,
+  factor=1.0, advertised_factor=None)`. Emits
+  `(resultOffset, resultRecordCount)` tuples byte-identical to the
+  previous inline arithmetic. When `factor` exceeds
+  `advertised_factor` the planner clamps to the advertised value and
+  logs a warning via `restgdf.pagination`. Live
+  `advancedQueryCapabilities.maxRecordCountFactor` wiring into
+  `get_query_data_batches` is a deliberate post-3.0 follow-up.
+
+**Advanced query capabilities** (`restgdf._models.responses`)
+
+- `AdvancedQueryCapabilities` — typed `PermissiveModel` companion for
+  the ArcGIS `advancedQueryCapabilities` sub-object (five flags
+  restgdf routes on: `supportsPagination`, `supportsQueryByOIDs`,
+  `supportsReturnExceededLimitFeatures`,
+  `supportsPaginationOnAggregatedQueries`, `maxRecordCountFactor`).
+  Unknown keys survive via the permissive tier. Exposed as the
+  additive companion
+  `LayerMetadata.advanced_query_capabilities_typed: AdvancedQueryCapabilities | None`
+  — the raw dict on `advanced_query_capabilities` stays the default
+  representation so permissive-tier consumers keep working
+  byte-for-byte.
+
+**Transport protocols** (`restgdf._client`)
+
+- `AsyncHTTPSession` — `typing.Protocol` (`@runtime_checkable`)
+  capturing the `get` / `post` / `close` / `closed` surface restgdf
+  call sites rely on. `isinstance(aiohttp.ClientSession(),
+  AsyncHTTPSession)` holds at runtime.
+
+**Drift observation** (`restgdf._models._drift`)
+
+- `FieldSetDriftObserver` — observer class that tracks attribute-key
+  appearance/disappearance across feature-page batches. Emits
+  `field_appeared` / `field_disappeared` records via the
+  `restgdf.schema_drift` logger. Empty pages are skipped.
+  Observation-only; never blocking.
+
+**Resilience extra** (`pip install restgdf[resilience]`)
+
+- `restgdf.resilience.ResilientSession` wraps any `AsyncHTTPSession`
+  with stamina-based retry (429/5xx awareness, configurable
+  max-attempts) and per-service-root token-bucket rate limiting.
+- Controlled by `restgdf.ResilienceConfig` (a peer sub-config on
+  `Config.resilience`). Disabled by default; opt in via
+  `RESTGDF_RESILIENCE_ENABLED=1` or `ResilienceConfig(enabled=True)`.
+  When disabled, `ResilientSession` is a zero-overhead pass-through.
+- `LimiterRegistry` (backed by `aiolimiter.AsyncLimiter`) and
+  `CooldownRegistry` provide per-service-root rate limiting and
+  separate 429 back-off. The `_service_root()` helper truncates the
+  URL at `FeatureServer` / `MapServer` / `ImageServer` / `SceneServer`
+  to derive the rate-limit key. Cooldown is separate from the token
+  bucket — 429 back-off does NOT drain tokens.
+
+**Telemetry extra** (`pip install restgdf[telemetry]`)
+
+- `restgdf.telemetry.RestgdfInstrumentor` — dynamic subclass of
+  `AioHttpClientInstrumentor` that adds CLIENT spans for every aiohttp
+  request.
+- `feature_layer_stream_span` — async context manager producing a
+  single INTERNAL `feature_layer.stream` parent span (R-21). Now wired
+  into `iter_pages` via `_iter_pages_raw` so every `stream_*` call
+  emits exactly one parent span. Uses `contextlib.aclosing` to ensure
+  span cleanup on early break.
+- `span_context_fields()` — convenience for non-restgdf loggers
+  wanting the current `trace_id` / `span_id`.
+- `_SpanContextFilter` auto-attached to the `restgdf` root logger;
+  stamps `trace_id` / `span_id` on every log record when a span is
+  active.
+- Telemetry is **disabled by default** (`TelemetryConfig.enabled =
+  False`). `import restgdf.telemetry` always succeeds; runtime
+  functions raise `OptionalDependencyError` when OTel is absent and
+  telemetry is enabled.
+
+**Logging surface** (`restgdf._logging`)
+
+- `get_logger(suffix: str = "")` returns a named `restgdf.<suffix>`
+  logger with a `NullHandler` attached. `suffix` must be `""` or one
+  of `LOGGER_SUFFIXES` (`transport`, `retry`, `limiter`,
+  `concurrency`, `auth`, `pagination`, `normalization`,
+  `schema_drift`); unknown suffixes raise `ValueError`.
+- `build_log_extra(*, service_root=None, layer_id=None,
+  operation=None, page_index=None, page_size=None,
+  retry_attempt=None, retry_delay_s=None, limiter_wait_s=None,
+  timeout_category=None, result_count=None, exception_type=None)`
+  returns a normalized `extra=` envelope. Unknown keys raise
+  `TypeError`. `service_root` is URL-scrubbed internally so
+  `?token=…` values never appear in logs.
+- `get_drift_logger` / the `restgdf.schema_drift` logger name remain
+  unchanged; `get_drift_logger()` is a thin alias for
+  `get_logger("schema_drift")`.
+
+### Deprecations
+
+- `restgdf._types` re-exports (`LayerMetadata`, `ServiceInfo`, etc.)
+  — import directly from `restgdf` or `restgdf._models.*`. Alias shim
+  emits `DeprecationWarning`; removal no earlier than 3.x final.
+- `restgdf.Settings` / `restgdf.get_settings()` — use `restgdf.Config`
+  / `restgdf.get_config()` / `restgdf.reset_config_cache()`.
+  `get_settings()` emits `DeprecationWarning` on first call and
+  delegates to `get_config()`. `reset_settings_cache()` clears both
+  caches bidirectionally.
+- `TokenSessionConfig.refresh_threshold_seconds` — use
+  `refresh_leeway_seconds` + `clock_skew_seconds`.
+- `restgdf.get_token` (synchronous helper) — migrate to
+  `ArcGISTokenSession` for async token lifecycle. `get_token` now
+  accepts `pydantic.SecretStr` passwords.
+- `FeatureLayer.row_dict_generator` — use `FeatureLayer.stream_rows`.
+  Behavior is equivalent; `stream_rows` adds the `on_truncation` /
+  `order` / `max_concurrent_pages` knobs and emits the R-61 parent
+  span when telemetry is enabled.
+
+All deprecations are shim-backed — existing code keeps working and
+emits `DeprecationWarning`. Removal of any deprecated surface will not
+happen before the 3.0 final release.
+
+### Configuration
+
+`restgdf.Config` composes eight frozen pydantic sub-configs:
+
+- `TransportConfig` — user-agent, default headers, verify-SSL.
+- `TimeoutConfig` — `total_s` (default `30.0`); replaces the flat
+  `Settings.timeout_seconds`.
+- `RetryConfig` — stamina knobs surfaced via the resilience extra.
+- `LimiterConfig` — aiolimiter token-bucket knobs.
+- `ConcurrencyConfig` — `max_concurrent_requests` (default **8**,
+  matches aiohttp `TCPConnector` default). Enforced at the three
+  internal `asyncio.gather` sites (orchestrator call paths), not at
+  leaf helpers.
+- `AuthConfig` — token URL, transport (default `"header"`),
+  `refresh_leeway_seconds` (default **120**), `clock_skew_seconds`
+  (default `30`), `referer`, credentials.
+- `TelemetryConfig` — `enabled` (default `False`), log level, span
+  attributes.
+- `ResilienceConfig` — opt-in wrapper for the stamina-based retry
+  policy and per-service-root token-bucket rate limiter. Disabled by
+  default (`enabled=False`); toggle via `RESTGDF_RESILIENCE_ENABLED=1`
+  or an explicit `ResilienceConfig(enabled=True, ...)`.
+
+Use `restgdf.get_config()` to resolve the process-wide cached instance
+and `restgdf.reset_config_cache()` to clear it (tests, long-running
+processes).
+
+#### Environment-variable aliases
+
+Old flat `RESTGDF_*` variables are still honoured with
+`DeprecationWarning` on read. When both old and new are set, the new
+name wins and the warning notes the override.
+
+| Deprecated (still honoured)        | Replacement                                      |
+| ---------------------------------- | ------------------------------------------------ |
+| `RESTGDF_TIMEOUT_SECONDS`          | `RESTGDF_TIMEOUT_TOTAL_S`                        |
+| `RESTGDF_TOKEN_URL`                | `RESTGDF_AUTH_TOKEN_URL`                         |
+| `RESTGDF_REFRESH_THRESHOLD`        | `RESTGDF_AUTH_REFRESH_THRESHOLD_S`               |
+| `RESTGDF_USER_AGENT`               | `RESTGDF_TRANSPORT_USER_AGENT`                   |
+| `RESTGDF_LOG_LEVEL`                | `RESTGDF_TELEMETRY_LOG_LEVEL`                    |
+| `RESTGDF_MAX_CONCURRENT_REQUESTS`  | `RESTGDF_CONCURRENCY_MAX_CONCURRENT_REQUESTS`    |
+
+`RESTGDF_CHUNK_SIZE` and `RESTGDF_DEFAULT_HEADERS_JSON` remain on
+`Settings` only for now; they do not yet have a `Config` home.
+
+Resilience / telemetry toggles:
+
+- `RESTGDF_RESILIENCE_ENABLED=1` turns on retry + rate-limiting.
+- `RESTGDF_TELEMETRY_ENABLED=1` turns on OpenTelemetry spans.
+
+### Observability
+
+- **Named loggers** — one per responsibility:
+  `restgdf.transport` / `retry` / `limiter` / `concurrency` / `auth` /
+  `pagination` / `normalization` / `schema_drift`. All attached with a
+  `NullHandler`; opt in by adding a handler.
+- **Auth log events** — `update_token` emits `auth.refresh.start`,
+  `auth.refresh.success`, and `auth.refresh.failure` at DEBUG level via
+  `restgdf.auth`.
+- **Streaming spans** — `iter_pages` emits exactly one INTERNAL
+  `feature_layer.stream` parent span per call when the telemetry extra
+  is installed and `TelemetryConfig.enabled=True`. The span is
+  constructed inside `restgdf.utils.getgdf._iter_pages_raw`. No
+  per-page child spans are emitted.
+- **Tracing recipe** — `docs/recipes/tracing.md` documents structured
+  observability, error-attribute inspection, and the OpenTelemetry
+  integration.
+
+### Transport and auth hardening
+
+- **Bounded internal concurrency.** Every top-level orchestration call
+  (`service_metadata`, `fetch_all_data`, `safe_crawl`) caps in-flight
+  HTTP fan-out through a single `asyncio.BoundedSemaphore` sized to
+  `ConcurrencyConfig.max_concurrent_requests`. Saturation semantics =
+  wait (no new exception). No public signature changed.
+- **Single-flight token refresh.** `ArcGISTokenSession.update_token`
+  is guarded by a lazily-initialized per-instance `asyncio.Lock` with
+  double-checked `token_needs_update()`. Happy-path behavior (no
+  contention, no expiry) is unchanged; under N concurrent requesters
+  exactly one `/generateToken` POST is issued.
+- **Reactive 498/499.** `_call_with_auth_retry` intercepts HTTP 498
+  (token expired) with a single-flight refresh + one automatic retry.
+  HTTP 499 (token not attached) raises `AuthNotAttachedError`
+  immediately — no retry.
+- **Bounded token retry.** `update_token` retries transient network
+  errors up to 3 times with exponential backoff (0.5 s → 1.0 s).
+  Deterministic errors (invalid credentials, content-type mismatches)
+  propagate immediately. After exhaustion,
+  `TokenRefreshFailedError` is raised with the last exception chained
+  as `__cause__`.
+- **Feature-count timeout retry.** `_feature_count_with_timeout` in
+  `restgdf.utils.getinfo` wraps `get_feature_count` with exponential-
+  backoff retry on **timeout failures only**
+  (`asyncio.TimeoutError`, `TimeoutError`,
+  `aiohttp.ServerTimeoutError`). Connection-level failures
+  (`aiohttp.ClientConnectionError`) and deterministic failures
+  (`RestgdfResponseError`, validation errors, 4xx) fail fast.
+  Exhausted timeouts raise `RestgdfTimeoutError` with the original
+  exception chained as `__cause__`. Inline-only; no soft-dep on the
+  resilience extra.
+- **`verify_ssl` plumbed through.** `ArcGISTokenSession.update_token`
+  now forwards `ssl=self.verify_ssl` to aiohttp, matching the existing
+  behavior of other library-maintained request sites.
+- **Safe-crawl concurrency bound.** `Directory.safe_crawl` routes the
+  per-layer `feature_count` probe through a `BoundedSemaphore` sized
+  from `ConcurrencyConfig.max_concurrent_requests`.
+- **Request-verb seam.** `restgdf.utils._http._choose_verb(url,
+  body=None)` returns `"POST"` for `/query` / `/queryRelatedRecords`,
+  `"GET"` for bare service/layer metadata URLs, and `"POST"` for
+  unknown URLs. Internal seam only; call sites are unchanged in 3.0.
+- **Referer binding.** When `TokenSessionConfig.referer` /
+  `AuthConfig.referer` is set, `token_request_payload` includes
+  `"referer": <url>` and switches the ArcGIS `client` field from
+  `"requestip"` to `"referer"`.
+- **UTC wall-clock expiry.** `ArcGISTokenSession.expires_at` returns
+  a tz-aware UTC `datetime.datetime` (or `None`). `_utc_now()` shim
+  is monkeypatchable for deterministic time tests.
+
+### Upgrading checklist
+
+1. **Pin the geo extra** if you materialize GeoDataFrames or call any
+   of the pandas/geopandas helpers: change `restgdf` to
+   `"restgdf[geo]"` in `requirements.txt` / `pyproject.toml` /
+   lockfiles / deployment manifests.
+2. **Widen `except` clauses** on the small number of legacy shapes:
+   `except RuntimeError:` around `get_gdf` / feature-count paths
+   → `except PaginationError:` (or the broader
+   `ArcGISServiceError` / `RestgdfError`). Replace
+   `FIELDDOESNOTEXIST` sentinel checks with
+   `except FieldDoesNotExistError:`.
+3. **Swap `get_settings()` for `get_config()`** if you touched the
+   flat `Settings` model directly; same for
+   `reset_settings_cache()` → `reset_config_cache()`. Environment
+   variables can stay on their old names during the transition.
+4. **Migrate `row_dict_generator` to `stream_rows`.** Pick an
+   `on_truncation` policy explicitly (default is now
+   `"raise"` — previously pagination silently continued).
+5. **Audit auth config.** If you relied on the implicit body/query
+   token transport, set `transport="body"`. Bump monitoring windows
+   for the 60 → 120 second proactive-refresh shift if you alert on
+   `auth.refresh.start` cadence.
+6. **Split `refresh_threshold_seconds`** into
+   `refresh_leeway_seconds` + `clock_skew_seconds` in
+   `TokenSessionConfig` to silence the deprecation warning.
+7. **Attach a handler to the named loggers you care about**
+   (`restgdf.auth`, `restgdf.pagination`, `restgdf.schema_drift`,
+   `restgdf.retry`, `restgdf.limiter`, `restgdf.transport`,
+   `restgdf.concurrency`, `restgdf.normalization`). They are
+   `NullHandler`-muted by default.
+8. **(Optional) Install the extras you want:**
+   `pip install "restgdf[resilience]"` for retry + rate limiting,
+   `pip install "restgdf[telemetry]"` for OpenTelemetry spans.
 
 # Migrating from restgdf 1.x to 2.0
 

@@ -15,7 +15,14 @@ import restgdf
 
 _EXPECTED_CLASSES = {
     "AGOLUserPass",
+    "ArcGISServiceError",
     "ArcGISTokenSession",
+    "AuthConfig",
+    "AuthNotAttachedError",
+    "AuthenticationError",
+    "ConcurrencyConfig",
+    "Config",
+    "ConfigurationError",
     "CountResponse",
     "CrawlError",
     "CrawlReport",
@@ -26,21 +33,43 @@ _EXPECTED_CLASSES = {
     "Feature",
     "FeatureLayer",
     "FeaturesResponse",
+    "FieldDoesNotExistError",
     "FieldSpec",
+    "InvalidCredentialsError",
     "LayerMetadata",
+    "LimiterConfig",
     "ObjectIdsResponse",
+    "OptionalDependencyError",
+    "OutputConversionError",
+    "PaginationError",
+    "RateLimitError",
+    "ResilienceConfig",
+    "RestgdfError",
     "RestgdfResponseError",
+    "RestgdfTimeoutError",
+    "RetryConfig",
+    "SchemaValidationError",
     "ServiceInfo",
     "Settings",
+    "TelemetryConfig",
+    "TimeoutConfig",
+    "TokenExpiredError",
+    "TokenRefreshFailedError",
+    "TokenRequiredError",
     "TokenResponse",
     "TokenSessionConfig",
+    "TransportConfig",
+    "TransportError",
 }
 
 _EXPECTED_CALLABLES = {
+    "get_config",
     "get_settings",
+    "reset_config_cache",
 }
 
 _EXPECTED_MODULES = {
+    "adapters",
     "compat",
     "utils",
 }

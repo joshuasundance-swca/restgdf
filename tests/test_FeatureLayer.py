@@ -8,6 +8,7 @@ from geopandas import GeoDataFrame
 from pytest import raises
 from shapely.geometry import Point
 
+from restgdf.errors import FieldDoesNotExistError
 from restgdf.featurelayer.featurelayer import FeatureLayer
 from restgdf.utils.token import AGOLUserPass, ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list
@@ -143,8 +144,15 @@ async def test_arcgistokensession():
     assert await get_response.json() == {"ok": True}
     assert token_session.token == "generated-token"
     assert session.post_calls[0][0].endswith("generateToken")
-    assert session.post_calls[1][1]["data"]["token"] == "generated-token"
-    assert session.get_calls[0][1]["params"]["token"] == "generated-token"
+    # Under default transport='header', token goes in headers, not body/params.
+    assert (
+        session.post_calls[1][1]["headers"]["X-Esri-Authorization"]
+        == "Bearer generated-token"
+    )
+    assert (
+        session.get_calls[0][1]["headers"]["X-Esri-Authorization"]
+        == "Bearer generated-token"
+    )
 
 
 def test_featurelayer_requires_url_to_end_with_numeric_layer_id():
@@ -420,6 +428,40 @@ async def test_row_dict_generator_merges_data_kwargs():
 
 
 @pytest.mark.asyncio
+async def test_get_df_does_not_emit_deprecation_warning():
+    """rd-gate2 HIGH #2: FeatureLayer.get_df must not emit DeprecationWarning.
+
+    get_df is a supported public method; it must not route through the
+    deprecated ``row_dict_generator`` shim. It should consume ``stream_rows``
+    instead.
+    """
+    import warnings
+
+    from pandas import DataFrame as _PandasDataFrame
+
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+
+    async def fake_stream_rows(self, **kwargs):
+        for row in ({"OBJECTID": 1, "geometry": None},):
+            yield row
+
+    with patch.object(FeatureLayer, "stream_rows", new=fake_stream_rows):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            df = await layer.get_df()
+
+    assert isinstance(df, _PandasDataFrame)
+    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert deprecations == [], (
+        f"FeatureLayer.get_df unexpectedly emitted DeprecationWarning(s): "
+        f"{[str(w.message) for w in deprecations]}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_getuniquevalues_cache_includes_sortby():
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
@@ -450,10 +492,10 @@ async def test_featurelayer_getuniquevalues_rejects_unknown_fields():
     )
     layer.fields = ("CITY", "STATE")
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         await layer.get_unique_values("ZIP")
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         await layer.get_unique_values(("CITY", "ZIP"))
 
 
@@ -475,7 +517,7 @@ async def test_featurelayer_getvaluecounts_caches_and_validates_fields():
     assert first == second == "counts"
     mock_get_value_counts.assert_awaited_once()
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         await layer.get_value_counts("ZIP")
 
 
@@ -497,7 +539,7 @@ async def test_featurelayer_getnestedcount_caches_and_validates_fields():
     assert first == second == "nested"
     mock_nested_count.assert_awaited_once()
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         await layer.get_nested_count(("CITY", "ZIP"))
 
 
@@ -700,9 +742,9 @@ async def test_featurelayer(client_session):
     assert (await ziprest.getvaluecounts("PO_NAME")).set_index("PO_NAME").to_dict()[
         "PO_NAME_count"
     ]["Cincinnati"] > 40
-    with raises(IndexError):
+    with raises(FieldDoesNotExistError):
         assert "Cincinnati" in await ziprest.getuniquevalues("zzzzzz")
-    with raises(IndexError):
+    with raises(FieldDoesNotExistError):
         assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP"))) > 900
     assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP_CODE"))) > 900
     assert ziprest.count > ziprest.metadata.max_record_count

@@ -36,5 +36,20 @@ jobs:
       run: |
         git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
-    - name: Bump version
-      run: bumpver update --commit --tag-commit --${{ github.event.inputs.bump }} --push
+    - name: Bump version (commit + tag, no push)
+      run: bumpver update --commit --tag-commit --${{ github.event.inputs.bump }} --no-push
+    - name: Install project with dev extras
+      # BL-42: pre-tag pytest safety — install the just-bumped commit
+      # so the test run below executes against the exact source tree
+      # that will be published.
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install -e ".[dev,geo,resilience,telemetry]"
+    - name: Run offline test suite on the to-be-tagged commit
+      # BL-42: if any test fails, abort BEFORE pushing the tag so a
+      # broken commit never makes it onto the release branch.
+      run: python -m pytest -q -m "not network"
+    - name: Push commit and tag
+      run: |
+        git push
+        git push --tags

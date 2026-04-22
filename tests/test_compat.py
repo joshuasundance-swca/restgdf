@@ -44,7 +44,6 @@ def test_restgdf_public_api_surface():
 _GETINFO_SYMBOLS = (
     "DEFAULTDICT",
     "DEFAULT_METADATA_HEADERS",
-    "FIELDDOESNOTEXIST",
     "default_data",
     "default_headers",
     "get_feature_count",
@@ -177,9 +176,3 @@ def test_defaultdict_contents():
     assert DEFAULTDICT["returnGeometry"] is True
     assert DEFAULTDICT["returnCountOnly"] is False
     assert DEFAULTDICT["f"] == "json"
-
-
-def test_fielddoesnotexist_is_indexerror():
-    from restgdf.utils.getinfo import FIELDDOESNOTEXIST
-
-    assert isinstance(FIELDDOESNOTEXIST, IndexError)

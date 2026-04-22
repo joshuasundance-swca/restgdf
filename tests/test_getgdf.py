@@ -7,6 +7,7 @@ import pytest
 from geopandas import GeoDataFrame
 
 from restgdf._models import RestgdfResponseError
+from restgdf.errors import PaginationError
 from tests.pagination_fixtures import load_pagination_fixture
 
 from restgdf.utils.getgdf import (
@@ -384,7 +385,7 @@ async def test_get_sub_features_should_reject_truncated_empty_feature_page():
         [load_pagination_fixture("query_exceeded_transfer_limit_empty_features.json")],
     )
 
-    with pytest.raises(RuntimeError, match="exceededTransferLimit"):
+    with pytest.raises(PaginationError, match="exceededTransferLimit"):
         await get_sub_features(
             "https://example.com/layer/0",
             session,
@@ -398,7 +399,7 @@ async def test_get_sub_features_should_reject_truncated_short_feature_page():
         [load_pagination_fixture("query_exceeded_transfer_limit_short_page.json")],
     )
 
-    with pytest.raises(RuntimeError, match="exceededTransferLimit"):
+    with pytest.raises(PaginationError, match="exceededTransferLimit"):
         await get_sub_features(
             "https://example.com/layer/0",
             session,

@@ -1,0 +1,104 @@
+name: Verify PyPI attestation
+
+# BL-43 (MASTER-PLAN L189-190): post-publish attestation verification.
+# Runs after the "Publish release" workflow completes successfully;
+# downloads the published wheel from PyPI and verifies its PEP 740
+# attestation with `pypi-attestations verify pypi`. Failures do NOT
+# roll back the release — PyPI publishes are immutable — but a red
+# run on this workflow signals attestation drift to the maintainer.
+
+on:
+  workflow_run:
+    workflows: ["Publish release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to verify (e.g. 2.0.0). Leave blank to use latest from PyPI."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-attestation-${{ github.event.workflow_run.head_sha || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify PEP 740 attestation
+    # Only run when the triggering workflow succeeded; manual dispatches
+    # always run (workflow_run.conclusion is null on workflow_dispatch).
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          # Pin to the exact SHA that triggered the upstream Publish
+          # workflow so `pyproject.toml` reflects the shipped version,
+          # not default-branch HEAD (which may have moved).
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.0.0
+        with:
+          python-version: "3.12"
+
+      - name: Install pypi-attestations
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install pypi-attestations
+
+      - name: Resolve release version
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          dispatch_version="${{ github.event.inputs.version }}"
+          if [[ -n "${dispatch_version}" ]]; then
+            version="${dispatch_version}"
+          else
+            # Read the package version from pyproject.toml at the SHA
+            # that triggered the source workflow; falls back to HEAD.
+            version="$(python -c 'import tomllib, pathlib; print(tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"])')"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Verifying restgdf==${version}"
+
+      - name: Download wheel from PyPI
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          python -m pip download \
+            --no-deps \
+            --dest dist \
+            --only-binary=:all: \
+            "restgdf==${VERSION}"
+          ls -l dist/
+
+      - name: Verify attestation
+        env:
+          VERSION: ${{ steps.resolve.outputs.version }}
+          REPO_URL: https://github.com/${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          wheels=(dist/restgdf-*.whl)
+          if [[ ${#wheels[@]} -eq 0 ]]; then
+            echo "::error::No wheel downloaded for restgdf==${VERSION}."
+            exit 1
+          fi
+          for wheel in "${wheels[@]}"; do
+            filename="$(basename "$wheel")"
+            echo "::group::pypi-attestations verify pypi ${filename}"
+            pypi-attestations verify pypi \
+              --repository "${REPO_URL}" \
+              "pypi:${filename}"
+            echo "::endgroup::"
+          done

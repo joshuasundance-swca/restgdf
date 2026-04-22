@@ -47,6 +47,10 @@ Errors
    :members:
    :show-inheritance:
 
+.. automodule:: restgdf.errors
+   :members:
+   :show-inheritance:
+
 Runtime settings
 ----------------
 

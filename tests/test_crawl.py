@@ -29,6 +29,7 @@ async def test_fetch_all_data_collects_services_and_folder_services():
         service_url,
         token,
         return_feature_count=False,
+        _sem=None,
     ):
         return {
             "service_url": service_url,

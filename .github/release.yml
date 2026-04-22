@@ -1,0 +1,49 @@
+# BL-44 (MASTER-PLAN L191-192): auto-generated release notes config.
+#
+# Consumed by GitHub's "Generate release notes" endpoint (and the
+# Release UI "Auto-generate release notes" button) to bucket merged
+# pull requests by label into the categories below.
+#
+# See: https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes
+
+changelog:
+  exclude:
+    labels:
+      - duplicate
+      - invalid
+      - wontfix
+      - ignore-for-release
+
+  categories:
+    - title: ⚠️ Breaking changes
+      labels:
+        - breaking-change
+        - breaking
+    - title: 🚀 Features
+      labels:
+        - enhancement
+        - feature
+    - title: 🐛 Bug fixes
+      labels:
+        - bug
+        - fix
+    - title: 📝 Documentation
+      labels:
+        - documentation
+        - docs
+    - title: 🧪 Testing
+      labels:
+        - testing
+        - tests
+    - title: 🔧 CI / Build
+      labels:
+        - ci
+        - build
+        - infrastructure
+    - title: 📦 Dependencies
+      labels:
+        - dependencies
+        - deps
+    - title: Other changes
+      labels:
+        - "*"

@@ -82,6 +82,25 @@ jobs:
             echo "version=${project_version}"
           } >> "$GITHUB_OUTPUT"
 
+      - name: Require CHANGELOG entry for release
+        if: steps.release_meta.outputs.raw != ''
+        env:
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # BL-41: block the release if CHANGELOG.md has not been
+          # consolidated to the tagged version. The maintainer renames
+          # the `## [Unreleased]` header to `## [X.Y.Z] - <date>` at
+          # tag time; we fail fast here when that step was skipped.
+          header="## [${RELEASE_VERSION}]"
+          if ! grep -F -- "$header" CHANGELOG.md > /dev/null; then
+            echo "::error file=CHANGELOG.md::Missing release header '${header}' in CHANGELOG.md."
+            echo "Expected '${header}' section before publishing ${RELEASE_VERSION}."
+            exit 1
+          fi
+
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip

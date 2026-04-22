@@ -755,6 +755,8 @@ Thumbs.db:encryptable
 [Ss]cripts
 !.github/scripts/
 !.github/scripts/generate_coverage_badge.py
+!/scripts/
+!/scripts/bumpver_stamp_date.py
 ehthumbs.db
 ehthumbs_vista.db
 pip-selfcheck.json
