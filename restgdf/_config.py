@@ -39,13 +39,33 @@ import warnings
 from collections.abc import Mapping
 from typing import Any, Callable
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    HttpUrl,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+)
 
 from restgdf._models._errors import RestgdfResponseError
 from restgdf._models._settings import _VALID_LOG_LEVELS, _default_user_agent
 
 
 _FROZEN = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
+
+# pydantic HttpUrl-based validator for ``token_url`` strings. We keep the
+# public field type as ``str`` so consumers (e.g. TokenSessionConfig) that
+# expect plain strings do not break, but we reuse pydantic's URL parser for
+# validation so we reject malformed inputs consistently.
+_HTTP_URL_ADAPTER: TypeAdapter[HttpUrl] = TypeAdapter(HttpUrl)
+
+# Logging aliases we accept in addition to the canonical level names. The
+# stdlib logging module treats ``WARN`` as a synonym for ``WARNING`` and
+# ``FATAL`` as a synonym for ``CRITICAL``; we normalize both here so
+# ``RESTGDF_TELEMETRY_LOG_LEVEL=WARN`` does not raise.
+_LOG_LEVEL_ALIASES: Mapping[str, str] = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 
 
 class TransportConfig(BaseModel):
@@ -107,10 +127,12 @@ class AuthConfig(BaseModel):
     def _check_token_url_scheme(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        if not value.startswith(("http://", "https://")):
+        try:
+            _HTTP_URL_ADAPTER.validate_python(value)
+        except ValidationError as exc:
             raise ValueError(
-                "token_url must start with 'http://' or 'https://'",
-            )
+                f"token_url must be a valid http(s) URL: {value!r} ({exc})",
+            ) from exc
         return value
 
 
@@ -127,6 +149,7 @@ class TelemetryConfig(BaseModel):
     @classmethod
     def _normalize_log_level(cls, value: str) -> str:
         upper = value.upper()
+        upper = _LOG_LEVEL_ALIASES.get(upper, upper)
         if upper not in _VALID_LOG_LEVELS:
             raise ValueError(
                 f"log_level must be one of {sorted(_VALID_LOG_LEVELS)!r}",
@@ -223,7 +246,12 @@ class Config(BaseModel):
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> Config:
+    def from_env(
+        cls,
+        env: Mapping[str, str] | None = None,
+        *,
+        _warn_stacklevel: int = 2,
+    ) -> Config:
         """Build :class:`Config` from environment variables.
 
         Parameters
@@ -232,6 +260,14 @@ class Config(BaseModel):
             Mapping of env-var name to value. Defaults to ``os.environ``.
             Pass an explicit mapping (including ``{}``) to bypass the real
             environment, primarily for tests.
+        _warn_stacklevel
+            Internal hook controlling the ``stacklevel`` passed to
+            :func:`warnings.warn` for deprecated-alias warnings. Direct
+            callers of ``Config.from_env`` get the default (``2``), which
+            attributes the warning to the user's call site.
+            :func:`get_config` overrides this to ``3`` so the warning
+            surfaces past the cached accessor frame. Not part of the
+            public API.
 
         Raises
         ------
@@ -239,14 +275,6 @@ class Config(BaseModel):
             If any ``RESTGDF_*`` env var contains a malformed value or fails
             pydantic validation. The original exception chains via
             ``__cause__``.
-
-        Notes
-        -----
-        Deprecated-alias warnings are emitted with ``stacklevel=3``; callers
-        that reach this method through :func:`get_config` receive attribution
-        to user code, while callers through the :func:`get_settings` shim see
-        attribution to ``get_settings``. The shim separately emits a
-        ``stacklevel=2`` warning that does point at the user.
         """
         source: Mapping[str, str] = os.environ if env is None else env
         sub_kwargs: dict[str, dict[str, Any]] = {
@@ -288,13 +316,13 @@ class Config(BaseModel):
                     f"{old_key} is deprecated; {new_key} is set and "
                     f"takes precedence (old value ignored).",
                     DeprecationWarning,
-                    stacklevel=3,
+                    stacklevel=_warn_stacklevel,
                 )
                 continue
             warnings.warn(
                 f"{old_key} is deprecated; use {new_key} instead.",
                 DeprecationWarning,
-                stacklevel=3,
+                stacklevel=_warn_stacklevel,
             )
             _coerce(old_key, dotted, caster)
 
@@ -319,8 +347,13 @@ class Config(BaseModel):
 
 @functools.lru_cache(maxsize=1)
 def get_config() -> Config:
-    """Return the process-wide cached :class:`Config` instance."""
-    return Config.from_env()
+    """Return the process-wide cached :class:`Config` instance.
+
+    Deprecated-alias warnings emitted during env resolution attribute to the
+    caller of :func:`get_config` (``stacklevel=3``: one extra frame past the
+    :meth:`Config.from_env` default so the warning surfaces at user code).
+    """
+    return Config.from_env(_warn_stacklevel=3)
 
 
 def reset_config_cache() -> None:

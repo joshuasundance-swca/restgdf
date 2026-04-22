@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from restgdf._models.crawl import CrawlError, CrawlReport, CrawlServiceEntry
 from restgdf._models.responses import LayerMetadata
-from restgdf._models._settings import get_settings
+from restgdf._config import get_config
 from restgdf.utils.getinfo import service_metadata, get_metadata
 from restgdf.utils.token import ArcGISTokenSession
 
@@ -34,7 +34,9 @@ async def fetch_all_data(
     # the nested ``service_metadata`` fan-out and at the directory-level
     # ``get_metadata`` calls below — wrapping outer tasks in the same sem
     # would double-acquire (``asyncio.Semaphore`` is not re-entrant).
-    _sem = asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
+    _sem = asyncio.BoundedSemaphore(
+        get_config().concurrency.max_concurrent_requests,
+    )
 
     # Retrieve the initial list of folders and services
     try:
@@ -144,7 +146,9 @@ async def safe_crawl(
     # per request (plan.md §3c R-18/R-44, kickoff §10.3). The outer
     # ``asyncio.gather`` below is NOT wrapped in this sem because nested
     # orchestrators re-acquire it; ``asyncio.Semaphore`` is not re-entrant.
-    _sem = asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
+    _sem = asyncio.BoundedSemaphore(
+        get_config().concurrency.max_concurrent_requests,
+    )
 
     try:
         async with _sem:

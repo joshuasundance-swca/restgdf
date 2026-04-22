@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import warnings
 from collections.abc import Iterator
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from restgdf._config import (
     AuthConfig,
@@ -77,7 +78,7 @@ def _clear_caches_and_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
         TelemetryConfig,
     ],
 )
-def test_subconfig_is_frozen(model_cls: type) -> None:
+def test_subconfig_is_frozen(model_cls: type[BaseModel]) -> None:
     instance = model_cls()
     first_field = next(iter(model_cls.model_fields))
     with pytest.raises(ValidationError):
@@ -301,3 +302,131 @@ def test_from_env_empty_mapping_uses_defaults() -> None:
     cfg = Config.from_env(env={})
     assert cfg.timeout.total_s == 30.0
     assert cfg.concurrency.max_concurrent_requests == 8
+
+
+# ---- gate-2: log_level aliases (WARN/FATAL) -------------------------------
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("WARN", "WARNING"),
+        ("warn", "WARNING"),
+        ("Warn", "WARNING"),
+        ("FATAL", "CRITICAL"),
+        ("fatal", "CRITICAL"),
+    ],
+)
+def test_telemetry_log_level_accepts_stdlib_aliases(raw: str, expected: str) -> None:
+    cfg = TelemetryConfig(log_level=raw)
+    assert cfg.log_level == expected
+
+
+def test_telemetry_log_level_alias_via_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESTGDF_TELEMETRY_LOG_LEVEL", "WARN")
+    cfg = get_config()
+    assert cfg.telemetry.log_level == "WARNING"
+
+
+# ---- gate-2: HttpUrl-based token_url validation ---------------------------
+
+
+@pytest.mark.parametrize(
+    "bad_url",
+    [
+        "https://",
+        "not-a-url",
+        "ftp://example.com/token",
+        "javascript:alert(1)",
+        "",
+    ],
+)
+def test_auth_token_url_rejects_invalid_urls(bad_url: str) -> None:
+    with pytest.raises(ValidationError):
+        AuthConfig(token_url=bad_url)
+
+
+@pytest.mark.parametrize(
+    "good_url",
+    [
+        "https://example.com/token",
+        "http://enterprise.example.com/sharing/rest/generateToken",
+        "https://arcgis.com/sharing/rest/generateToken",
+    ],
+)
+def test_auth_token_url_accepts_valid_urls(good_url: str) -> None:
+    cfg = AuthConfig(token_url=good_url)
+    assert cfg.token_url == good_url
+
+
+# ---- gate-2: cache-cascade (both directions) ------------------------------
+
+
+def test_reset_config_cache_also_invalidates_get_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Clearing the Config cache must also drop the cached Settings shim."""
+    from restgdf._models._settings import get_settings
+
+    monkeypatch.setenv("RESTGDF_TIMEOUT_TOTAL_S", "11.5")
+    with pytest.warns(DeprecationWarning):
+        first = get_settings()
+    assert first.timeout_seconds == pytest.approx(11.5)
+
+    monkeypatch.setenv("RESTGDF_TIMEOUT_TOTAL_S", "17.25")
+    reset_config_cache()  # only the Config cache is cleared explicitly
+    with pytest.warns(DeprecationWarning):
+        second = get_settings()
+    assert second.timeout_seconds == pytest.approx(17.25)
+    assert first is not second
+
+
+def test_reset_settings_cache_also_invalidates_get_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Clearing the Settings cache must also drop the cached Config."""
+    from restgdf._models._settings import reset_settings_cache as _rsc
+
+    first = get_config()
+    assert first.timeout.total_s == 30.0
+
+    monkeypatch.setenv("RESTGDF_TIMEOUT_TOTAL_S", "21.5")
+    _rsc()  # only the Settings cache is cleared explicitly
+    second = get_config()
+    assert second.timeout.total_s == pytest.approx(21.5)
+    assert first is not second
+
+
+# ---- gate-2: stacklevel attribution ---------------------------------------
+
+
+def test_config_from_env_direct_warning_attributes_to_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Direct ``Config.from_env()`` call — warning points at this test file."""
+    monkeypatch.setenv("RESTGDF_TIMEOUT_SECONDS", "5.0")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        Config.from_env()
+    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert dep, "expected a DeprecationWarning"
+    assert dep[0].filename == __file__, (
+        f"expected attribution to test file {__file__!r}, " f"got {dep[0].filename!r}"
+    )
+
+
+def test_get_config_warning_attributes_to_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``get_config()`` call — warning points at this test file, not get_config."""
+    monkeypatch.setenv("RESTGDF_TIMEOUT_SECONDS", "5.0")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        get_config()
+    dep = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert dep, "expected a DeprecationWarning"
+    assert dep[0].filename == __file__, (
+        f"expected attribution to test file {__file__!r}, " f"got {dep[0].filename!r}"
+    )

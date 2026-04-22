@@ -39,6 +39,8 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    HttpUrl,
+    TypeAdapter,
     ValidationError,
     field_validator,
 )
@@ -47,6 +49,13 @@ from restgdf._models._errors import RestgdfResponseError
 
 
 _VERSION_RE = re.compile(r"""^__version__\s*=\s*["']([^"']+)["']\s*$""", re.MULTILINE)
+
+
+# Shared URL-validation adapter + log-level alias map. Kept in sync with the
+# copies in :mod:`restgdf._config` so the legacy :class:`Settings` shim
+# applies the same validation as the new layered :class:`restgdf.Config`.
+_HTTP_URL_ADAPTER: TypeAdapter[HttpUrl] = TypeAdapter(HttpUrl)
+_LOG_LEVEL_ALIASES: dict[str, str] = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 
 
 @functools.lru_cache(maxsize=1)
@@ -146,6 +155,7 @@ class Settings(BaseModel):
     @classmethod
     def _normalize_log_level(cls, value: str) -> str:
         upper = value.upper()
+        upper = _LOG_LEVEL_ALIASES.get(upper, upper)
         if upper not in _VALID_LOG_LEVELS:
             raise ValueError(
                 f"log_level must be one of {sorted(_VALID_LOG_LEVELS)!r}",
@@ -155,10 +165,12 @@ class Settings(BaseModel):
     @field_validator("token_url")
     @classmethod
     def _check_token_url_scheme(cls, value: str) -> str:
-        if not value.startswith(("http://", "https://")):
+        try:
+            _HTTP_URL_ADAPTER.validate_python(value)
+        except ValidationError as exc:
             raise ValueError(
-                "token_url must start with 'http://' or 'https://'",
-            )
+                f"token_url must be a valid http(s) URL: {value!r} ({exc})",
+            ) from exc
         return value
 
     @classmethod
