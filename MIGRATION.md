@@ -26,6 +26,14 @@
   unchanged. The lock field is excluded from `repr`/`compare` and
   defaults to `None` so instances constructed outside a running event
   loop (e.g. at import time) do not emit a deprecation warning.
+- **Request-verb seam (BL-20).** A new private helper
+  `restgdf.utils._http._choose_verb(url, body=None)` returns `"POST"`
+  for `/query` and `/queryRelatedRecords`, `"GET"` for bare
+  service / layer metadata URLs, and `"POST"` as the conservative
+  default for unknown URLs. This slice only introduces the seam —
+  existing call sites are unchanged. A later slice (BL-50) will extend
+  the helper to auto-switch `GET` → `POST` when a `where` clause pushes
+  a GET URL past the ArcGIS ~1800-byte URL budget.
 
 # Upcoming: restgdf 2.x to 3.x optional Geo extras
 

@@ -23,7 +23,7 @@ def test_choose_verb_default_for_unknown_url_is_post():
     from restgdf.utils._http import _choose_verb
 
     assert _choose_verb("https://example.com/some/unknown/path") == "POST"
-    assert _choose_verb("https://example.com/rest/services/Foo/MapServer") == "POST"
+    assert _choose_verb("https://example.com/arbitrary/endpoint") == "POST"
 
 
 def test_choose_verb_query_endpoint_is_post():

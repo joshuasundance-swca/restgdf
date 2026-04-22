@@ -15,6 +15,11 @@ All notable changes to restgdf are documented here. This project follows
   `RESTGDF_MAX_CONCURRENT_REQUESTS` env-var coercion. Caps the in-flight
   HTTP fan-out inside every top-level restgdf orchestration call. Default
   matches aiohttp `TCPConnector` pool size (BL-01).
+- Private `restgdf.utils._http._choose_verb(url, body=None)` seam
+  returning `"POST"` for `/query` and `/queryRelatedRecords`, `"GET"`
+  for bare service/layer metadata URLs, and `"POST"` as the
+  conservative default. Call sites unchanged; forward-compatible stub
+  for BL-50's future ~1800-byte GET→POST auto-switch (BL-20).
 
 ### Changed
 
