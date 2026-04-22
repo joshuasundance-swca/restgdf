@@ -17,7 +17,10 @@ _EXPECTED_CLASSES = {
     "AGOLUserPass",
     "ArcGISServiceError",
     "ArcGISTokenSession",
+    "AuthConfig",
     "AuthenticationError",
+    "ConcurrencyConfig",
+    "Config",
     "ConfigurationError",
     "CountResponse",
     "CrawlError",
@@ -31,6 +34,7 @@ _EXPECTED_CLASSES = {
     "FeaturesResponse",
     "FieldSpec",
     "LayerMetadata",
+    "LimiterConfig",
     "ObjectIdsResponse",
     "OptionalDependencyError",
     "OutputConversionError",
@@ -39,16 +43,22 @@ _EXPECTED_CLASSES = {
     "RestgdfError",
     "RestgdfResponseError",
     "RestgdfTimeoutError",
+    "RetryConfig",
     "SchemaValidationError",
     "ServiceInfo",
     "Settings",
+    "TelemetryConfig",
+    "TimeoutConfig",
     "TokenResponse",
     "TokenSessionConfig",
+    "TransportConfig",
     "TransportError",
 }
 
 _EXPECTED_CALLABLES = {
+    "get_config",
     "get_settings",
+    "reset_config_cache",
 }
 
 _EXPECTED_MODULES = {

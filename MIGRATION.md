@@ -224,6 +224,51 @@ factory (for ``restgdf.transport`` / ``retry`` / ``limiter`` / ``concurrency`` /
 ``auth`` / ``pagination`` / ``normalization``) happens in later 3.0 phases
 (BL-11 / BL-15 / BL-27 / BL-31 / BL-32 / BL-33); phase-1d ships the surface only.
 
+### phase-2a — restgdf.Config supersedes restgdf.Settings
+
+**Additive + deprecation.** ``restgdf.Config`` is now the canonical runtime
+configuration model: a frozen pydantic 2.x aggregate composed of seven
+frozen sub-configs — ``TransportConfig``, ``TimeoutConfig``, ``RetryConfig``,
+``LimiterConfig``, ``ConcurrencyConfig``, ``AuthConfig``, ``TelemetryConfig``.
+Use ``restgdf.get_config()`` to resolve the process-wide cached instance and
+``restgdf.reset_config_cache()`` to clear it (tests, long-running processes).
+
+The flat ``restgdf.Settings`` model and ``restgdf.get_settings()`` accessor
+remain importable but are **deprecated**. ``get_settings()`` now emits a
+``DeprecationWarning`` on first call and constructs its return value from
+``get_config()``; calling it continues to work. ``reset_settings_cache()``
+also clears the new Config cache (bidirectional cascade), so tests can
+continue to use whichever accessor they are currently calling.
+
+``Settings.from_env()`` is **not** deprecated at the method level — it is a
+legacy direct path that reads only the flat env-var set, without alias
+translation or deprecation warnings. Callers that need the new-wins alias
+contract should migrate to ``Config.from_env()``.
+
+#### Deprecated env-var aliases
+
+Six flat environment variables are deprecated in favour of the new
+``RESTGDF_<CATEGORY>_<FIELD>`` layout. The old names continue to work but
+emit a ``DeprecationWarning`` when read via ``Config.from_env`` /
+``get_config``. When both the old and the new name are set, the new name
+takes precedence and the deprecation warning notes the override.
+
+| Deprecated (still honoured) | Replacement |
+|---|---|
+| ``RESTGDF_TIMEOUT_SECONDS`` | ``RESTGDF_TIMEOUT_TOTAL_S`` |
+| ``RESTGDF_TOKEN_URL`` | ``RESTGDF_AUTH_TOKEN_URL`` |
+| ``RESTGDF_REFRESH_THRESHOLD`` | ``RESTGDF_AUTH_REFRESH_THRESHOLD_S`` |
+| ``RESTGDF_USER_AGENT`` | ``RESTGDF_TRANSPORT_USER_AGENT`` |
+| ``RESTGDF_LOG_LEVEL`` | ``RESTGDF_TELEMETRY_LOG_LEVEL`` |
+| ``RESTGDF_MAX_CONCURRENT_REQUESTS`` | ``RESTGDF_CONCURRENCY_MAX_CONCURRENT_REQUESTS`` |
+
+``RESTGDF_CHUNK_SIZE`` and ``RESTGDF_DEFAULT_HEADERS_JSON`` remain on
+``Settings`` only for now; they do not yet have a ``Config`` home.
+
+phase-2a ships the new surface and the deprecation shims only. Consumer
+wiring (swapping ``get_settings()`` call sites inside ``restgdf.utils`` for
+``get_config()``) is deferred to phase-3 per R-44.
+
 ## Upcoming: restgdf 2.x to 3.x optional Geo extras
 
 restgdf 2.0 just landed, so the 1.x → 2.0 notes stay below unchanged. This

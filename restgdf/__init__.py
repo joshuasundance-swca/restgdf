@@ -7,6 +7,18 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from . import compat, utils
+    from ._config import (
+        AuthConfig,
+        ConcurrencyConfig,
+        Config,
+        LimiterConfig,
+        RetryConfig,
+        TelemetryConfig,
+        TimeoutConfig,
+        TransportConfig,
+        get_config,
+        reset_config_cache,
+    )
     from ._models import (
         AGOLUserPass,
         CountResponse,
@@ -48,7 +60,10 @@ __all__ = [
     "AGOLUserPass",
     "ArcGISServiceError",
     "ArcGISTokenSession",
+    "AuthConfig",
     "AuthenticationError",
+    "ConcurrencyConfig",
+    "Config",
     "ConfigurationError",
     "CountResponse",
     "CrawlError",
@@ -62,6 +77,7 @@ __all__ = [
     "FeaturesResponse",
     "FieldSpec",
     "LayerMetadata",
+    "LimiterConfig",
     "ObjectIdsResponse",
     "OptionalDependencyError",
     "OutputConversionError",
@@ -70,20 +86,41 @@ __all__ = [
     "RestgdfError",
     "RestgdfResponseError",
     "RestgdfTimeoutError",
+    "RetryConfig",
     "SchemaValidationError",
     "ServiceInfo",
     "Settings",
+    "TelemetryConfig",
+    "TimeoutConfig",
     "TokenResponse",
     "TokenSessionConfig",
+    "TransportConfig",
     "TransportError",
     "compat",
+    "get_config",
     "get_settings",
+    "reset_config_cache",
     "utils",
 ]
 
 __version__ = "2.0.0"
 
 _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
+    **{
+        name: ("restgdf._config", name)
+        for name in (
+            "AuthConfig",
+            "ConcurrencyConfig",
+            "Config",
+            "LimiterConfig",
+            "RetryConfig",
+            "TelemetryConfig",
+            "TimeoutConfig",
+            "TransportConfig",
+            "get_config",
+            "reset_config_cache",
+        )
+    },
     **{
         name: ("restgdf._models", name)
         for name in (

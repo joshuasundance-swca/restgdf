@@ -15,6 +15,7 @@ Covers:
 from __future__ import annotations
 
 import warnings
+from collections.abc import Iterator
 
 import pytest
 
@@ -23,7 +24,7 @@ from restgdf._models._settings import Settings, get_settings, reset_settings_cac
 
 
 @pytest.fixture(autouse=True)
-def _clear_caches(monkeypatch: pytest.MonkeyPatch) -> None:
+def _clear_caches(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """Drop cached Config/Settings before and after each test."""
     reset_config_cache()
     reset_settings_cache()
@@ -88,7 +89,8 @@ def test_old_env_refresh_threshold_alias_emits_warning_and_resolves(
 ) -> None:
     monkeypatch.setenv("RESTGDF_REFRESH_THRESHOLD", "120")
     with pytest.warns(
-        DeprecationWarning, match="RESTGDF_AUTH_REFRESH_THRESHOLD_S",
+        DeprecationWarning,
+        match="RESTGDF_AUTH_REFRESH_THRESHOLD_S",
     ):
         cfg = get_config()
     assert cfg.auth.refresh_threshold_s == pytest.approx(120.0)
@@ -160,7 +162,8 @@ def test_get_settings_default_headers_json_from_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv(
-        "RESTGDF_DEFAULT_HEADERS_JSON", '{"x-foo":"bar"}',
+        "RESTGDF_DEFAULT_HEADERS_JSON",
+        '{"x-foo":"bar"}',
     )
     with pytest.warns(DeprecationWarning):
         settings = get_settings()
