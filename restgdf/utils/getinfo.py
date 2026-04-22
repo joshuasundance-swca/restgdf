@@ -16,7 +16,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, ServerTimeoutError
 from pydantic import BaseModel
 
 from restgdf.utils._http import (
@@ -27,7 +27,6 @@ from restgdf.utils._http import (
 )
 from restgdf.utils._concurrency import bounded_gather
 from restgdf.utils._metadata import (
-    FIELDDOESNOTEXIST,
     get_fields,
     get_fields_frame,
     get_max_record_count,
@@ -51,12 +50,12 @@ from restgdf.utils._stats import (
     nestedcount,
 )
 from restgdf.utils.token import ArcGISTokenSession
+from restgdf.errors import RestgdfTimeoutError
 
 __all__ = [
     "ClientSession",
     "DEFAULTDICT",
     "DEFAULT_METADATA_HEADERS",
-    "FIELDDOESNOTEXIST",
     "PaginationPlan",
     "build_pagination_plan",
     "default_data",
@@ -81,6 +80,56 @@ __all__ = [
     "service_metadata",
     "supports_pagination",
 ]
+
+
+async def _feature_count_with_timeout(
+    session: ClientSession | ArcGISTokenSession,
+    url: str,
+    token: str | None,
+    *,
+    timeout: float | None = None,
+    max_attempts: int = 3,
+) -> int:
+    """Fetch feature count with inline bounded retry.
+
+    BL-51: inline-only retry (R-59 — no restgdf.resilience imports).
+    Retries ONLY on timeout failures:
+
+    * :class:`asyncio.TimeoutError` / :class:`TimeoutError`
+    * :class:`aiohttp.ServerTimeoutError`
+
+    Connection-level failures (disconnect, reset, DNS failure),
+    deterministic failures (:class:`~restgdf.errors.RestgdfResponseError`,
+    schema mismatches), and any other exception fail fast on the first
+    attempt without retry so real bugs and transport errors are not
+    masked or misreported as timeouts.
+
+    When all retry attempts are exhausted, wraps the last timeout as
+    :class:`~restgdf.errors.RestgdfTimeoutError` with the original
+    exception preserved as ``__cause__``.
+    """
+    kwargs: dict[str, Any] = {}
+    if token is not None:
+        kwargs["data"] = {"token": token}
+    if timeout is not None:
+        kwargs["timeout"] = timeout
+
+    last_exc: BaseException | None = None
+    for attempt in range(max_attempts):
+        try:
+            return await get_feature_count(url, session, **kwargs)
+        except (
+            asyncio.TimeoutError,
+            TimeoutError,
+            ServerTimeoutError,
+        ) as exc:
+            last_exc = exc
+        if attempt < max_attempts - 1:
+            await asyncio.sleep(0.1 * (2**attempt))
+
+    raise RestgdfTimeoutError(
+        f"feature_count for {url} timed out after {max_attempts} attempts",
+    ) from last_exc
 
 
 async def get_offset_range(
@@ -151,12 +200,12 @@ async def service_metadata(
         metadata["url"] = layer_url
         if return_feature_count and metadata.get("type") == "Feature Layer":
             try:
-                feature_count = await get_feature_count(
-                    layer_url,
+                feature_count = await _feature_count_with_timeout(
                     session,
-                    **({"data": {"token": token}} if token is not None else {}),
+                    layer_url,
+                    token,
                 )
-            except KeyError:
+            except (KeyError, RestgdfTimeoutError):
                 feature_count = None
             metadata["feature_count"] = feature_count
         return metadata

@@ -8,6 +8,7 @@ from geopandas import GeoDataFrame
 from pytest import raises
 from shapely.geometry import Point
 
+from restgdf.errors import FieldDoesNotExistError
 from restgdf.featurelayer.featurelayer import FeatureLayer
 from restgdf.utils.token import AGOLUserPass, ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list
@@ -457,10 +458,10 @@ async def test_featurelayer_getuniquevalues_rejects_unknown_fields():
     )
     layer.fields = ("CITY", "STATE")
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         await layer.get_unique_values("ZIP")
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         await layer.get_unique_values(("CITY", "ZIP"))
 
 
@@ -482,7 +483,7 @@ async def test_featurelayer_getvaluecounts_caches_and_validates_fields():
     assert first == second == "counts"
     mock_get_value_counts.assert_awaited_once()
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         await layer.get_value_counts("ZIP")
 
 
@@ -504,7 +505,7 @@ async def test_featurelayer_getnestedcount_caches_and_validates_fields():
     assert first == second == "nested"
     mock_nested_count.assert_awaited_once()
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         await layer.get_nested_count(("CITY", "ZIP"))
 
 

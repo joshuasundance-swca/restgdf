@@ -20,7 +20,7 @@ except ImportError as _exc:
     from restgdf.errors import OptionalDependencyError
 
     raise OptionalDependencyError(
-        "The resilience extra is required: pip install restgdf[resilience]"
+        "The resilience extra is required: pip install restgdf[resilience]",
     ) from _exc
 
 from restgdf.resilience._retry import ResilientSession

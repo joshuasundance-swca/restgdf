@@ -14,9 +14,10 @@ alongside these in this module.
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, PrivateAttr, field_validator
 
 from restgdf._models._drift import PermissiveModel, StrictModel
 
@@ -259,6 +260,7 @@ class FeaturesResponse(PermissiveModel):
         alias="objectIdFieldName",
         validation_alias=AliasChoices("objectIdFieldName", "object_id_field_name"),
     )
+    fields: list[FieldSpec] | None = None
     features: list[dict[str, Any]] = Field(default_factory=list)
     exceeded_transfer_limit: bool | None = Field(
         default=None,
@@ -305,11 +307,12 @@ class NormalizedGeometry(PermissiveModel):
 
     type: str | None = None
     coords: Any = None
-    spatial_reference: int | dict[str, Any] | None = Field(
+    spatial_reference: int | None = Field(
         default=None,
         alias="spatialReference",
         validation_alias=AliasChoices("spatialReference", "spatial_reference"),
     )
+    _raw_spatial_reference: dict[str, Any] | None = PrivateAttr(default=None)
     has_z: bool = Field(
         default=False,
         alias="hasZ",
@@ -336,6 +339,43 @@ class NormalizedFeature(PermissiveModel):
     object_id: int | None = None
 
 
+_NULL_COORD_SENTINELS = {None, "NaN", "nan", "NAN"}
+
+
+def _is_null_geometry(geo: Mapping[str, Any]) -> bool:
+    """Return True when a geometry dict represents a null/empty geometry.
+
+    Five shapes: ``None``, ``{}``, missing key, ``{"x": None, "y": None}``,
+    ``{"x": "NaN", "y": "NaN"}``.  The first two (non-Mapping / empty dict)
+    are caught here; the coordinate-sentinel shapes need a value check.
+    """
+    if not geo:
+        return True
+    coord_keys = {
+        k
+        for k in geo
+        if k
+        not in {
+            "spatialReference",
+            "spatial_reference",
+            "hasZ",
+            "has_z",
+            "hasM",
+            "has_m",
+        }
+    }
+    if not coord_keys:
+        return True
+    for k in coord_keys:
+        v = geo.get(k)
+        if v is None:
+            continue
+        if isinstance(v, str) and v in ("NaN", "nan", "NAN"):
+            continue
+        return False
+    return True
+
+
 def _infer_geometry_type(geometry: Mapping[str, Any]) -> str | None:
     if "x" in geometry and "y" in geometry:
         return "point"
@@ -350,11 +390,55 @@ def _infer_geometry_type(geometry: Mapping[str, Any]) -> str | None:
     return None
 
 
+_ESRI_DATE_TYPES: frozenset[str] = frozenset(
+    {
+        "esriFieldTypeDate",
+        "esriFieldTypeTimeOnly",
+        "esriFieldTypeDateOnly",
+    },
+)
+
+
+_EPOCH_UTC = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
+def _epoch_ms_to_iso(value: Any) -> str | None:
+    """Convert an ArcGIS epoch-millisecond value to ISO-8601 UTC string.
+
+    Returns ``None`` when ``value`` is ``None`` or not convertible.
+    Uses an epoch anchor plus :class:`~datetime.timedelta` so behaviour
+    is stable across platforms (``datetime.fromtimestamp`` raises
+    ``OSError`` for negative values on Windows).
+    """
+    if value is None:
+        return None
+    try:
+        ms = int(value)
+    except (ValueError, TypeError):
+        return None
+    try:
+        return (_EPOCH_UTC + timedelta(milliseconds=ms)).isoformat()
+    except OverflowError:
+        return None
+
+
+def _resolve_date_fields(
+    fields: list[FieldSpec] | None,
+) -> frozenset[str]:
+    """Return the set of field names whose type is an Esri date type."""
+    if not fields:
+        return frozenset()
+    return frozenset(
+        f.name for f in fields if f.name is not None and f.type in _ESRI_DATE_TYPES
+    )
+
+
 def iter_normalized_features(
     response: FeaturesResponse,
     *,
     oid_field: str | None = None,
     sr: int | str | dict[str, Any] | None = None,
+    normalize_dates: bool = False,
 ) -> Iterator[NormalizedFeature]:
     """Yield :class:`NormalizedFeature` for each entry in ``response.features``.
 
@@ -374,6 +458,10 @@ def iter_normalized_features(
         Fallback spatial reference applied when the raw geometry does
         not already carry one. A server-provided ``spatialReference``
         always wins.
+    normalize_dates
+        When ``True``, epoch-millisecond values in ``esriFieldTypeDate``
+        fields are converted to ISO-8601 UTC strings. Defaults to
+        ``False`` to preserve the raw wire shape.
 
     Normalization is best-effort: missing geometry, missing attributes,
     and non-mapping feature entries are silently tolerated (iteration
@@ -383,6 +471,9 @@ def iter_normalized_features(
     iterator; they land with BL-29 when metadata context is available.
     """
     resolved_oid_field = oid_field or response.object_id_field_name
+    date_fields: frozenset[str] = (
+        _resolve_date_fields(response.fields) if normalize_dates else frozenset()
+    )
     for raw in response.features:
         if not isinstance(raw, Mapping):
             continue
@@ -393,9 +484,17 @@ def iter_normalized_features(
         else:
             attributes = {}
 
+        # BL-54: convert epoch-ms date fields to ISO-8601 UTC strings
+        if date_fields and attributes:
+            for fname in date_fields:
+                if fname in attributes and attributes[fname] is not None:
+                    converted = _epoch_ms_to_iso(attributes[fname])
+                    if converted is not None:
+                        attributes[fname] = converted
+
         geometry_raw = raw.get("geometry")
         geometry: NormalizedGeometry | None
-        if isinstance(geometry_raw, Mapping):
+        if isinstance(geometry_raw, Mapping) and not _is_null_geometry(geometry_raw):
             geo_dict = dict(geometry_raw)
             coords = {
                 key: value
@@ -408,13 +507,31 @@ def iter_normalized_features(
                 spatial_ref = geo_dict.get("spatial_reference")
             if spatial_ref is None:
                 spatial_ref = sr
+
+            # BL-23: normalize SR dict → EPSG int, preserve raw dict
+            raw_sr_dict: dict[str, Any] | None = None
+            epsg_int: int | None = None
+            if isinstance(spatial_ref, Mapping):
+                raw_sr_dict = dict(spatial_ref)
+                epsg_int = raw_sr_dict.get("latestWkid") or raw_sr_dict.get("wkid")
+                if not isinstance(epsg_int, int):
+                    epsg_int = None
+            elif isinstance(spatial_ref, int):
+                epsg_int = spatial_ref
+            elif isinstance(spatial_ref, str):
+                try:
+                    epsg_int = int(spatial_ref)
+                except (ValueError, TypeError):
+                    epsg_int = None
+
             geometry = NormalizedGeometry(
                 type=inferred,
                 coords=coords,
-                spatial_reference=spatial_ref,
+                spatial_reference=epsg_int,
                 has_z=bool(geo_dict.get("hasZ") or geo_dict.get("has_z") or False),
                 has_m=bool(geo_dict.get("hasM") or geo_dict.get("has_m") or False),
             )
+            geometry._raw_spatial_reference = raw_sr_dict
         else:
             geometry = None
 

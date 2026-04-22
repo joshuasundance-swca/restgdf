@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pandas import DataFrame
 
+from restgdf.errors import FieldDoesNotExistError
 from tests.id_schema_fixtures import load_id_schema_fixture
 from restgdf.utils.utils import ends_with_num, where_var_in_list
 from restgdf.utils.getinfo import (
@@ -231,10 +232,10 @@ def test_get_object_id_field():
         == "OBJECTID"
     )
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         get_object_id_field({"fields": []})
 
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         get_object_id_field(
             {
                 "fields": [
@@ -282,7 +283,7 @@ def test_ends_with_num():
 def test_get_name():
     assert get_name({"name": "Test Layer"}) == "Test Layer"
     assert get_name({"Name": "Mixed Case"}) == "Mixed Case"
-    with pytest.raises(IndexError):
+    with pytest.raises(FieldDoesNotExistError):
         get_name({"noname": "x"})
 
 

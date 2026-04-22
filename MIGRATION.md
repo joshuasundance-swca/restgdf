@@ -931,3 +931,80 @@ and ``auth.refresh.failure`` events at DEBUG level via the
 When ``TokenSessionConfig.referer`` (or ``AuthConfig.referer``) is set,
 ``token_request_payload`` includes ``"referer": <url>`` and switches the
 ArcGIS ``client`` field from ``"requestip"`` to ``"referer"``.
+
+### phase-3d
+
+**Normalization, safe_crawl polish, and BL-23/39/51/54 hardening.**
+Phase-3d retires two legacy error shapes, adds date/field normalization
+helpers, bounds ``safe_crawl`` concurrency, and wires the inline
+feature-count retry that complements phase-3a's resilience extra.
+
+#### Breaking changes
+
+- **``FIELDDOESNOTEXIST`` removed** (BL-09, R-02). The legacy sentinel
+  ``restgdf.utils._metadata.FIELDDOESNOTEXIST`` (and the re-export
+  through ``restgdf.utils.getinfo``) is gone. Call sites must now
+  ``except FieldDoesNotExistError`` (new ``ArcGISServiceError`` subclass
+  under the BL-06 taxonomy).
+- **``PaginationError`` no longer multi-inherits ``RuntimeError``.**
+  Callers that caught ``RuntimeError`` around ``feature_count`` /
+  pagination planner calls must widen to ``RestgdfError`` or narrow
+  to ``PaginationError`` / ``ArcGISServiceError``.
+
+#### New public surfaces (BL-23, BL-54)
+
+- ``restgdf.utils._metadata.normalize_spatial_reference(sr)`` — pure
+  helper returning ``(epsg_int | None, raw_dict | None)``. Prefers
+  ``latestWkid`` over ``wkid`` for EPSG-consuming clients (R-28);
+  preserves the original ``{wkid, latestWkid}`` mapping as the raw
+  component for round-trip fidelity.
+- ``GeoDataFrame.attrs["spatial_reference"]`` propagation through
+  ``concat_gdfs`` (R-28 propagation primitive). End-to-end wiring
+  from layer metadata to the materialized ``.attrs`` happens in
+  phase-4B (R-65); phase-3d ships the propagation primitive only.
+- ``restgdf.utils._metadata.normalize_date_fields(features, fields)``
+  — converts ArcGIS ``esriFieldTypeDate`` epoch-ms integers to
+  ISO-8601 UTC strings. Defaults preserve the integer representation;
+  opt in with ``normalize_dates=True`` on the adapter layer. Adapter
+  coercion to ``datetime64[ms, UTC]`` at DataFrame materialization
+  is a phase-4B follow-up.
+
+#### ``safe_crawl`` concurrency bound (Q-A7)
+
+``Directory.safe_crawl`` now routes the expensive per-layer
+``feature_count`` probe through a ``BoundedSemaphore`` (R-18) sized
+from ``ConcurrencyConfig.max_concurrent_requests``. Matches phase-1a's
+crawl fan-out bound; prevents head-of-line stalls on large portals.
+
+#### Feature-count timeout + bounded retry (BL-51)
+
+``_feature_count_with_timeout`` in ``restgdf.utils.getinfo`` wraps
+``get_feature_count`` with exponential-backoff retry on **timeout
+failures only** — ``asyncio.TimeoutError``, ``TimeoutError``,
+``aiohttp.ServerTimeoutError``. Connection-level failures
+(``aiohttp.ClientConnectionError``) and deterministic failures
+(``RestgdfResponseError``, validation errors, 4xx) fail fast without
+retry, so real transport errors are not misreported as timeouts.
+Exhausted timeouts raise ``RestgdfTimeoutError`` with the original
+exception chained as ``__cause__``. Inline-only: no soft-dep on the
+resilience extra (R-59).
+
+#### Test-infra additions (BL-39, R-62 scope)
+
+- ``hypothesis``, ``aioresponses``, and ``opentelemetry-sdk`` added
+  to the ``dev`` extra for property-based crawl tests and
+  transport-level telemetry assertions.
+- ``tests/test_crawl_property_hypothesis.py`` scaffold — property
+  test for ``safe_crawl`` stability under randomized failure orders.
+- ``tests/_mocks/aioresponses_helpers.py`` — shared mock-server
+  fixtures for 4xx/5xx/timeout scenarios.
+- Full install-combination matrix (base / +resilience / +telemetry /
+  +geo / full) remains a post-3.0 follow-up (R-62).
+
+#### Coverage exclusions (R-63)
+
+``pyproject.toml::[tool.coverage.report].exclude_also`` now also
+excludes ``if TYPE_CHECKING:``, ``@overload``, and bare-ellipsis
+Protocol/ABC stub lines. Standard coverage.py idioms (pydantic /
+httpx / attrs precedent); does not relax the ``fail_under=97``
+threshold — only corrects the denominator.

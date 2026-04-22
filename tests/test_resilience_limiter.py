@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-from restgdf._config import ResilienceConfig
 
 
 class TestServiceRootDerivation:
@@ -18,13 +15,19 @@ class TestServiceRootDerivation:
         from restgdf.resilience._limiter import _service_root
 
         url = "https://example.com/arcgis/rest/services/MyMap/FeatureServer/0/query"
-        assert _service_root(url) == "https://example.com/arcgis/rest/services/MyMap/FeatureServer"
+        assert (
+            _service_root(url)
+            == "https://example.com/arcgis/rest/services/MyMap/FeatureServer"
+        )
 
     def test_map_server_url(self) -> None:
         from restgdf.resilience._limiter import _service_root
 
         url = "https://example.com/arcgis/rest/services/MyMap/MapServer/0/query"
-        assert _service_root(url) == "https://example.com/arcgis/rest/services/MyMap/MapServer"
+        assert (
+            _service_root(url)
+            == "https://example.com/arcgis/rest/services/MyMap/MapServer"
+        )
 
     def test_no_server_suffix_returns_host(self) -> None:
         from restgdf.resilience._limiter import _service_root

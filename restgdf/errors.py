@@ -32,6 +32,7 @@ Hierarchy::
     |   +-- OptionalDependencyError(ConfigurationError, ModuleNotFoundError)
     +-- RestgdfResponseError(RestgdfError, ValueError)
     |   +-- SchemaValidationError(RestgdfResponseError)
+    |   |   +-- FieldDoesNotExistError(SchemaValidationError)
     |   +-- ArcGISServiceError(RestgdfResponseError)
     |   |   +-- PaginationError(ArcGISServiceError, IndexError)
     |   +-- AuthenticationError(RestgdfResponseError, PermissionError)
@@ -118,6 +119,52 @@ class SchemaValidationError(RestgdfResponseError):
     the transitional ``SchemaValidationError(IndexError, ...)`` shim that
     earlier drafts of the plan proposed.
     """
+
+
+class FieldDoesNotExistError(SchemaValidationError):
+    """A referenced field is absent from the ArcGIS layer metadata (BL-09).
+
+    Replaces the 2.x ``FIELDDOESNOTEXIST`` ``IndexError`` singleton per
+    plan.md §3c R-02. Callers previously catching ``IndexError`` must
+    migrate to ``except FieldDoesNotExistError`` (or the parent
+    ``SchemaValidationError`` / ``RestgdfResponseError``). No compat shim.
+
+    Attributes
+    ----------
+    field_name : ``str | tuple[str, ...] | None``
+        The field(s) that failed resolution.
+    context : ``str``
+        Call-site identifier (e.g. ``"FeatureLayer.get_unique_values"``);
+        defaults to ``"FieldDoesNotExistError"`` when the caller passes
+        ``None``, matching the parent :class:`RestgdfResponseError`
+        contract where ``context`` is always a non-``None`` string.
+    """
+
+    def __init__(
+        self,
+        field_name: str | tuple[str, ...] | None = None,
+        *,
+        context: str | None = None,
+        message: str | None = None,
+    ) -> None:
+        self.field_name = field_name
+        if message is None:
+            if field_name is None:
+                message = (
+                    f"Field does not exist ({context})"
+                    if context
+                    else "Field does not exist"
+                )
+            else:
+                message = f"Field does not exist: {field_name!r}"
+                if context:
+                    message += f" ({context})"
+        super().__init__(
+            message,
+            model_name="ArcGIS.layer.fields",
+            context=context or "FieldDoesNotExistError",
+            raw=None,
+        )
 
 
 class ArcGISServiceError(RestgdfResponseError):
@@ -358,6 +405,7 @@ __all__ = [
     "AuthNotAttachedError",
     "AuthenticationError",
     "ConfigurationError",
+    "FieldDoesNotExistError",
     "InvalidCredentialsError",
     "OptionalDependencyError",
     "OutputConversionError",

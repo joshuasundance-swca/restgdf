@@ -16,7 +16,8 @@ class TestResilienceOptionalDependency:
         from restgdf import ResilienceConfig  # noqa: F401
 
     def test_resilience_import_raises_optional_dependency_error_when_missing(
-        self, monkeypatch: pytest.MonkeyPatch
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """import restgdf.resilience raises OptionalDependencyError when stamina missing."""
         # Remove cached module and sentinel-block stamina
@@ -27,6 +28,7 @@ class TestResilienceOptionalDependency:
 
         with pytest.raises(OptionalDependencyError) as exc_info:
             import importlib
+
             importlib.import_module("restgdf.resilience")
 
         assert isinstance(exc_info.value, ModuleNotFoundError)

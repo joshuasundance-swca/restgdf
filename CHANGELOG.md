@@ -173,6 +173,31 @@ All notable changes to restgdf are documented here. This project follows
   `get_logger("pagination")`. `get_query_data_batches` is rerouted
   through the planner with no public-signature change and all pinned
   fixtures preserved (BL-22).
+- `restgdf.utils._metadata.normalize_spatial_reference(sr)` — pure
+  helper returning `(epsg_int | None, raw_dict | None)` that prefers
+  `latestWkid` over `wkid` for EPSG-consuming clients (BL-23, R-28).
+- `concat_gdfs` propagates `GeoDataFrame.attrs["spatial_reference"]`
+  across concatenation (BL-23 propagation primitive). End-to-end
+  metadata→`.attrs` wiring lands in phase-4B per R-65.
+- `restgdf.utils._metadata.normalize_date_fields(features, fields)` —
+  converts ArcGIS `esriFieldTypeDate` epoch-ms integers to ISO-8601
+  UTC strings. Opt-in via `normalize_dates=True` on the adapter layer
+  (BL-54).
+- `restgdf.utils.getinfo._feature_count_with_timeout` — inline bounded
+  retry around `get_feature_count` with exponential backoff. Retries
+  only on `asyncio.TimeoutError`, `TimeoutError`, and
+  `aiohttp.ServerTimeoutError`; connection-level failures
+  (`aiohttp.ClientConnectionError`) and deterministic errors
+  (`RestgdfResponseError`, schema mismatches) propagate on the first
+  attempt so they are not misreported as timeouts. Exhausted timeouts
+  raise `RestgdfTimeoutError` with `__cause__` preserved (BL-51).
+- `Directory.safe_crawl` now routes its per-layer `feature_count`
+  probe through a `BoundedSemaphore` sized from
+  `ConcurrencyConfig.max_concurrent_requests` (Q-A7).
+- `hypothesis`, `aioresponses`, and `opentelemetry-sdk` added to the
+  `dev` extra. New `tests/test_crawl_property_hypothesis.py` scaffold
+  and `tests/_mocks/aioresponses_helpers.py` shared fixtures (BL-39,
+  R-62 scope).
 
 ### Changed
 
@@ -225,6 +250,22 @@ All notable changes to restgdf are documented here. This project follows
   fires a `DeprecationWarning`. `token_refresh_threshold` is resynced
   from the validated config after construction.
 - **BREAKING** `getgdf` / `_get_sub_features` now raise `restgdf.errors.PaginationError` (not `RuntimeError`) on `exceededTransferLimit=true`. `PaginationError` carries `batch_index` and `page_size`. See MIGRATION.md § Unreleased migration notes / phase-1b-bl08. (BL-08)
+- **BREAKING** `PaginationError` no longer multi-inherits `RuntimeError`
+  (phase-3d consolidation under the BL-06 taxonomy). Callers catching
+  `RuntimeError` around `feature_count` / pagination calls must widen
+  to `RestgdfError` or narrow to `PaginationError` /
+  `ArcGISServiceError` (BL-09, R-02).
+- `pyproject.toml::[tool.coverage.report].exclude_also` extended with
+  `if TYPE_CHECKING:`, `@overload`, and bare-ellipsis stub lines
+  (standard coverage.py idioms, pydantic/httpx/attrs precedent).
+  Threshold `fail_under=97` unchanged (R-63).
+
+### Removed
+
+- `restgdf.utils._metadata.FIELDDOESNOTEXIST` sentinel (and its
+  re-export via `restgdf.utils.getinfo`). Call sites must now
+  `except FieldDoesNotExistError` from the BL-06 taxonomy (BL-09,
+  R-02). Hard break — no compat shim.
 
 ### Deprecated
 

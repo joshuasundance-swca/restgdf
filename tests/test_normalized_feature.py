@@ -53,7 +53,7 @@ def test_point_feature_hoists_object_id() -> None:
     assert feature.geometry is not None
     assert feature.geometry.type == "point"
     assert feature.geometry.coords == {"x": 1.0, "y": 2.0}
-    assert feature.geometry.spatial_reference == {"wkid": 4326}
+    assert feature.geometry.spatial_reference == 4326
 
 
 def test_polygon_feature_type_inferred() -> None:
@@ -187,7 +187,7 @@ def test_server_sr_wins_over_kwarg() -> None:
     )
     feature = next(iter_normalized_features(response, sr=4326))
     assert feature.geometry is not None
-    assert feature.geometry.spatial_reference == {"wkid": 3857}
+    assert feature.geometry.spatial_reference == 3857
 
 
 def test_non_mapping_feature_entry_is_skipped() -> None:
@@ -261,15 +261,11 @@ def test_empty_paths_polyline_preserved_as_empty_coords() -> None:
 
 
 def test_empty_dict_geometry_yields_none_typed_geometry() -> None:
-    # An empty geometry dict is still a Mapping, so the iterator
-    # produces a NormalizedGeometry with unknown type and empty coords
-    # rather than crashing or returning None. This pins defense-in-
-    # depth behavior against vendor payloads that omit coord keys.
+    # R-27: An empty geometry dict is a null-geometry shape that should
+    # be normalized to None rather than producing a degenerate object.
     response = _features_response([{"attributes": {"k": 1}, "geometry": {}}])
     feature = next(iter_normalized_features(response))
-    assert feature.geometry is not None
-    assert feature.geometry.type is None
-    assert feature.geometry.coords == {}
+    assert feature.geometry is None
 
 
 def test_curve_ring_geometry_falls_back_to_none_type() -> None:
