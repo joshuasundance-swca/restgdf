@@ -35,6 +35,11 @@ Hierarchy::
     |   +-- ArcGISServiceError(RestgdfResponseError)
     |   |   +-- PaginationError(ArcGISServiceError, IndexError)
     |   +-- AuthenticationError(RestgdfResponseError, PermissionError)
+    |       +-- InvalidCredentialsError(AuthenticationError)
+    |       +-- TokenExpiredError(AuthenticationError)
+    |       +-- TokenRequiredError(AuthenticationError)
+    |       +-- TokenRefreshFailedError(AuthenticationError)
+    |       +-- AuthNotAttachedError(AuthenticationError)
     +-- TransportError(RestgdfError)
     |   +-- RestgdfTimeoutError(TransportError, TimeoutError)
     |   +-- RateLimitError(TransportError)
@@ -155,6 +160,124 @@ class AuthenticationError(RestgdfResponseError, PermissionError):
     """
 
 
+def _redact_secret_str(value: object) -> str:
+    """Return ``'**********'`` for SecretStr values, ``str(value)`` otherwise."""
+    # Avoid importing pydantic at module level just for this guard.
+    cls_name = type(value).__name__
+    if cls_name == "SecretStr":
+        return "**********"
+    return str(value)
+
+
+class _AuthSubtypeBase(AuthenticationError):
+    """Internal base for auth subtypes carrying ``context``, ``attempt``, ``cause``.
+
+    All five public auth subtypes below inherit this mixin.  ``__repr__``
+    and ``__str__`` redact any :class:`pydantic.SecretStr`-wrapped value
+    in *cause* so credential material never leaks to logs / tracebacks.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        context: str | None = None,
+        attempt: int | None = None,
+        cause: BaseException | None = None,
+        model_name: str = "AuthenticationError",
+        raw: Any = None,
+    ) -> None:
+        super().__init__(
+            message,
+            model_name=model_name,
+            context=context or "",
+            raw=raw,
+        )
+        self.context = context
+        self.attempt = attempt
+        self.cause = cause
+        if cause is not None and isinstance(cause, BaseException):
+            self.__cause__ = cause
+
+    def __str__(self) -> str:
+        parts = [super(Exception, self).__str__()]
+        if self.context:
+            parts.append(f"context={self.context!r}")
+        if self.attempt is not None:
+            parts.append(f"attempt={self.attempt}")
+        if self.cause is not None:
+            parts.append(f"cause={_redact_secret_str(self.cause)}")
+        return " | ".join(parts)
+
+    def __repr__(self) -> str:
+        cls = type(self).__name__
+        cause_repr = (
+            _redact_secret_str(self.cause) if self.cause is not None else None
+        )
+        return (
+            f"{cls}(context={self.context!r}, "
+            f"attempt={self.attempt!r}, cause={cause_repr!r})"
+        )
+
+
+class InvalidCredentialsError(_AuthSubtypeBase):
+    """Raised on 400 / bad credentials from ``/generateToken``.
+
+    Inherits :class:`AuthenticationError` → :class:`PermissionError`.
+    """
+
+
+class TokenExpiredError(_AuthSubtypeBase):
+    """Raised when ArcGIS returns error code **498** (Invalid Token).
+
+    Attributes
+    ----------
+    code : int
+        Always ``498``.
+    """
+
+    def __init__(
+        self,
+        message: str = "Token expired (Esri 498)",
+        *,
+        code: int = 498,
+        context: str | None = None,
+        attempt: int | None = None,
+        cause: BaseException | None = None,
+    ) -> None:
+        super().__init__(
+            message, context=context, attempt=attempt, cause=cause,
+        )
+        self.code = code
+
+
+class TokenRequiredError(_AuthSubtypeBase):
+    """Raised when ArcGIS returns error code **499** (Token Required).
+
+    Semantically: the service demands a token but the request did not
+    carry one (or the wrong transport was chosen).
+    """
+
+
+class TokenRefreshFailedError(_AuthSubtypeBase):
+    """Raised after the bounded-retry ladder for ``/generateToken`` is exhausted.
+
+    Attributes
+    ----------
+    attempt : int | None
+        The final attempt number at which the refresh was abandoned.
+    """
+
+
+class AuthNotAttachedError(_AuthSubtypeBase):
+    """Raised when a 499 is observed — the library did not attach auth to the request.
+
+    Per R-14 no retry is attempted; the error propagates immediately to
+    the caller. This is semantically distinct from :class:`TokenExpiredError`
+    (498) which *does* trigger a single-flight refresh.
+    """
+
+
 class TransportError(RestgdfError):
     """Raised for network/HTTP transport-layer failures (connection, DNS, ...).
 
@@ -231,8 +354,10 @@ class OutputConversionError(RestgdfError):
 
 __all__ = [
     "ArcGISServiceError",
+    "AuthNotAttachedError",
     "AuthenticationError",
     "ConfigurationError",
+    "InvalidCredentialsError",
     "OptionalDependencyError",
     "OutputConversionError",
     "PaginationError",
@@ -241,5 +366,8 @@ __all__ = [
     "RestgdfResponseError",
     "RestgdfTimeoutError",
     "SchemaValidationError",
+    "TokenExpiredError",
+    "TokenRefreshFailedError",
+    "TokenRequiredError",
     "TransportError",
 ]

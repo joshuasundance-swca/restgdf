@@ -23,6 +23,8 @@ from restgdf._models.credentials import AGOLUserPass, TokenSessionConfig
 from restgdf._models.responses import TokenResponse
 from restgdf.utils._http import default_timeout
 
+from restgdf.errors import AuthenticationError
+
 __all__ = [
     "AGOLUserPass",
     "ArcGISTokenSession",
@@ -113,7 +115,12 @@ class ArcGISTokenSession:
     def token_request_payload(self) -> dict:
         """Return the payload for the token request."""
         if self.credentials is None:
-            raise ValueError("Credentials are required to generate a token.")
+            raise AuthenticationError(
+                "Credentials are required to generate a token.",
+                model_name="ArcGISTokenSession",
+                context="token_request_payload",
+                raw=None,
+            )
         return {
             "f": "json",
             "client": "requestip",

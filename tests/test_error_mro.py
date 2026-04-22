@@ -237,8 +237,10 @@ def test_module_lists_full_public_api() -> None:
     exported = set(errors_module.__all__)
     expected = {
         "ArcGISServiceError",
+        "AuthNotAttachedError",
         "AuthenticationError",
         "ConfigurationError",
+        "InvalidCredentialsError",
         "OptionalDependencyError",
         "OutputConversionError",
         "PaginationError",
@@ -247,6 +249,9 @@ def test_module_lists_full_public_api() -> None:
         "RestgdfResponseError",
         "RestgdfTimeoutError",
         "SchemaValidationError",
+        "TokenExpiredError",
+        "TokenRefreshFailedError",
+        "TokenRequiredError",
         "TransportError",
     }
     assert exported == expected
