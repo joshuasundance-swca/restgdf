@@ -35,18 +35,23 @@ _DEFAULT_FACTOR: Final[float] = 1.0
 class PaginationPlan:
     """Frozen result of :func:`build_pagination_plan`.
 
-    Attributes:
-        total_records: Layer-wide feature count the plan paginates over.
-        max_record_count: Server-advertised per-page cap.
-        max_record_count_factor: Effective factor after clamping against
-            the advertised upper bound. Equals the caller-supplied
-            ``factor`` when no clamp was applied.
-        effective_page_size: ``max(1, int(max_record_count *
-            max_record_count_factor))`` — the actual page size used to
-            compute batches.
-        batches: Tuple of ``(resultOffset, resultRecordCount)`` pairs.
-            Empty when ``total_records == 0``. Last pair's count may be
-            less than ``effective_page_size`` (partial tail page).
+    Attributes
+    ----------
+    total_records : int
+        Layer-wide feature count the plan paginates over.
+    max_record_count : int
+        Server-advertised per-page cap.
+    max_record_count_factor : float
+        Effective factor after clamping against the advertised upper
+        bound. Equals the caller-supplied ``factor`` when no clamp was
+        applied.
+    effective_page_size : int
+        ``max(1, int(max_record_count * max_record_count_factor))`` —
+        the actual page size used to compute batches.
+    batches : tuple
+        Tuple of ``(resultOffset, resultRecordCount)`` pairs. Empty
+        when ``total_records == 0``. Last pair's count may be less
+        than ``effective_page_size`` (partial tail page).
     """
 
     total_records: int
@@ -65,21 +70,28 @@ def build_pagination_plan(
 ) -> PaginationPlan:
     """Compute a :class:`PaginationPlan` for ``total_records`` rows.
 
-    Args:
-        total_records: Non-negative total row count (typically the
-            result of ``get_feature_count``).
-        max_record_count: Positive server-advertised per-page cap.
-        factor: Caller-supplied multiplier on ``max_record_count``.
-            Defaults to 1.0 (pure ``max_record_count`` pagination).
-        advertised_factor: Server-advertised
-            ``advancedQueryCapabilities.maxRecordCountFactor`` upper
-            bound. When provided and ``factor > advertised_factor``,
-            the factor is clamped down and a single warning is logged
-            under ``restgdf.pagination``.
+    Parameters
+    ----------
+    total_records : int
+        Non-negative total row count (typically the result of
+        ``get_feature_count``).
+    max_record_count : int
+        Positive server-advertised per-page cap.
+    factor : float, optional
+        Caller-supplied multiplier on ``max_record_count``. Defaults
+        to 1.0 (pure ``max_record_count`` pagination).
+    advertised_factor : float or None, optional
+        Server-advertised
+        ``advancedQueryCapabilities.maxRecordCountFactor`` upper
+        bound. When provided and ``factor > advertised_factor``, the
+        factor is clamped down and a single warning is logged under
+        ``restgdf.pagination``.
 
-    Raises:
-        ValueError: If ``total_records < 0``, ``max_record_count <= 0``,
-            or ``factor <= 0``.
+    Raises
+    ------
+    ValueError
+        If ``total_records < 0``, ``max_record_count <= 0``, or
+        ``factor <= 0``.
     """
     if total_records < 0:
         raise ValueError("total_records must be >= 0")

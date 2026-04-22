@@ -170,6 +170,12 @@ async def get_query_data_batches(
                 for offset in range(0, feature_count, page_size)
             ]
         plan = build_pagination_plan(feature_count, max_record_count)
+        # NOTE (BL-21/22 deferred): maxRecordCountFactor from
+        # advancedQueryCapabilities is intentionally NOT plumbed here in
+        # phase-2c. The planner API accepts `advertised_factor` / `factor`
+        # and will clamp with a warning via `get_logger("pagination")`;
+        # the live wire-up is deferred to a future phase to preserve
+        # byte-exact batch sizes during the 3.0 migration.
         return [
             {
                 **request_data,

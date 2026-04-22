@@ -80,7 +80,8 @@ def test_layer_metadata_typed_field_accepts_submodel():
     )
     assert layer.advanced_query_capabilities == REAL_WORLD_PAYLOAD
     assert isinstance(
-        layer.advanced_query_capabilities_typed, AdvancedQueryCapabilities,
+        layer.advanced_query_capabilities_typed,
+        AdvancedQueryCapabilities,
     )
     assert layer.advanced_query_capabilities_typed.max_record_count_factor == 2.0
 
@@ -93,7 +94,8 @@ def test_layer_metadata_typed_field_accepts_dict_and_validates():
         advancedQueryCapabilitiesTyped=REAL_WORLD_PAYLOAD,
     )
     assert isinstance(
-        layer.advanced_query_capabilities_typed, AdvancedQueryCapabilities,
+        layer.advanced_query_capabilities_typed,
+        AdvancedQueryCapabilities,
     )
     assert layer.advanced_query_capabilities_typed.supports_query_by_oids is True
 

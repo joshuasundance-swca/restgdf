@@ -341,7 +341,14 @@ phase-2c (BL-21 + BL-22):
   ``factor=1.0`` so production batch sizes are unchanged; plumbing the
   live ``maxRecordCountFactor`` from layer metadata into the planner
   is a deliberate P1 follow-up so it can ship with its own review
-  surface and observability story.
+  surface and observability story. The ``PaginationPlan``
+  clamp-warning behavior is available via the planner API but is
+  **not** yet wired into ``get_query_data_batches`` — live
+  ``advancedQueryCapabilities.maxRecordCountFactor`` plumbing is
+  deferred. Callers using ``build_pagination_plan`` directly see the
+  full clamp/warning semantics today. The planner enforces no
+  hardcoded clamp range; it clamps only to the service-advertised
+  ``advertised_factor`` upper bound.
 
 No behavior change for existing consumers. Byte-exact pagination
 fixtures in ``tests/test_getgdf.py`` and
