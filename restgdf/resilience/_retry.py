@@ -17,6 +17,7 @@ from restgdf.errors import (
     RestgdfTimeoutError,
     TransportError,
 )
+from restgdf.resilience._errors import _parse_retry_after
 
 
 _log = get_logger("retry")
@@ -151,6 +152,8 @@ async def _do_retried_request(
                 model_name="",
                 context=url,
                 raw=None,
+                url=url,
+                status_code=resp.status,
             )
 
         return resp
@@ -159,21 +162,30 @@ async def _do_retried_request(
         return await _attempt()
     except _RetryableHTTPError as exc:
         if exc.status == 429:
+            retry_after = _parse_retry_after(exc.headers.get("Retry-After", ""))
             raise RateLimitError(
                 f"Rate limited (429) at {url}",
-                retry_after=None,
+                retry_after=retry_after,
+                url=url,
+                status_code=429,
             ) from exc
         raise RestgdfResponseError(
             f"Server error ({exc.status}) at {url}",
             model_name="",
             context=url,
             raw=None,
+            url=url,
+            status_code=exc.status,
         ) from exc
     except aiohttp.ClientConnectorError as exc:
         raise TransportError(
             f"Connection failed for {url}",
+            url=url,
+            status_code=None,
         ) from exc
     except aiohttp.ServerTimeoutError as exc:
         raise RestgdfTimeoutError(
             f"Read timeout: {exc}",
+            url=url,
+            timeout_kind="read",
         ) from exc

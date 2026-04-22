@@ -90,14 +90,20 @@ class RestgdfResponseError(RestgdfError, ValueError):
         self,
         message: str,
         *,
-        model_name: str,
-        context: str,
-        raw: Any,
+        model_name: str = "",
+        context: str = "",
+        raw: Any = None,
+        url: str | None = None,
+        status_code: int | None = None,
+        request_id: str | None = None,
     ) -> None:
         super().__init__(message)
         self.model_name = model_name
         self.context = context
         self.raw = raw
+        self.url = url
+        self.status_code = status_code
+        self.request_id = request_id
 
 
 class SchemaValidationError(RestgdfResponseError):
@@ -150,7 +156,26 @@ class AuthenticationError(RestgdfResponseError, PermissionError):
 
 
 class TransportError(RestgdfError):
-    """Raised for network/HTTP transport-layer failures (connection, DNS, ...)."""
+    """Raised for network/HTTP transport-layer failures (connection, DNS, ...).
+
+    Attributes
+    ----------
+    url
+        The URL that was being requested when the failure occurred.
+    status_code
+        The HTTP status code, if one was received before the transport
+        failure. ``None`` for pre-connect failures (DNS, refused, …).
+    """
+
+    def __init__(
+        self,
+        *args: Any,
+        url: str | None = None,
+        status_code: int | None = None,
+    ) -> None:
+        super().__init__(*args)
+        self.url = url
+        self.status_code = status_code
 
 
 class RestgdfTimeoutError(TransportError, TimeoutError):
@@ -159,7 +184,23 @@ class RestgdfTimeoutError(TransportError, TimeoutError):
     Named ``RestgdfTimeoutError`` (not ``TimeoutError``) to avoid shadowing
     the builtin. Multi-inherits :class:`TimeoutError` so
     ``except TimeoutError`` callers continue to match.
+
+    Attributes
+    ----------
+    timeout_kind
+        One of ``"total"``, ``"connect"``, or ``"read"``, indicating which
+        timeout budget was exceeded. ``None`` when unknown.
     """
+
+    def __init__(
+        self,
+        *args: Any,
+        url: str | None = None,
+        status_code: int | None = None,
+        timeout_kind: str | None = None,
+    ) -> None:
+        super().__init__(*args, url=url, status_code=status_code)
+        self.timeout_kind = timeout_kind
 
 
 class RateLimitError(TransportError):
@@ -177,8 +218,10 @@ class RateLimitError(TransportError):
         self,
         *args: Any,
         retry_after: float | None = None,
+        url: str | None = None,
+        status_code: int | None = None,
     ) -> None:
-        super().__init__(*args)
+        super().__init__(*args, url=url, status_code=status_code)
         self.retry_after = retry_after
 
 

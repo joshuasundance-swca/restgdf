@@ -20,6 +20,16 @@ All notable changes to restgdf are documented here. This project follows
   Requires the `resilience` extra: `pip install restgdf[resilience]` (BL-31).
 - `[project.optional-dependencies] resilience` extra in pyproject.toml:
   `stamina>=24.2`, `aiolimiter>=1.1` (BL-31).
+- Error-attribute population (BL-36): `RestgdfResponseError` now carries
+  optional `url`, `status_code`, and `request_id` attributes (kw-only,
+  default ``None``). `TransportError` gains `url` and `status_code`.
+  `RestgdfTimeoutError` gains `timeout_kind` (``"total"``, ``"connect"``,
+  or ``"read"``). `RateLimitError` gains `url` and `status_code` alongside
+  existing `retry_after`. All new attrs are backward-compatible — existing
+  call sites that omit them get ``None`` defaults.
+- `_parse_retry_after(value)` helper in `restgdf.resilience._errors`
+  parses integer-seconds and RFC 7231 HTTP-date ``Retry-After`` header
+  values into ``float | None`` (Q-A12).
 - `restgdf.Config` — frozen pydantic 2.x aggregate of seven frozen
   sub-configs (`TransportConfig`, `TimeoutConfig`, `RetryConfig`,
   `LimiterConfig`, `ConcurrencyConfig`, `AuthConfig`, `TelemetryConfig`)

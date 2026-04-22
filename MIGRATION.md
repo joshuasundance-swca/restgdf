@@ -823,3 +823,12 @@ library expects a plain `str`, unwrap explicitly with
   sub-config on `Config.resilience`). Disabled by default; opt-in via
   `RESTGDF_RESILIENCE_ENABLED=1` or by constructing `ResilienceConfig(enabled=True)`.
   When disabled, `ResilientSession` is a zero-overhead pass-through.
+- **Error-attribute population (BL-36).** `RestgdfResponseError`,
+  `TransportError`, `RestgdfTimeoutError`, and `RateLimitError` now
+  accept optional `url`, `status_code`, `request_id`, and `timeout_kind`
+  keyword arguments. All default to `None`, so existing call sites are
+  unaffected. The resilience retry wrapper populates these attributes
+  automatically.
+- **Retry-After parsing (Q-A12).** `RateLimitError.retry_after` is now
+  populated from the server's `Retry-After` header (integer-seconds or
+  RFC 7231 HTTP-date) when the resilience retry wrapper raises a 429.
