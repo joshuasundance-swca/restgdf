@@ -103,6 +103,7 @@ async def service_metadata(
     service_url: str,
     token: str | None = None,
     return_feature_count: bool = False,
+    _sem: asyncio.Semaphore | None = None,
 ) -> LayerMetadata:
     """Asynchronously retrieve layers for a single service.
 
@@ -112,13 +113,30 @@ async def service_metadata(
     The aggregated payload is validated against :class:`LayerMetadata` via
     the drift adapter before being returned, so vendor-variance extras are
     logged (not raised) and callers get a typed envelope.
+
+    BL-01: ``_sem`` is a private kwarg allowing a caller (e.g. the
+    ``fetch_all_data`` / ``safe_crawl`` orchestrators) to share ONE
+    ``BoundedSemaphore`` across nested fan-outs so the cap is global per
+    top-level request. When ``None``, a fresh sem is created and the
+    direct-call semantics are preserved.
     """
-    _raw = await get_metadata(service_url, session, token=token)
+    # BL-01: when called nested (``_sem`` supplied), every HTTP call made by
+    # this orchestrator must compete for the same cap as the caller's fan-out.
+    # When called standalone, a fresh sem preserves the direct-call contract.
+    sem = _sem or asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
+
+    # Service-level metadata is a single HTTP call — gate it explicitly so it
+    # participates in the shared cap without being wrapped by the
+    # ``bounded_gather`` below (which would introduce a double-acquire).
+    async with sem:
+        _raw = await get_metadata(service_url, session, token=token)
     _service_metadata: dict[str, Any] = (
         _raw.model_dump(by_alias=True) if isinstance(_raw, BaseModel) else dict(_raw)
     )
 
     async def _comprehensive_metadata(layer_url: str) -> dict[str, Any]:
+        # ``bounded_gather`` below acquires ``sem`` once per task, so do NOT
+        # re-acquire here — ``asyncio.Semaphore`` is not re-entrant.
         layer_raw = await get_metadata(layer_url, session, token=token)
         metadata: dict[str, Any] = (
             layer_raw.model_dump(by_alias=True)
@@ -142,9 +160,9 @@ async def service_metadata(
         _comprehensive_metadata(f"{service_url}/{layer['id']}")
         for layer in _service_metadata.get("layers") or []
     ]
-    # BL-01: one BoundedSemaphore per top-level orchestration call, consumed
-    # at this enumerated fan-out site (plan.md §3c R-18/R-44, kickoff §10.3).
-    _sem = asyncio.BoundedSemaphore(get_settings().max_concurrent_requests)
-    results = await bounded_gather(*tasks, semaphore=_sem)
+    # BL-01: enumerated fan-out site. ``bounded_gather`` holds ``sem`` for
+    # each task (plan.md §3c R-18/R-44, kickoff §10.3). When a shared sem is
+    # passed in by a top-level orchestrator, the cap is truly global.
+    results = await bounded_gather(*tasks, semaphore=sem)
     _service_metadata["layers"] = results
     return _parse_response(LayerMetadata, _service_metadata, context=service_url)
