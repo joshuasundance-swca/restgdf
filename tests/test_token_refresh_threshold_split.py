@@ -200,3 +200,42 @@ def test_ts_config_legacy_alias_drives_runtime():
         expires=_expires_in_seconds(80),
     )
     assert ts.token_needs_update() is True
+
+
+# ---------------------------------------------------------------------------
+# Warning-surface guards: no spurious DeprecationWarnings at construction.
+# ---------------------------------------------------------------------------
+
+
+def test_plain_arcgis_token_session_construction_is_silent():
+    """Constructing ``ArcGISTokenSession`` must not emit any deprecation."""
+    from restgdf.utils.token import ArcGISTokenSession
+
+    class _Sess:
+        pass
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        ArcGISTokenSession(
+            session=_Sess(),  # type: ignore[arg-type]
+            credentials=_creds(),
+        )
+    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert deprecations == [], (
+        "ArcGISTokenSession construction fired DeprecationWarning(s): "
+        f"{[str(w.message) for w in deprecations]}"
+    )
+
+
+def test_refresh_threshold_seconds_read_warns_from_caller_frame():
+    """Reading the alias must blame the caller's line (stacklevel=2)."""
+    cfg = TokenSessionConfig(
+        token_url="https://example.com/generateToken",
+        credentials=_creds(),
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        _ = cfg.refresh_threshold_seconds
+    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert len(deprecations) == 1
+    assert deprecations[0].filename.endswith("test_token_refresh_threshold_split.py")
