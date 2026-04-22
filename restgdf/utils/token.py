@@ -21,6 +21,7 @@ import requests
 from restgdf._models._drift import _parse_response
 from restgdf._models.credentials import AGOLUserPass, TokenSessionConfig
 from restgdf._models.responses import TokenResponse
+from restgdf.utils._http import default_timeout
 
 __all__ = [
     "AGOLUserPass",
@@ -136,6 +137,7 @@ class ArcGISTokenSession:
             self.token_url,
             data=self.token_request_payload,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=default_timeout(),
         ) as resp:
             resp.raise_for_status()
             data = await resp.json()

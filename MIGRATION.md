@@ -1,3 +1,35 @@
+# Unreleased migration notes
+
+This section collects migration guidance for the in-flight 3.0 rewrite
+before a formal release lands.
+
+## phase-1b
+
+### HTTP timeouts are now plumbed via `Settings.timeout_seconds` (BL-02)
+
+Every library-maintained `session.get` / `session.post` call-site now
+forwards an explicit `aiohttp.ClientTimeout` whose `total` is resolved
+from `Settings.timeout_seconds` (float, default `30.0`). The knob is
+overridable via the `RESTGDF_TIMEOUT_SECONDS` environment variable; call
+`restgdf._models._settings.reset_settings_cache()` in long-lived
+processes or tests that mutate the environment at runtime.
+
+| Call-site | Behaviour before | Behaviour after |
+|---|---|---|
+| `restgdf.utils._query.get_feature_count` | No timeout (aiohttp default) | `timeout=default_timeout()` |
+| `restgdf.utils._query.get_metadata` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils._query.get_object_ids` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils._stats.get_unique_values` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils._stats.get_value_counts` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils._stats.nested_count` | No timeout | `timeout=default_timeout()` |
+| `restgdf.utils.token.ArcGISTokenSession.update_token` | No timeout | `timeout=default_timeout()` |
+
+Call-sites in `restgdf.utils.getgdf` are intentionally unmigrated in
+phase-1b and will move in a follow-up slice. Callers that already pass
+an explicit `timeout=` kwarg continue to override the default.
+
+---
+
 # Upcoming: restgdf 2.x to 3.x optional Geo extras
 
 ## Unreleased migration notes

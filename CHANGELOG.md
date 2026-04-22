@@ -59,6 +59,14 @@ All notable changes to restgdf are documented here. This project follows
   `ModuleNotFoundError`. Existing `except ModuleNotFoundError:` and
   `except ImportError:` handlers still catch the new exception because
   `OptionalDependencyError` multi-inherits `ModuleNotFoundError` (BL-07).
+- HTTP timeouts are now plumbed through `Settings.timeout_seconds` into
+  every library-maintained `session.get` / `session.post` call-site
+  (`restgdf.utils._query`, `restgdf.utils._stats`, and
+  `ArcGISTokenSession.update_token`). The new
+  `restgdf.utils._http.default_timeout()` helper returns an
+  `aiohttp.ClientTimeout` sized from `Settings.timeout_seconds` (float,
+  default `30.0`, overridable via `RESTGDF_TIMEOUT_SECONDS`). Callers
+  that already pass `timeout=` keep precedence (BL-02).
 
 ## [2.0.0] - 2026-04-20
 
