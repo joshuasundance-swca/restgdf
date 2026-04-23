@@ -43,7 +43,7 @@ async def test_iter_feature_batches_delegates() -> None:
             batch
             async for batch in stream_adapter.iter_feature_batches(
                 "https://example.com/layer/0",
-                session,
+                session,  # type: ignore[arg-type]
             )
         ]
 
@@ -70,7 +70,7 @@ async def test_iter_rows_delegates() -> None:
             row
             async for row in stream_adapter.iter_rows(
                 "https://example.com/layer/0",
-                session,
+                session,  # type: ignore[arg-type]
             )
         ]
 
@@ -97,7 +97,7 @@ async def test_iter_gdf_chunks_delegates() -> None:
             chunk
             async for chunk in stream_adapter.iter_gdf_chunks(
                 "https://example.com/layer/0",
-                object(),
+                object(),  # type: ignore[arg-type]
             )
         ]
 
@@ -122,6 +122,6 @@ async def test_iter_gdf_chunks_requires_geo_stack(monkeypatch) -> None:
     with pytest.raises(OptionalDependencyError):
         async for _ in stream_adapter.iter_gdf_chunks(
             "https://example.com/layer/0",
-            object(),
+            object(),  # type: ignore[arg-type]
         ):
             pass

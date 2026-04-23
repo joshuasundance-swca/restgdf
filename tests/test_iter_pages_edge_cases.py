@@ -22,7 +22,7 @@ async def test_iter_pages_raw_rejects_invalid_order() -> None:
 async def test_iter_pages_raw_rejects_invalid_on_truncation() -> None:
     agen = _iter_pages_raw(
         "https://x/FeatureServer/0",
-        object(),
+        object(),  # type: ignore[arg-type]
         on_truncation="nope",  # type: ignore[arg-type]
     )
     with pytest.raises(ValueError, match="on_truncation must be"):
@@ -33,7 +33,7 @@ async def test_iter_pages_raw_rejects_invalid_on_truncation() -> None:
 async def test_iter_pages_raw_rejects_invalid_max_concurrent_pages() -> None:
     agen = _iter_pages_raw(
         "https://x/FeatureServer/0",
-        object(),
+        object(),  # type: ignore[arg-type]
         max_concurrent_pages=0,
     )
     with pytest.raises(ValueError, match="max_concurrent_pages"):
@@ -62,7 +62,7 @@ async def test_iter_pages_raw_split_single_oid_raises() -> None:
             AsyncMock(return_value=("OBJECTID", [42])),
         ),
     ):
-        agen = _iter_pages_raw(url, object(), on_truncation="split")
+        agen = _iter_pages_raw(url, object(), on_truncation="split")  # type: ignore[arg-type]
         with pytest.raises(RestgdfResponseError, match="could not bisect"):
             async for _ in agen:
                 pass
@@ -92,7 +92,7 @@ async def test_iter_pages_raw_split_exceeds_max_depth() -> None:
     ):
         agen = _iter_pages_raw(
             url,
-            object(),
+            object(),  # type: ignore[arg-type]
             on_truncation="split",
             max_split_depth=1,
         )

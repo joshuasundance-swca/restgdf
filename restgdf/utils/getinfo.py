@@ -19,6 +19,8 @@ from typing import Any
 from aiohttp import ClientSession, ServerTimeoutError
 from pydantic import BaseModel
 
+from restgdf._client._protocols import AsyncHTTPSession
+
 from restgdf.utils._http import (
     DEFAULT_METADATA_HEADERS,
     DEFAULTDICT,
@@ -49,7 +51,6 @@ from restgdf.utils._stats import (
     nested_count,
     nestedcount,
 )
-from restgdf.utils.token import ArcGISTokenSession
 from restgdf.errors import RestgdfTimeoutError
 
 __all__ = [
@@ -83,7 +84,7 @@ __all__ = [
 
 
 async def _feature_count_with_timeout(
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     url: str,
     token: str | None,
     *,
@@ -134,7 +135,7 @@ async def _feature_count_with_timeout(
 
 async def get_offset_range(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> range:
     """Get the offset range for a layer.
@@ -151,7 +152,7 @@ async def get_offset_range(
 
 
 async def service_metadata(
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     service_url: str,
     token: str | None = None,
     return_feature_count: bool = False,

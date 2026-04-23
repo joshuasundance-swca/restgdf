@@ -100,7 +100,7 @@ async def _build_layer(
     session = QuerySession(responses)
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Test/FeatureServer/0",
-        session=session,
+        session=session,  # type: ignore[arg-type]
     )
     from restgdf._models.responses import LayerMetadata
     from restgdf.utils.getinfo import get_fields, get_name

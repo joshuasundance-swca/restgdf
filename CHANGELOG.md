@@ -5,6 +5,20 @@ All notable changes to restgdf are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Transport typing (R-71, v3-followup T7).** `ArcGISTokenSession` now
+  exposes `close()` and `closed` that delegate to its inner
+  `aiohttp.ClientSession`, making it fully satisfy the
+  `restgdf._client._protocols.AsyncHTTPSession` Protocol. Internal call
+  sites previously typed `aiohttp.ClientSession | ArcGISTokenSession`
+  were widened to `AsyncHTTPSession` across `adapters/stream.py`,
+  `directory/directory.py`, `featurelayer/featurelayer.py`,
+  `utils/crawl.py`, `utils/getgdf.py`, `utils/getinfo.py`,
+  `utils/_query.py`, and `utils/_stats.py`. Zero runtime behavior
+  change — widening to a superset Protocol is backwards-compatible for
+  existing callers.
+
 ### Added
 
 #### Streaming (BL-24, Q-A11, R-61, R-65)

@@ -430,6 +430,27 @@ class ArcGISTokenSession:
             **kwargs,
         )
 
+    @property
+    def closed(self) -> bool:
+        """Return ``True`` when the underlying :class:`aiohttp.ClientSession` is closed.
+
+        Delegating lets :class:`ArcGISTokenSession` satisfy the
+        :class:`~restgdf._client._protocols.AsyncHTTPSession` Protocol
+        uniformly with ``aiohttp.ClientSession`` (R-71).
+        """
+        return bool(self.session.closed)
+
+    async def close(self) -> None:
+        """Close the underlying :class:`aiohttp.ClientSession`.
+
+        Mirrors :meth:`aiohttp.ClientSession.close` so token sessions and
+        raw aiohttp sessions are interchangeable through the
+        :class:`~restgdf._client._protocols.AsyncHTTPSession` Protocol.
+        Idempotent: closing an already-closed session is a no-op.
+        """
+        if not self.session.closed:
+            await self.session.close()
+
     async def __aenter__(self) -> ArcGISTokenSession:
         """Enter the runtime context related to this object."""
         await self.update_token_if_needed()

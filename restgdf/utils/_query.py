@@ -10,8 +10,8 @@ that patching ``restgdf.utils.getinfo.<helper>`` intercepts those calls.
 
 from __future__ import annotations
 
-from aiohttp import ClientSession
 
+from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._client.request import build_conservative_query_data
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import (
@@ -20,12 +20,11 @@ from restgdf._models.responses import (
     ObjectIdsResponse,
 )
 from restgdf.utils._http import default_headers, default_timeout
-from restgdf.utils.token import ArcGISTokenSession
 
 
 async def get_feature_count(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> int:
     """Get the feature count for a layer.
@@ -55,7 +54,7 @@ async def get_feature_count(
 
 async def get_metadata(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     token: str | None = None,
 ) -> LayerMetadata:
     """Get the parsed metadata model for a layer.
@@ -81,7 +80,7 @@ async def get_metadata(
 
 async def get_object_ids(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> tuple[str, list[int]]:
     """Get the object id field name and matching object ids for a layer query.

@@ -7,8 +7,8 @@ import warnings
 from collections.abc import AsyncIterable, AsyncIterator
 from typing import TYPE_CHECKING, Any, Literal
 
-from aiohttp import ClientSession
 
+from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._compat import _warn_deprecated, aclosing
 from restgdf._models.responses import LayerMetadata
 from restgdf.errors import FieldDoesNotExistError
@@ -55,7 +55,6 @@ __all__ = [
     "getvaluecounts",
     "nestedcount",
 ]
-from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list, ends_with_num
 
 if TYPE_CHECKING:
@@ -92,7 +91,7 @@ class FeatureLayer:
     def __init__(
         self,
         url: str,
-        session: ClientSession | ArcGISTokenSession,
+        session: AsyncHTTPSession,
         where: str = "1=1",
         token: str | None = None,
         **kwargs,
