@@ -7,6 +7,17 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Changed
 
+- **Feature-count retry delegation (BL-51, v3-followup T10).**
+  `restgdf.utils.getinfo._feature_count_with_timeout` now delegates its
+  bounded timeout-retry loop to `restgdf.resilience.bounded_retry_timeout`
+  (a new public helper) when the `resilience` extra is installed, giving
+  restgdf a single stamina-backed source of truth for retry semantics.
+  When the extra is absent, the previous inline loop is preserved
+  byte-for-byte as a fallback. The retryable exception set
+  (`asyncio.TimeoutError`, `TimeoutError`, `aiohttp.ServerTimeoutError`)
+  and R-69 (`ClientConnectionError` propagates without retry) are
+  preserved on both paths.
+
 - **Transport typing (R-71, v3-followup T7).** `ArcGISTokenSession` now
   exposes `close()` and `closed` that delegate to its inner
   `aiohttp.ClientSession`, making it fully satisfy the
