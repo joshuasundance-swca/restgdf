@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 from collections.abc import Mapping
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 import aiohttp
 
@@ -50,46 +50,103 @@ _GET_PARENT_SEGMENTS: tuple[str, ...] = (
     "GPServer",
 )
 
+# T8 (R-74): ArcGIS REST practical URL-length ceiling. Past this many bytes
+# (URL + encoded body), servers (and intermediaries like IIS/WAFs) routinely
+# reject the GET with 414 URI Too Long, so restgdf must fall back to POST.
+_ARCGIS_URL_BODY_LIMIT: int = 8192
+
+
+def _encoded_body_length(body: Mapping[str, object] | None) -> int:
+    """Return the byte length of ``body`` as it would be URL-encoded."""
+    if not body:
+        return 0
+    return len(urlencode(dict(body), doseq=True))
+
 
 def _choose_verb(
     url: str,
     body: Mapping[str, object] | None = None,
 ) -> Literal["POST", "GET"]:
-    """Return the HTTP verb restgdf should use for ``url``.
+    """Return the HTTP verb restgdf should use for ``url`` with ``body``.
 
-    BL-20 seam (MASTER-PLAN §5 BL-20, plan.md §3c R-34/R-35/R-38,
-    kickoff phase-1a §10.1).
+    T8 (R-74) wires this helper at every ArcGIS call site. The decision
+    is length-based against :data:`_ARCGIS_URL_BODY_LIMIT` (the 8k
+    practical ceiling ArcGIS Server / IIS / common WAFs enforce for
+    ``GET`` query strings):
 
-    Rules (deterministic, call-sites not yet rewired in this slice):
+    * ``len(url) + len(urlencode(body)) <= limit`` → ``GET`` — idempotent,
+      cache-friendly, byte-for-byte equivalent to today's short-body GETs.
+    * Anything larger → ``POST`` — restgdf will never emit a request that
+      a real server will refuse with 414 URI Too Long.
 
-    * ArcGIS ``/query`` and ``/queryRelatedRecords`` endpoints → ``POST``
-      (queries can carry long ``where`` clauses and arbitrary geometry).
-    * Bare service / layer URLs whose path ends in a server family
-      segment (``MapServer``, ``FeatureServer``, ``ImageServer``,
-      ``GPServer``) or a numeric layer index directly under one →
-      ``GET`` (short, idempotent metadata fetches).
-    * Everything else → ``POST`` (conservative default — avoids URL
-      length blowups and tolerates unknown ArcGIS operations).
-
-    The ``body`` parameter is accepted for forward compatibility but
-    currently ignored. BL-50 will extend this helper to auto-switch a
-    ``GET`` to ``POST`` when the serialized ``where``/``outFields``
-    payload pushes a GET URL past the ArcGIS ~1800-byte budget.
+    ``body`` is accepted as any mapping (or ``None``). The helper never
+    mutates the mapping; it only measures its encoded size. A ``None``
+    or empty body short-circuits to ``GET`` immediately.
     """
-    path = urlsplit(url).path.rstrip("/")
-    for suffix in _POST_ENDPOINT_SUFFIXES:
-        if path.endswith(suffix):
-            return "POST"
-    segments = path.split("/")
-    if segments and segments[-1] in _GET_PARENT_SEGMENTS:
-        return "GET"
-    if (
-        len(segments) >= 2
-        and segments[-1].isdigit()
-        and segments[-2] in _GET_PARENT_SEGMENTS
-    ):
+    encoded_len = _encoded_body_length(body)
+    # Account for the "?" separator that aiohttp would add between the
+    # URL path and the query string in a GET request.
+    separator = 1 if encoded_len else 0
+    if len(url) + separator + encoded_len <= _ARCGIS_URL_BODY_LIMIT:
         return "GET"
     return "POST"
+
+
+# Legacy endpoint-classification data kept for potential diagnostic reuse
+# (see git blame for BL-20). The active verb decision is length-based —
+# these constants are intentionally unused at runtime.
+_ = (_POST_ENDPOINT_SUFFIXES, _GET_PARENT_SEGMENTS, urlsplit)
+
+
+async def _arcgis_request(
+    session: Any,
+    url: str,
+    body: Mapping[str, object] | None,
+    **kwargs: Any,
+) -> Any:
+    """Issue an ArcGIS request using the verb selected by :func:`_choose_verb`.
+
+    T8 (R-74): centralizes the GET-vs-POST decision so every ArcGIS call
+    site participates in length-based routing.
+
+    * ``GET`` → ``session.get(url, params=body, **kwargs)``
+    * ``POST`` → ``session.post(url, data=body, **kwargs)``
+
+    ``body`` is forwarded untouched; the helper never injects or removes
+    keys. Any extra ``kwargs`` (``headers``, ``timeout``, ``ssl`` …) are
+    passed through to the underlying session call verbatim so request
+    semantics stay byte-for-byte identical below the verb switch.
+    """
+    verb = _choose_verb(url, body=body)
+    if verb == "GET":
+        params = _coerce_params_for_get(body) if body else body
+        return await session.get(url, params=params, **kwargs)
+    return await session.post(url, data=body, **kwargs)
+
+
+def _coerce_params_for_get(
+    body: Mapping[str, object],
+) -> dict[str, Any]:
+    """Return ``body`` with values normalized for ``session.get(params=...)``.
+
+    ``yarl`` (aiohttp's URL builder) rejects :class:`bool` and ``None``
+    values in query params with :class:`TypeError`, while the equivalent
+    ``session.post(data=...)`` path serializes them happily via
+    :func:`urllib.parse.urlencode`. T8 (R-74) routes the same ArcGIS
+    payloads through either verb, so this helper keeps the GET path
+    byte-for-byte equivalent to what ArcGIS Server sees today:
+    booleans become lowercase ``"true"``/``"false"`` (ArcGIS's own wire
+    convention) and ``None`` becomes an empty string.
+    """
+    coerced: dict[str, Any] = {}
+    for key, value in body.items():
+        if isinstance(value, bool):
+            coerced[key] = "true" if value else "false"
+        elif value is None:
+            coerced[key] = ""
+        else:
+            coerced[key] = value
+    return coerced
 
 
 def default_timeout(settings: Any | None = None) -> aiohttp.ClientTimeout:

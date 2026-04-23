@@ -25,6 +25,11 @@ class QuerySession:
         self.post_calls.append((url, kwargs))
         return JsonResponse(self.responses.pop(0))
 
+    async def get(self, url, **kwargs):
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self.post(url, **kwargs)
+
 
 @pytest.mark.asyncio
 async def test_iter_feature_batches_delegates() -> None:

@@ -33,6 +33,11 @@ class _ScriptedSession:
         self.post_calls.append((url, kwargs))
         return _JsonResp(self.payloads.pop(0))
 
+    async def get(self, url, **kwargs):
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self.post(url, **kwargs)
+
 
 def _make_layer():
     layer = FeatureLayer(

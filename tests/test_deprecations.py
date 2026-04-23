@@ -116,6 +116,8 @@ def test_legacy_getuniquevalues_warns_and_delegates():
         )
         session = AsyncMock()
         session.post = AsyncMock(return_value=response)
+        # T8 (R-74): short ``get_unique_values`` bodies now route to GET.
+        session.get = AsyncMock(return_value=response)
 
         with pytest.warns(DeprecationWarning, match=r"get_unique_values"):
             result = loop.run_until_complete(

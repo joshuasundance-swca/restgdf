@@ -40,6 +40,16 @@ class RecordingSession:
 
         return Response(self.response_text)
 
+    async def get(self, url: str, **kwargs):
+        # Translate params→data so the recorded kwargs snapshot matches
+        # the legacy POST shape. T8 (R-74): short GETs now hit call sites
+        # that used to issue POST; preserving the POST-shaped record keeps
+        # existing assertions intact.
+        if "params" in kwargs:
+            params = kwargs.pop("params")
+            kwargs.setdefault("data", params)
+        return await self.post(url, **kwargs)
+
 
 class JsonSession:
     def __init__(self, payloads: list[dict]):
@@ -57,6 +67,12 @@ class JsonSession:
                 return self._payload
 
         return Response(self.payloads.pop(0))
+
+    async def get(self, url: str, **kwargs):
+        if "params" in kwargs:
+            params = kwargs.pop("params")
+            kwargs.setdefault("data", params)
+        return await self.post(url, **kwargs)
 
 
 def _missing_optional_import(target: str):
@@ -365,6 +381,11 @@ async def test_row_dict_generator_yields_rows(sample_feature_gdf):
                         return self._payload
 
                 return Response(self.responses.pop(0))
+
+            async def get(self, url: str, **kwargs):
+                if "params" in kwargs and "data" not in kwargs:
+                    kwargs = {**kwargs, "data": kwargs["params"]}
+                return await self.post(url, **kwargs)
 
         rows = [
             row

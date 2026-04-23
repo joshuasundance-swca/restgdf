@@ -66,6 +66,11 @@ class ScriptedQuerySession:
         self.post_calls.append((url, dict(kwargs)))
         return self.response
 
+    async def get(self, url, **kwargs):
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self.post(url, **kwargs)
+
 
 class ScriptedTokenSession:
     def __init__(self, response: FixtureResponse):

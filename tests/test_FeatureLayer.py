@@ -71,24 +71,47 @@ class MockFeatureLayerSession:
         self.metadata = metadata
         self.count = count
         self.object_ids = object_ids or list(range(1, count + 1))
-        self.post_calls: list[tuple[str, dict]] = []
-        self.get_calls: list[tuple[str, dict]] = []
+        # T8 (R-74): unify call records so tests that iterate over
+        # ``post_calls`` continue to see every ArcGIS request regardless
+        # of whether it went out as a GET or a POST. ``params`` on GETs
+        # is mirrored under ``data`` so ``call_kwargs["data"]`` keeps
+        # resolving.
+        self._calls: list[tuple[str, dict]] = []
+        self.post_calls = self._calls
+        self.get_calls = self._calls
 
     def get(self, url: str, **kwargs):
+        params = dict(kwargs.get("params", {}))
         copied_kwargs = {
             **kwargs,
-            "params": dict(kwargs.get("params", {})),
+            "params": params,
+            "data": params,
         }
-        self.get_calls.append((url, copied_kwargs))
+        self._calls.append((url, copied_kwargs))
+        # T8 (R-74): /query calls with short bodies now arrive as GET.
+        # Dispatch the payload the same way as POST so tests covering
+        # count / objectIds / feature pages continue to work.
+        if url.endswith("/query"):
+            if params.get("returnCountOnly"):
+                return MockRequestContext({"count": self.count})
+            if params.get("returnIdsOnly"):
+                return MockRequestContext(
+                    {
+                        "objectIdFieldName": "OBJECTID",
+                        "objectIds": self.object_ids,
+                    },
+                )
+            return MockRequestContext({"features": []})
         return MockRequestContext(self.metadata)
 
     def post(self, url: str, **kwargs):
+        data = dict(kwargs.get("data", {}))
         copied_kwargs = {
             **kwargs,
-            "data": dict(kwargs.get("data", {})),
+            "data": data,
+            "params": data,
         }
-        self.post_calls.append((url, copied_kwargs))
-        data = copied_kwargs["data"]
+        self._calls.append((url, copied_kwargs))
 
         if url.endswith("/query"):
             if data.get("returnCountOnly"):
@@ -634,8 +657,10 @@ async def test_getgdf_avoids_result_offset_when_pagination_is_unsupported():
         call_kwargs["data"]
         for url, call_kwargs in session.post_calls
         if url.endswith("/query")
-        and not call_kwargs["data"].get("returnCountOnly")
-        and not call_kwargs["data"].get("returnIdsOnly")
+        and str(call_kwargs["data"].get("returnCountOnly", "")).lower()
+        not in ("true", "1")
+        and str(call_kwargs["data"].get("returnIdsOnly", "")).lower()
+        not in ("true", "1")
     ]
 
     assert len(feature_queries) == 1
@@ -674,10 +699,14 @@ async def test_getgdf_falls_back_to_objectid_chunks_without_pagination():
     feature_queries = [
         data
         for data in query_calls
-        if not data.get("returnCountOnly") and not data.get("returnIdsOnly")
+        if str(data.get("returnCountOnly", "")).lower() not in ("true", "1")
+        and str(data.get("returnIdsOnly", "")).lower() not in ("true", "1")
     ]
 
-    assert any(data.get("returnIdsOnly") for data in query_calls)
+    assert any(
+        str(data.get("returnIdsOnly", "")).lower() in ("true", "1")
+        for data in query_calls
+    )
     assert len(feature_queries) == 3
     assert all("resultOffset" not in data for data in feature_queries)
     assert {data["where"] for data in feature_queries} == {

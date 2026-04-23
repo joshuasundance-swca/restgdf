@@ -42,6 +42,10 @@ class _Session:
         self.count = count
 
     def get(self, url, **kwargs):
+        params = kwargs.get("params") or {}
+        # T8 (R-74): metadata endpoint and short /query bodies arrive as GET.
+        if url.endswith("/query") and params.get("returnCountOnly"):
+            return _Resp({"count": self.count})
         return _Resp(self.metadata)
 
     def post(self, url, **kwargs):

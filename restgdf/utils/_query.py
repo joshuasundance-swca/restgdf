@@ -19,7 +19,7 @@ from restgdf._models.responses import (
     LayerMetadata,
     ObjectIdsResponse,
 )
-from restgdf.utils._http import default_headers, default_timeout
+from restgdf.utils._http import _arcgis_request, default_headers, default_timeout
 from restgdf.utils.token import ArcGISTokenSession
 
 
@@ -42,9 +42,10 @@ async def get_feature_count(
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
     xkwargs.setdefault("timeout", default_timeout())
     query_url = f"{url}/query"
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         query_url,
-        data=datadict,
+        datadict,
         headers=default_headers(xkwargs.pop("headers", None)),
         **xkwargs,
     )
@@ -69,9 +70,10 @@ async def get_metadata(
     data = {"f": "json"}
     if token is not None:
         data["token"] = token
-    response = await session.get(
+    response = await _arcgis_request(
+        session,
         url,
-        params=data,
+        data,
         headers=default_headers(),
         timeout=default_timeout(),
     )
@@ -99,9 +101,10 @@ async def get_object_ids(
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
     xkwargs.setdefault("timeout", default_timeout())
     query_url = f"{url}/query"
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         query_url,
-        data=datadict,
+        datadict,
         headers=default_headers(xkwargs.pop("headers", None)),
         **xkwargs,
     )
