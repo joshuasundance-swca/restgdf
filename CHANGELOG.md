@@ -25,6 +25,15 @@ All notable changes to restgdf are documented here. This project follows
   and R-69 (`ClientConnectionError` propagates without retry) are
   preserved on both paths.
 
+- **GET/POST verb selection wiring (R-74, v3-followup T8).** ArcGIS
+  query requests now route through a single `_arcgis_request` helper
+  in `restgdf/utils/_http.py` that consults `_choose_verb` (8,192-byte
+  threshold on URL + urlencoded body). Previously every call site was
+  hard-coded `POST`. Nine call sites across `utils/getgdf.py`,
+  `utils/getinfo.py`, and `utils/_query.py` were migrated. The GET path
+  coerces `bool`/`None` values in `params` to `"true"`/`"false"`/`""`
+  so yarl can serialize them; POST payloads are untouched. Zero
+  behavior change for bodies above the threshold.
 - **Transport typing (R-71, v3-followup T7).** `ArcGISTokenSession` now
   exposes `close()` and `closed` that delegate to its inner
   `aiohttp.ClientSession`, making it fully satisfy the
@@ -50,6 +59,29 @@ All notable changes to restgdf are documented here. This project follows
   top-level public API — warnings live outside the `RestgdfError`
   taxonomy; import via `from restgdf.errors import
   PaginationInconsistencyWarning`.
+
+#### Domain resolution (R-75, v3-followup T6)
+
+- `FeatureLayer.get_df(resolve_domains=False)` — new kwarg on the
+  pandas-first tabular accessor. When `True`, coded-value domain fields
+  are replaced in-place with their human-readable names using a single
+  cached pass over the layer's metadata (no per-row HTTP). Defaults to
+  `False` so the base code path is byte-identical for existing callers.
+- `restgdf.adapters.pandas.resolve_domains(df, fields)` — public
+  helper exposing the same resolution logic for callers already holding
+  a `pandas.DataFrame`. Requires the `geo` extra (pandas is part of
+  that install surface).
+
+#### Resilience (BL-51, v3-followup T10)
+
+- `restgdf.resilience.bounded_retry_timeout` — new public helper
+  exposing a stamina-backed bounded retry loop for timeout-class
+  exceptions. Used internally by `_feature_count_with_timeout` when the
+  `resilience` extra is installed; safe for consumers on the same
+  extra. The retryable exception set matches restgdf's internal
+  timeout policy (`asyncio.TimeoutError`, `TimeoutError`,
+  `aiohttp.ServerTimeoutError`); `aiohttp.ClientConnectionError`
+  propagates immediately (R-69 preserved).
 
 #### Streaming (BL-24, Q-A11, R-61, R-65)
 
@@ -319,6 +351,22 @@ All notable changes to restgdf are documented here. This project follows
   every `bumpver update`, keeping the citation metadata in lock-step
   with `version:`. New `test_citation_cff_date_released_is_iso_8601`
   pins the ISO-8601 date format (BL-40 follow-up).
+- **Install-combination CI matrix (R-62, v3-followup T5).** New
+  `install_combinations` job in `.github/workflows/pytest.yml` runs
+  the test suite against six explicit pip install surfaces: base,
+  `[geo]`, `[resilience]`, `[telemetry]`, `[geo,resilience,telemetry]`,
+  and `[dev]`. Wired into the `ci` aggregator so regressions in any
+  single extra fail PR checks before merge.
+- **Coverage-recovery tests (v3-followup T1–T4).** Four targeted test
+  modules lift measured coverage from 96.53% to 98.16%:
+  `tests/test_resilience_retry_coverage.py` (17 tests;
+  `_retry.py` 79% → 99%), `tests/test_telemetry_coverage.py` (9 tests;
+  `_correlation.py` 100%, `_spans.py` 97%),
+  `tests/test_credentials_coverage.py` (6 tests; `credentials.py`
+  91% → 100%), and `tests/test_getgdf_coverage.py` (10 tests;
+  `getgdf.py` 95% → 99%). Coverage floor in `pyproject.toml`
+  (`[tool.coverage.report] fail_under`) raised from 96 to 97 to
+  match (v3-followup T11).
 
 ### Changed
 
