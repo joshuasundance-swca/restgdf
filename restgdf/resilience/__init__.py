@@ -23,6 +23,7 @@ except ImportError as _exc:
         "The resilience extra is required: pip install restgdf[resilience]",
     ) from _exc
 
+from restgdf.resilience._bounded_retry import bounded_retry_timeout
 from restgdf.resilience._retry import ResilientSession
 
-__all__ = ["ResilientSession"]
+__all__ = ["ResilientSession", "bounded_retry_timeout"]
