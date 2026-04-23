@@ -25,7 +25,7 @@ from restgdf.utils.getinfo import (
     get_object_ids,
     supports_pagination,
 )
-from restgdf.utils._http import default_timeout
+from restgdf.utils._http import _arcgis_request, default_timeout
 from restgdf.utils._metadata import (
     normalize_spatial_reference,
     supports_pagination_explicitly,
@@ -75,9 +75,10 @@ async def _get_sub_features(
     """Fetch a single query batch as raw ArcGIS feature dicts."""
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
     kwargs.setdefault("timeout", default_timeout())
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         f"{url}/query",
-        data=dict(query_data),
+        dict(query_data),
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )
@@ -218,9 +219,10 @@ async def get_sub_gdf(
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
     kwargs.setdefault("timeout", default_timeout())
 
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         f"{url}/query",
-        data=data,
+        data,
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )
@@ -427,9 +429,10 @@ async def _fetch_page_dict(
     """Fetch one query page and return the raw envelope dict."""
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
     kwargs.setdefault("timeout", default_timeout())
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         f"{url}/query",
-        data=dict(query_data),
+        dict(query_data),
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )

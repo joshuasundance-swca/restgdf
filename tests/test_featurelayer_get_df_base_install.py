@@ -51,6 +51,11 @@ class QuerySession:
         self.post_calls.append((url, kwargs))
         return JsonResponse(self.responses.pop(0))
 
+    async def get(self, url, **kwargs):
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self.post(url, **kwargs)
+
 
 @pytest.mark.asyncio
 async def test_get_df_returns_pandas_dataframe_when_pandas_available() -> None:

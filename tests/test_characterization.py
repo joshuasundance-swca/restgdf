@@ -46,9 +46,12 @@ async def test_get_feature_count_sends_minimal_count_payload(fake_session):
     assert len(fake_session.post_calls) == 1
     url, kwargs = fake_session.post_calls[0]
     assert url == "https://example.com/service/0/query"
+    # T8 (R-74): short count queries ride on GET, and bool/None values
+    # are coerced to ArcGIS wire strings ("true"/"false") so yarl/aiohttp
+    # will accept them as query-string parameters.
     assert kwargs["data"] == {
         "where": "1=1",
-        "returnCountOnly": True,
+        "returnCountOnly": "true",
         "f": "json",
     }
     # default_headers are merged in
@@ -76,7 +79,7 @@ async def test_get_feature_count_propagates_where_and_token_from_data(fake_sessi
     _, kwargs = fake_session.post_calls[0]
     assert kwargs["data"] == {
         "where": "STATUS = 'OPEN'",
-        "returnCountOnly": True,
+        "returnCountOnly": "true",
         "f": "json",
         "token": "abc",
     }
@@ -119,7 +122,7 @@ async def test_get_object_ids_preserves_where_and_returns_tuple(fake_session):
     _, kwargs = fake_session.post_calls[0]
     assert kwargs["data"] == {
         "where": "A=1",
-        "returnIdsOnly": True,
+        "returnIdsOnly": "true",
         "f": "json",
         "token": "t",
     }
@@ -142,8 +145,8 @@ async def test_getuniquevalues_sends_distinct_payload_string_field(fake_session)
     assert kwargs["data"] == {
         "where": "1=1",
         "f": "json",
-        "returnGeometry": False,
-        "returnDistinctValues": True,
+        "returnGeometry": "false",
+        "returnDistinctValues": "true",
         "outFields": "CITY",
     }
 
@@ -173,7 +176,8 @@ async def test_getvaluecounts_builds_statistics_payload(fake_session):
     assert data["groupByFieldsForStatistics"] == "CITY"
     assert data["outFields"] == "CITY"
     assert data["f"] == "json"
-    assert data["returnGeometry"] is False
+    # T8 (R-74): bool coerced to the ArcGIS wire string for GET params.
+    assert data["returnGeometry"] == "false"
     assert '"onStatisticField":"CITY"' in data["outStatistics"]
     assert '"outStatisticFieldName":"CITY_count"' in data["outStatistics"]
 

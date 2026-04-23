@@ -40,6 +40,11 @@ class _ScriptedSession:
         self.post_calls.append((url, kwargs))
         return _JsonResp(self.payloads.pop(0))
 
+    async def get(self, url, **kwargs):
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self.post(url, **kwargs)
+
 
 class _DelayedSession:
     """Serves POST payloads with per-call delays (seconds)."""
@@ -57,6 +62,11 @@ class _DelayedSession:
         delay, payload = self.pairs[idx]
         await asyncio.sleep(delay)
         return _JsonResp(payload)
+
+    async def get(self, url, **kwargs):
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self.post(url, **kwargs)
 
 
 def _make_layer():
@@ -136,6 +146,11 @@ async def test_iter_pages_max_concurrent_pages_bounds_inflight():
                 inflight -= 1
             self.post_calls.append((url, kwargs))
             return _JsonResp({"features": []})
+
+        async def get(self, url, **kwargs):
+            if "params" in kwargs and "data" not in kwargs:
+                kwargs = {**kwargs, "data": kwargs["params"]}
+            return await self.post(url, **kwargs)
 
     layer.session = _TrackedSession()
     batches = [{"resultOffset": i} for i in range(6)]

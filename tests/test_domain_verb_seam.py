@@ -1,55 +1,49 @@
-"""BL-20 red tests: request-verb seam.
+"""T8 (R-74) tests: length-based request-verb seam.
 
-Per MASTER-PLAN §5 BL-20 (MASTER-PLAN.md:143-144):
-
-> BL-20. Deterministic request-verb seam. Add a private
->   ``_choose_verb(url, body=None)`` helper that returns
->   ``"POST"`` for ArcGIS ``/query`` and ``/queryRelatedRecords``
->   endpoints, ``"GET"`` for metadata-style requests, and ``"POST"``
->   as the conservative default for unknown URLs.
-
-These tests probe the seam only; call sites are NOT rewired in this
-slice (a later BL-50 extends this to auto-switch GET → POST when a
-``where`` clause pushes a GET URL past the ArcGIS ~1800-byte budget).
+Per the v3 follow-up plan, ``_choose_verb`` was extended in T8 (R-74)
+from the original BL-20 endpoint-classification contract to a length
+based policy: short requests use GET, long requests (URL + encoded body
+over the ~8 KiB budget) use POST. The prior BL-20 expectations — that
+``/query`` endpoints always POST and metadata endpoints always GET —
+were superseded by this slice. Tests below probe the new contract; the
+call-site wiring is covered in ``test_choose_verb_live.py``.
 """
 
 from __future__ import annotations
 
 
-def test_choose_verb_default_for_unknown_url_is_post():
-    """Named red per plan.md §3c R-34/R-35: the default for URLs that
-    match none of the known families must be POST (conservative — avoids
-    URL-length blowups and works with any body)."""
+def test_choose_verb_short_unknown_url_is_get():
+    """Short requests to unfamiliar URLs default to GET under the new
+    length-based policy; POST is reserved for oversized bodies."""
     from restgdf.utils._http import _choose_verb
 
-    assert _choose_verb("https://example.com/some/unknown/path") == "POST"
-    assert _choose_verb("https://example.com/arbitrary/endpoint") == "POST"
+    assert _choose_verb("https://example.com/some/unknown/path") == "GET"
+    assert _choose_verb("https://example.com/arbitrary/endpoint") == "GET"
 
 
-def test_choose_verb_query_endpoint_is_post():
+def test_choose_verb_short_query_endpoint_is_get():
     from restgdf.utils._http import _choose_verb
 
     assert (
         _choose_verb(
             "https://example.com/ArcGIS/rest/services/X/FeatureServer/0/query",
         )
-        == "POST"
+        == "GET"
     )
 
 
-def test_choose_verb_query_related_records_is_post():
+def test_choose_verb_short_query_related_records_is_get():
     from restgdf.utils._http import _choose_verb
 
     url = (
         "https://example.com/ArcGIS/rest/services/X/FeatureServer/0/"
         "queryRelatedRecords"
     )
-    assert _choose_verb(url) == "POST"
+    assert _choose_verb(url) == "GET"
 
 
 def test_choose_verb_metadata_endpoint_is_get():
-    """Bare service / layer metadata URLs (no trailing ``/query`` or
-    ``/queryRelatedRecords``) are short and idempotent — GET."""
+    """Bare service / layer metadata URLs are short and idempotent — GET."""
     from restgdf.utils._http import _choose_verb
 
     assert (
@@ -67,10 +61,8 @@ def test_choose_verb_metadata_endpoint_is_get():
 
 
 def test_choose_verb_accepts_optional_body_mapping():
-    """The signature is ``_choose_verb(url, body=None)`` so BL-50 can
-    later inspect the ``where`` clause and switch based on serialized
-    length — today, the body is ignored but must be accepted without
-    raising."""
+    """The signature is ``_choose_verb(url, body=None)``; a small body
+    keeps the request under the byte budget and stays GET."""
     from restgdf.utils._http import _choose_verb
 
     assert (
@@ -78,7 +70,7 @@ def test_choose_verb_accepts_optional_body_mapping():
             "https://example.com/ArcGIS/rest/services/X/FeatureServer/0/query",
             body={"where": "1=1", "outFields": "*"},
         )
-        == "POST"
+        == "GET"
     )
     assert (
         _choose_verb(
