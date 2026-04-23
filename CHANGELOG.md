@@ -7,6 +7,14 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Changed
 
+- **Pagination planner wiring (R-72, v3-followup T9).** When an ArcGIS
+  layer advertises `advancedQueryCapabilities.maxRecordCountFactor`,
+  `get_query_data_batches` now forwards that value to
+  `build_pagination_plan(advertised_factor=...)`. The wiring is strictly
+  opt-in: servers that do not expose the field (or expose a non-positive
+  / non-numeric value) get the previous byte-exact plan with no
+  `advertised_factor` kwarg. This replaces the deferred-plumbing stub.
+
 - **Transport typing (R-71, v3-followup T7).** `ArcGISTokenSession` now
   exposes `close()` and `closed` that delegate to its inner
   `aiohttp.ClientSession`, making it fully satisfy the
@@ -20,6 +28,18 @@ All notable changes to restgdf are documented here. This project follows
   existing callers.
 
 ### Added
+
+#### Pagination (R-73, v3-followup T9)
+
+- `restgdf.errors.PaginationInconsistencyWarning` — new `UserWarning`
+  subclass emitted by `_resolve_page` when a batch page returns zero
+  features but the server still sets `exceededTransferLimit=true`. The
+  warning fires regardless of the `on_truncation` mode (`"raise"`,
+  `"ignore"`, or `"split"`) so pathological server responses are always
+  surfaced. Deliberately not included in `restgdf.errors.__all__` or the
+  top-level public API — warnings live outside the `RestgdfError`
+  taxonomy; import via `from restgdf.errors import
+  PaginationInconsistencyWarning`.
 
 #### Streaming (BL-24, Q-A11, R-61, R-65)
 

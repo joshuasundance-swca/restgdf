@@ -400,6 +400,22 @@ class OutputConversionError(RestgdfError):
     """Raised when converting validated ArcGIS data to a GeoDataFrame / DataFrame fails."""
 
 
+class PaginationInconsistencyWarning(UserWarning):
+    """Emitted when an ArcGIS batch response is self-inconsistent (R-73).
+
+    Specifically: a page that returns zero features *and* sets
+    ``exceededTransferLimit=true`` is an ArcGIS-side pagination bug —
+    the cursor cannot advance (offset-based pagination needs at least
+    one row per page to progress) but the service simultaneously
+    insists more rows exist. Left un-flagged this produces a
+    silently-truncated result set.
+
+    Multi-inherits :class:`UserWarning` so callers can silence or
+    escalate it via :mod:`warnings` (e.g.
+    ``warnings.filterwarnings("error", category=PaginationInconsistencyWarning)``).
+    """
+
+
 __all__ = [
     "ArcGISServiceError",
     "AuthNotAttachedError",
