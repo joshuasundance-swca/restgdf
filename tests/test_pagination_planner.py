@@ -121,14 +121,15 @@ def test_getinfo_reexports_pagination_symbols():
 
 
 @pytest.mark.asyncio
-async def test_default_pagination_uses_factor_1_0():
-    """Regression: `get_query_data_batches` calls the planner with
-    `factor=1.0` (default) and no `advertised_factor` in phase-2c.
+async def test_no_advertised_factor_when_metadata_does_not_advertise():
+    """Regression: when layer metadata does NOT advertise
+    ``advancedQueryCapabilities.maxRecordCountFactor``,
+    ``get_query_data_batches`` calls the planner with ``factor=1.0``
+    (default) and no ``advertised_factor``.
 
-    This pins the deferred-plumbing decision: live
-    `advancedQueryCapabilities.maxRecordCountFactor` is not yet wired
-    into the call site, so production batch sizes stay byte-exact
-    during the 3.0 migration.
+    This pins the R-72 opt-in contract: servers without the field
+    get today's byte-exact pagination; wire-up is gated on the
+    metadata actually carrying the key.
     """
     from restgdf.utils import getgdf
 
@@ -149,7 +150,6 @@ async def test_default_pagination_uses_factor_1_0():
                 "maxRecordCount": 10,
                 "advancedQueryCapabilities": {
                     "supportsPagination": True,
-                    "maxRecordCountFactor": 4.0,
                 },
             },
         ),

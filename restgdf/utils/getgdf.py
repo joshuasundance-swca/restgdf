@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import warnings
 from asyncio import gather
 from collections.abc import AsyncGenerator, Mapping
 from functools import reduce
@@ -14,7 +15,11 @@ from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._logging import get_logger
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse, LayerMetadata
-from restgdf.errors import PaginationError, RestgdfResponseError
+from restgdf.errors import (
+    PaginationError,
+    PaginationInconsistencyWarning,
+    RestgdfResponseError,
+)
 from restgdf.telemetry._spans import start_feature_layer_stream_span
 from restgdf.utils.getinfo import (
     default_data,
@@ -145,12 +150,55 @@ def chunk_values(values: list[int], chunk_size: int) -> list[list[int]]:
     return [values[i : i + chunk_size] for i in range(0, len(values), chunk_size)]
 
 
+def _advertised_max_record_count_factor(
+    metadata: Mapping[str, Any],
+) -> float | None:
+    """Return the server-advertised ``maxRecordCountFactor`` or ``None``.
+
+    Checks ``advancedQueryCapabilities.maxRecordCountFactor`` in the
+    raw layer metadata dict (R-72). Returns ``None`` when the
+    ``advancedQueryCapabilities`` block is missing, when the factor
+    key itself is absent, or when the advertised value is not a
+    positive number (``None`` / 0 / negative / non-numeric). The
+    return value is intended to be threaded straight through to
+    :func:`build_pagination_plan` as ``advertised_factor=``.
+    """
+    aqc = metadata.get("advancedQueryCapabilities")
+    if not isinstance(aqc, Mapping):
+        return None
+    raw = aqc.get("maxRecordCountFactor")
+    if raw is None:
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value <= 0:
+        return None
+    return value
+
+
 async def get_query_data_batches(
     url: str,
     session: AsyncHTTPSession,
     **kwargs,
 ) -> list[dict]:
-    """Build query payloads for each request needed to read a layer."""
+    """Build query payloads for each request needed to read a layer.
+
+    When the layer metadata advertises an explicit
+    ``advancedQueryCapabilities.maxRecordCountFactor`` (R-72), the
+    value is forwarded to :func:`build_pagination_plan` as
+    ``advertised_factor=`` so pagination batch sizes honor the
+    server-published upper bound. Layers that do **not** advertise the
+    field keep today's byte-for-byte batching: no ``advertised_factor``
+    kwarg is supplied and the planner falls back to its
+    ``_DEFAULT_FACTOR`` (``1.0``).
+
+    Pages observed at stream time that return zero features while
+    setting ``exceededTransferLimit=true`` are flagged with
+    :class:`restgdf.errors.PaginationInconsistencyWarning` (R-73) from
+    :func:`_resolve_page`; see that helper for details.
+    """
     request_data = dict(kwargs.get("data") or {})
     feature_count = await get_feature_count(url, session, **kwargs)
     token = request_data.get("token")
@@ -175,13 +223,18 @@ async def get_query_data_batches(
                 }
                 for offset in range(0, feature_count, page_size)
             ]
-        plan = build_pagination_plan(feature_count, max_record_count)
-        # NOTE (BL-21/22 deferred): maxRecordCountFactor from
-        # advancedQueryCapabilities is intentionally NOT plumbed here in
-        # phase-2c. The planner API accepts `advertised_factor` / `factor`
-        # and will clamp with a warning via `get_logger("pagination")`;
-        # the live wire-up is deferred to a future phase to preserve
-        # byte-exact batch sizes during the 3.0 migration.
+        # R-72: opt-in wire of advertised maxRecordCountFactor. Only
+        # pass ``advertised_factor`` when the server actually publishes
+        # it, so layers without the field keep byte-exact 3.0 batching.
+        planner_kwargs: dict[str, Any] = {}
+        advertised_factor = _advertised_max_record_count_factor(metadata)
+        if advertised_factor is not None:
+            planner_kwargs["advertised_factor"] = advertised_factor
+        plan = build_pagination_plan(
+            feature_count,
+            max_record_count,
+            **planner_kwargs,
+        )
         return [
             {
                 **request_data,
@@ -460,6 +513,21 @@ async def _resolve_page(
     if not envelope.exceeded_transfer_limit:
         yield page
         return
+
+    # R-73: 0-feature + exceededTransferLimit=true is an ArcGIS-side
+    # pagination bug — the cursor cannot advance but the service claims
+    # more rows exist. Flag it regardless of ``on_truncation`` so the
+    # inconsistency is visible to callers who choose to ignore the
+    # normal truncation signal.
+    if not envelope.features:
+        warnings.warn(
+            (
+                f"{url}/query returned exceededTransferLimit=true with "
+                "zero features; pagination cursor cannot advance."
+            ),
+            PaginationInconsistencyWarning,
+            stacklevel=2,
+        )
 
     if on_truncation == "ignore":
         get_logger("pagination").warning(
