@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import importlib
 import logging
 from dataclasses import dataclass, field
 
 import aiohttp
-import requests
 
 from restgdf._models._drift import _parse_response
 from restgdf._models.credentials import AGOLUserPass, TokenSessionConfig
@@ -41,6 +41,25 @@ _MAX_TOKEN_RETRIES: int = 3  # Max /generateToken POST attempts
 _BASE_BACKOFF_S: float = 0.5  # Initial retry sleep; doubles each attempt
 
 _RETRYABLE_ERRORS = (OSError, asyncio.TimeoutError, ConnectionError)
+
+
+class _LazyRequestsModule:
+    """Load ``requests`` only when the deprecated sync helper is touched."""
+
+    def _module(self):
+        return importlib.import_module("requests")
+
+    def __getattr__(self, name: str):
+        return getattr(self._module(), name)
+
+    def __setattr__(self, name: str, value) -> None:
+        setattr(self._module(), name, value)
+
+    def __delattr__(self, name: str) -> None:
+        delattr(self._module(), name)
+
+
+requests = _LazyRequestsModule()
 
 
 def _utc_now() -> datetime.datetime:

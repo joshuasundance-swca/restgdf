@@ -15,7 +15,7 @@ import pytest
 
 from restgdf import errors as errors_module
 from restgdf._logging import LOGGER_SUFFIXES, get_logger
-from restgdf.errors import PaginationError, RestgdfError
+from restgdf.errors import PaginationError, PaginationInconsistencyWarning, RestgdfError
 
 
 def test_every_public_exception_inherits_restgdf_error() -> None:
@@ -25,7 +25,13 @@ def test_every_public_exception_inherits_restgdf_error() -> None:
     for name in errors_module.__all__:
         cls = getattr(errors_module, name)
         assert isinstance(cls, type), f"{name} is not a class"
+        if issubclass(cls, Warning):
+            continue
         assert issubclass(cls, RestgdfError), f"{name} must inherit RestgdfError"
+
+
+def test_public_warning_exports_remain_warnings() -> None:
+    assert issubclass(PaginationInconsistencyWarning, UserWarning)
 
 
 def test_exception_taxonomy_is_catchable_as_restgdf_error() -> None:

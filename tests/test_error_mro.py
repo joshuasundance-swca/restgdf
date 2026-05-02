@@ -244,6 +244,7 @@ def test_module_lists_full_public_api() -> None:
         "InvalidCredentialsError",
         "OptionalDependencyError",
         "OutputConversionError",
+        "PaginationInconsistencyWarning",
         "PaginationError",
         "RateLimitError",
         "RestgdfError",

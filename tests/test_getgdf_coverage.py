@@ -249,6 +249,49 @@ async def test_chunk_generator_skips_stamping_when_metadata_has_no_sr():
 
 
 @pytest.mark.asyncio
+async def test_apply_spatial_reference_attr_passes_token_and_stamps_raw_sr():
+    url = "https://example.test/FeatureServer/0"
+    raw_sr = {"wkid": 4326, "latestWkid": 4326}
+    session = object()
+    gdf = GeoDataFrame({"OBJECTID": [1], "geometry": [Point(0, 0)]}, crs="EPSG:4326")
+
+    with patch.object(
+        getgdf_mod,
+        "get_metadata",
+        AsyncMock(return_value={"extent": {"spatialReference": raw_sr}}),
+    ) as get_metadata:
+        await getgdf_mod._apply_spatial_reference_attr(
+            gdf,
+            url,
+            session,
+            data={"token": "secret", "where": "1=1"},
+        )
+
+    get_metadata.assert_awaited_once_with(url, session, token="secret")
+    assert gdf.attrs["spatial_reference"] == raw_sr
+
+
+@pytest.mark.asyncio
+async def test_apply_spatial_reference_attr_ignores_metadata_errors():
+    url = "https://example.test/FeatureServer/0"
+    gdf = GeoDataFrame({"OBJECTID": [1], "geometry": [Point(0, 0)]}, crs="EPSG:4326")
+
+    with patch.object(
+        getgdf_mod,
+        "get_metadata",
+        AsyncMock(side_effect=RuntimeError("metadata unavailable")),
+    ):
+        await getgdf_mod._apply_spatial_reference_attr(
+            gdf,
+            url,
+            object(),
+            data={"token": "secret"},
+        )
+
+    assert "spatial_reference" not in gdf.attrs
+
+
+@pytest.mark.asyncio
 async def test_iter_pages_raw_finally_ends_span_when_batches_fail_early():
     """If ``get_query_data_batches`` raises, no tasks exist but span still ends."""
     url = "https://example.test/FeatureServer/0"

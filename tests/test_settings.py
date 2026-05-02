@@ -214,6 +214,7 @@ def test_reset_settings_cache_forces_new_instance(monkeypatch):
 
 
 def test_get_settings_reads_current_env_on_first_call(monkeypatch):
-    monkeypatch.setenv("RESTGDF_USER_AGENT", "probe/9.9")
-    s = get_settings()
+    monkeypatch.setenv("RESTGDF_TRANSPORT_USER_AGENT", "probe/9.9")
+    with pytest.warns(DeprecationWarning, match=r"get_settings\(\)"):
+        s = get_settings()
     assert s.user_agent == "probe/9.9"

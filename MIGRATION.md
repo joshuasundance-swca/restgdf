@@ -1,12 +1,11 @@
 # restgdf migration guide
 
-## Unreleased migration notes
+## 2.0.0 migration notes
 
-The 3.0 release reshapes install surface, error taxonomy, configuration,
+restgdf 2.0.0 reshapes install surface, error taxonomy, configuration,
 authentication, observability, and streaming on top of the typed
-pydantic models that landed in 2.0. Everything below is consolidated
-across the phase-1 through phase-4 work tracks — the preserved 1.x → 2.0
-guide follows at the bottom unchanged.
+pydantic models that now ship in the release. The preserved 1.x → 2.0
+guide follows below.
 
 ### Summary
 
@@ -50,10 +49,6 @@ guide follows at the bottom unchanged.
   `PaginationPlan` / `build_pagination_plan`, pure-helper
   `normalize_spatial_reference` and `normalize_date_fields`, and
   `ResilientSession` / `RestgdfInstrumentor`.
-- **Version strings are frozen at `2.0.0`** until the 3.0 cut so the
-  taxonomy/contract tests (`tests/test_compat.py`) stay green through
-  the rewrite.
-
 ### Breaking changes
 
 **Install**
@@ -239,7 +234,7 @@ from the same row stream; raises `OptionalDependencyError`
   `advertised_factor` the planner clamps to the advertised value and
   logs a warning via `restgdf.pagination`. Live
   `advancedQueryCapabilities.maxRecordCountFactor` wiring into
-  `get_query_data_batches` is a deliberate post-3.0 follow-up.
+  `get_query_data_batches` remains a future follow-up.
 
 **Advanced query capabilities** (`restgdf._models.responses`)
 
@@ -345,8 +340,8 @@ from the same row stream; raises `OptionalDependencyError`
   span when telemetry is enabled.
 
 All deprecations are shim-backed — existing code keeps working and
-emits `DeprecationWarning`. Removal of any deprecated surface will not
-happen before the 3.0 final release.
+emits `DeprecationWarning`. Removal of any deprecated surface will only
+happen in a future major release.
 
 ### Configuration
 

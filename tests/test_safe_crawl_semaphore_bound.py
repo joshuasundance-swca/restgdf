@@ -83,7 +83,7 @@ async def test_feature_count_fanout_bounded_by_max_concurrent_requests(monkeypat
     3 services × 20 layers = 60 ``get_feature_count`` calls. With
     ``max_concurrent_requests=4``, observed peak must be ≤ 4.
     """
-    monkeypatch.setenv("RESTGDF_MAX_CONCURRENT_REQUESTS", "4")
+    monkeypatch.setenv("RESTGDF_CONCURRENCY_MAX_CONCURRENT_REQUESTS", "4")
     reset_settings_cache()
     try:
         peak_of = _install_counting_fakes(monkeypatch, layer_count=20)

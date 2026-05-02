@@ -182,7 +182,7 @@ async def test_bounded_semaphore_caps_concurrency_at_fanout_sites(monkeypatch):
         raising=False,
     )
 
-    monkeypatch.setenv("RESTGDF_MAX_CONCURRENT_REQUESTS", "4")
+    monkeypatch.setenv("RESTGDF_CONCURRENCY_MAX_CONCURRENT_REQUESTS", "4")
     reset_settings_cache()
     try:
         from restgdf.utils.getinfo import service_metadata

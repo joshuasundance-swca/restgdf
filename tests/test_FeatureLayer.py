@@ -425,6 +425,9 @@ async def test_featurelayer_get_gdf_requires_geo_extra_before_query():
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings(
+    r"ignore:FeatureLayer\.row_dict_generator is deprecated:DeprecationWarning",
+)
 async def test_row_dict_generator_merges_data_kwargs():
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",

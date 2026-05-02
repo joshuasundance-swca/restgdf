@@ -52,6 +52,9 @@ class RecordingTokenSession:
         return MockRequestContext({"ok": True})
 
 
+@pytest.mark.filterwarnings(
+    r"ignore:get_token\(\) is deprecated:DeprecationWarning",
+)
 def test_get_token_uses_requests_post():
     response = Mock()
     response.json.return_value = {"token": "sync-token"}
