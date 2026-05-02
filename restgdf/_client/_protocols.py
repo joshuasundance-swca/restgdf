@@ -6,9 +6,12 @@ call sites rely on (``get`` / ``post`` / ``close`` / ``closed``).
 Flagged :func:`typing.runtime_checkable` so adapter classes
 (resilience, tracing, mock) can be validated via ``isinstance``.
 
-Phase-2b ships this Protocol **definition only**; widening call-site
-annotations currently typed ``aiohttp.ClientSession | ArcGISTokenSession``
-lands in later phases so BL-17 stays additive.
+Internal call sites that previously accepted
+``aiohttp.ClientSession | ArcGISTokenSession`` were widened to
+``AsyncHTTPSession`` in R-71 (v3 follow-up T7).
+:class:`~restgdf.utils.token.ArcGISTokenSession` exposes ``close()`` /
+``closed`` delegating to its inner :class:`aiohttp.ClientSession`, so
+both concrete implementations satisfy this Protocol uniformly.
 """
 
 from __future__ import annotations
@@ -20,10 +23,12 @@ from typing import Any, Protocol, runtime_checkable
 class AsyncHTTPSession(Protocol):
     """Structural type for restgdf transport sessions.
 
-    Matches :class:`aiohttp.ClientSession` and is the forward-compatible
-    target for resilience/telemetry adapters (BL-31 / BL-32). Only
-    method/attribute *presence* is checked at ``isinstance`` time;
-    signature details are advisory per :class:`typing.Protocol`.
+    Matches :class:`aiohttp.ClientSession` and
+    :class:`~restgdf.utils.token.ArcGISTokenSession`, and is the
+    forward-compatible target for resilience/telemetry adapters
+    (BL-31 / BL-32). Only method/attribute *presence* is checked at
+    ``isinstance`` time; signature details are advisory per
+    :class:`typing.Protocol`.
 
     .. note::
        ``get`` and ``post`` are declared as non-async ``def`` because
@@ -33,12 +38,6 @@ class AsyncHTTPSession(Protocol):
        ``isinstance(aiohttp.ClientSession(), AsyncHTTPSession)`` fail at
        runtime on Python versions that check
        :func:`inspect.iscoroutinefunction` for Protocol members.
-
-    .. note::
-       :class:`~restgdf.utils.token.ArcGISTokenSession` does **not**
-       currently expose ``closed`` / ``close``. Making it Protocol-
-       compatible (or narrowing the Protocol) is deferred: phase-2b
-       does not migrate any call-site annotations, so no breakage.
     """
 
     @property

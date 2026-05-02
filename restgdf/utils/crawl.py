@@ -3,14 +3,13 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import aiohttp
 from pydantic import BaseModel
 
+from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._models.crawl import CrawlError, CrawlReport, CrawlServiceEntry
 from restgdf._models.responses import LayerMetadata
 from restgdf._config import get_config
 from restgdf.utils.getinfo import service_metadata, get_metadata
-from restgdf.utils.token import ArcGISTokenSession
 
 
 def _to_plain_dict(value: Any) -> dict:
@@ -21,7 +20,7 @@ def _to_plain_dict(value: Any) -> dict:
 
 
 async def fetch_all_data(
-    session: aiohttp.ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     base_url: str,
     token: str | None = None,
     return_feature_count: bool = False,
@@ -119,7 +118,7 @@ def _as_layer_metadata(raw: Any) -> LayerMetadata:
 
 
 async def safe_crawl(
-    session: aiohttp.ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     base_url: str,
     token: str | None = None,
     return_feature_count: bool = False,

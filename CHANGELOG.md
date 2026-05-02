@@ -5,7 +5,114 @@ All notable changes to restgdf are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Gate-3 hardening follow-up (post-T6-T11).** Three review-driven
+  safety fixes land on top of the v3-followup tranche:
+  - ArcGIS requests routed through `_choose_verb` now force `POST`
+    whenever the effective session transport is `"body"` or `"query"`
+    (including wrapped `ResilientSession(ArcGISTokenSession(...))`
+    stacks), preventing auth tokens from leaking into URL query
+    strings on short requests.
+  - `restgdf.resilience._retry._RetriedCtx` now mirrors
+    `aiohttp`'s dual request-manager shape so
+    `await session.get(...)` and `async with session.get(...)` both
+    work against `ResilientSession`.
+  - `getgdf._advertised_max_record_count_factor()` now rejects
+    `bool`, `NaN`, and infinity inputs so malformed vendor metadata
+    falls back to the byte-identical pre-T9 path.
+  - Module-level `get_gdf(..., session=None)` now closes the temporary
+    `aiohttp.ClientSession` it creates internally, eliminating the
+    unclosed-session leak on direct helper usage.
+  - `_iter_pages_raw(..., max_concurrent_pages=N)` now keeps at most
+    `N` fetch tasks scheduled at once instead of pre-creating one task
+    per page and only bounding execution with a semaphore, preventing
+    pagination plans with many batches from exploding task memory.
+  - Legacy streaming helpers (`_feature_batch_generator`,
+    `chunk_generator`) now honor the repository-wide concurrency cap
+    while they stream results and cancel outstanding work on early
+    generator close, preventing abandoned page-fetch tasks from
+    accumulating behind partially-consumed iterators.
+  - Hypothesis-backed property tests now live behind a dedicated
+    ``pytest --run-stress`` opt-in so the default suite remains a
+    representative production-validation pass instead of mixing in a
+    separate stress tier by default.
+
+- **Pagination planner wiring (R-72, v3-followup T9).** When an ArcGIS
+  layer advertises `advancedQueryCapabilities.maxRecordCountFactor`,
+  `get_query_data_batches` now forwards that value to
+  `build_pagination_plan(advertised_factor=...)`. The wiring is strictly
+  opt-in: servers that do not expose the field (or expose a non-positive
+  / non-numeric value) get the previous byte-exact plan with no
+  `advertised_factor` kwarg. This replaces the deferred-plumbing stub.
+- **Feature-count retry delegation (BL-51, v3-followup T10).**
+  `restgdf.utils.getinfo._feature_count_with_timeout` now delegates its
+  bounded timeout-retry loop to `restgdf.resilience.bounded_retry_timeout`
+  (a new public helper) when the `resilience` extra is installed, giving
+  restgdf a single stamina-backed source of truth for retry semantics.
+  When the extra is absent, the previous inline loop is preserved
+  byte-for-byte as a fallback. The retryable exception set
+  (`asyncio.TimeoutError`, `TimeoutError`, `aiohttp.ServerTimeoutError`)
+  and R-69 (`ClientConnectionError` propagates without retry) are
+  preserved on both paths.
+
+- **GET/POST verb selection wiring (R-74, v3-followup T8).** ArcGIS
+  query requests now route through a single `_arcgis_request` helper
+  in `restgdf/utils/_http.py` that consults `_choose_verb` (8,192-byte
+  threshold on URL + urlencoded body). Previously every call site was
+  hard-coded `POST`. Nine call sites across `utils/getgdf.py`,
+  `utils/getinfo.py`, and `utils/_query.py` were migrated. The GET path
+  coerces `bool`/`None` values in `params` to `"true"`/`"false"`/`""`
+  so yarl can serialize them; POST payloads are untouched. Zero
+  behavior change for bodies above the threshold.
+- **Transport typing (R-71, v3-followup T7).** `ArcGISTokenSession` now
+  exposes `close()` and `closed` that delegate to its inner
+  `aiohttp.ClientSession`, making it fully satisfy the
+  `restgdf._client._protocols.AsyncHTTPSession` Protocol. Internal call
+  sites previously typed `aiohttp.ClientSession | ArcGISTokenSession`
+  were widened to `AsyncHTTPSession` across `adapters/stream.py`,
+  `directory/directory.py`, `featurelayer/featurelayer.py`,
+  `utils/crawl.py`, `utils/getgdf.py`, `utils/getinfo.py`,
+  `utils/_query.py`, and `utils/_stats.py`. Zero runtime behavior
+  change — widening to a superset Protocol is backwards-compatible for
+  existing callers.
+
 ### Added
+
+#### Pagination (R-73, v3-followup T9)
+
+- `restgdf.errors.PaginationInconsistencyWarning` — new `UserWarning`
+  subclass emitted by `_resolve_page` when a batch page returns zero
+  features but the server still sets `exceededTransferLimit=true`. The
+  warning fires regardless of the `on_truncation` mode (`"raise"`,
+  `"ignore"`, or `"split"`) so pathological server responses are always
+  surfaced. Deliberately not included in `restgdf.errors.__all__` or the
+  top-level public API — warnings live outside the `RestgdfError`
+  taxonomy; import via `from restgdf.errors import
+  PaginationInconsistencyWarning`.
+
+#### Domain resolution (R-75, v3-followup T6)
+
+- `FeatureLayer.get_df(resolve_domains=False)` — new kwarg on the
+  pandas-first tabular accessor. When `True`, coded-value domain fields
+  are replaced in-place with their human-readable names using a single
+  cached pass over the layer's metadata (no per-row HTTP). Defaults to
+  `False` so the base code path is byte-identical for existing callers.
+- `restgdf.adapters.pandas.resolve_domains(df, fields)` — public
+  helper exposing the same resolution logic for callers already holding
+  a `pandas.DataFrame`. Requires the `geo` extra (pandas is part of
+  that install surface).
+
+#### Resilience (BL-51, v3-followup T10)
+
+- `restgdf.resilience.bounded_retry_timeout` — new public helper
+  exposing a stamina-backed bounded retry loop for timeout-class
+  exceptions. Used internally by `_feature_count_with_timeout` when the
+  `resilience` extra is installed; safe for consumers on the same
+  extra. The retryable exception set matches restgdf's internal
+  timeout policy (`asyncio.TimeoutError`, `TimeoutError`,
+  `aiohttp.ServerTimeoutError`); `aiohttp.ClientConnectionError`
+  propagates immediately (R-69 preserved).
 
 #### Streaming (BL-24, Q-A11, R-61, R-65)
 
@@ -275,6 +382,22 @@ All notable changes to restgdf are documented here. This project follows
   every `bumpver update`, keeping the citation metadata in lock-step
   with `version:`. New `test_citation_cff_date_released_is_iso_8601`
   pins the ISO-8601 date format (BL-40 follow-up).
+- **Install-combination CI matrix (R-62, v3-followup T5).** New
+  `install_combinations` job in `.github/workflows/pytest.yml` runs
+  the test suite against six explicit pip install surfaces: base,
+  `[geo]`, `[resilience]`, `[telemetry]`, `[geo,resilience,telemetry]`,
+  and `[dev]`. Wired into the `ci` aggregator so regressions in any
+  single extra fail PR checks before merge.
+- **Coverage-recovery tests (v3-followup T1–T4).** Four targeted test
+  modules lift measured coverage from 96.53% to 98.16%:
+  `tests/test_resilience_retry_coverage.py` (17 tests;
+  `_retry.py` 79% → 99%), `tests/test_telemetry_coverage.py` (9 tests;
+  `_correlation.py` 100%, `_spans.py` 97%),
+  `tests/test_credentials_coverage.py` (6 tests; `credentials.py`
+  91% → 100%), and `tests/test_getgdf_coverage.py` (10 tests;
+  `getgdf.py` 95% → 99%). Coverage floor in `pyproject.toml`
+  (`[tool.coverage.report] fail_under`) raised from 96 to 97 to
+  match (v3-followup T11).
 
 ### Changed
 

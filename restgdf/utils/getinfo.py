@@ -19,6 +19,8 @@ from typing import Any
 from aiohttp import ClientSession, ServerTimeoutError
 from pydantic import BaseModel
 
+from restgdf._client._protocols import AsyncHTTPSession
+
 from restgdf.utils._http import (
     DEFAULT_METADATA_HEADERS,
     DEFAULTDICT,
@@ -49,8 +51,12 @@ from restgdf.utils._stats import (
     nested_count,
     nestedcount,
 )
-from restgdf.utils.token import ArcGISTokenSession
 from restgdf.errors import RestgdfTimeoutError
+
+try:
+    from restgdf.resilience import bounded_retry_timeout as _resilience_bounded_retry
+except ImportError:  # pragma: no cover - resilience extra not installed
+    _resilience_bounded_retry = None  # type: ignore[assignment]
 
 __all__ = [
     "ClientSession",
@@ -83,22 +89,28 @@ __all__ = [
 
 
 async def _feature_count_with_timeout(
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     url: str,
     token: str | None,
     *,
     timeout: float | None = None,
     max_attempts: int = 3,
 ) -> int:
-    """Fetch feature count with inline bounded retry.
+    """Fetch feature count with bounded retry on timeouts.
 
-    BL-51: inline-only retry (R-59 — no restgdf.resilience imports).
+    BL-51: when the ``resilience`` extra is installed, delegates to
+    :func:`restgdf.resilience.bounded_retry_timeout` (stamina-backed) so
+    restgdf has a single source of truth for retry semantics. When the
+    extra is absent, falls back to the inline loop below with identical
+    contract.
+
     Retries ONLY on timeout failures:
 
     * :class:`asyncio.TimeoutError` / :class:`TimeoutError`
     * :class:`aiohttp.ServerTimeoutError`
 
-    Connection-level failures (disconnect, reset, DNS failure),
+    Connection-level failures (disconnect, reset, DNS failure —
+    :class:`aiohttp.ClientConnectionError`, R-69),
     deterministic failures (:class:`~restgdf.errors.RestgdfResponseError`,
     schema mismatches), and any other exception fail fast on the first
     attempt without retry so real bugs and transport errors are not
@@ -113,6 +125,17 @@ async def _feature_count_with_timeout(
         kwargs["data"] = {"token": token}
     if timeout is not None:
         kwargs["timeout"] = timeout
+
+    if _resilience_bounded_retry is not None:
+
+        async def _call() -> int:
+            return await get_feature_count(url, session, **kwargs)
+
+        return await _resilience_bounded_retry(
+            _call,
+            max_attempts=max_attempts,
+            url=url,
+        )
 
     last_exc: BaseException | None = None
     for attempt in range(max_attempts):
@@ -134,7 +157,7 @@ async def _feature_count_with_timeout(
 
 async def get_offset_range(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> range:
     """Get the offset range for a layer.
@@ -151,7 +174,7 @@ async def get_offset_range(
 
 
 async def service_metadata(
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     service_url: str,
     token: str | None = None,
     return_feature_count: bool = False,

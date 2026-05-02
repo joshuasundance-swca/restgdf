@@ -1,11 +1,10 @@
-import aiohttp
-from typing import Optional, Union
+from typing import Optional
 
+from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._models.crawl import CrawlReport, CrawlServiceEntry
 from restgdf._models.responses import LayerMetadata
 from restgdf.utils.getinfo import get_metadata
 from restgdf.utils.crawl import fetch_all_data, safe_crawl  # noqa: F401
-from restgdf.utils.token import ArcGISTokenSession
 
 
 class Directory:
@@ -34,7 +33,7 @@ class Directory:
     def __init__(
         self,
         url: str,
-        session: Union[aiohttp.ClientSession, ArcGISTokenSession],
+        session: AsyncHTTPSession,
         token: Optional[str] = None,
     ):
         """A class for interacting with ArcGIS Server directories."""

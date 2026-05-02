@@ -53,24 +53,50 @@ class QuerySession:
     def __init__(self, responses: list[dict]):
         self.responses = list(responses)
         self.post_calls: list[tuple[str, dict]] = []
+        # T8 (R-74): short ArcGIS requests now route through GET.
+        # Alias get_calls onto post_calls so tests keep asserting
+        # on ``post_calls`` regardless of the verb selected.
+        self.get_calls = self.post_calls
 
-    async def post(self, url: str, **kwargs):
+    async def _record(self, url: str, kwargs: dict) -> JsonResponse:
         self.post_calls.append((url, kwargs))
         return JsonResponse(self.responses.pop(0))
+
+    async def post(self, url: str, **kwargs):
+        return await self._record(url, kwargs)
+
+    async def get(self, url: str, **kwargs):
+        # Mirror the body under the POST key so tests that inspect
+        # ``kwargs["data"]`` keep passing when the call is now a GET.
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self._record(url, kwargs)
 
 
 class RecordingTextSession:
     def __init__(self, response_text: str = "{}"):
         self.response_text = response_text
         self.post_calls: list[tuple[str, dict]] = []
+        self.get_calls = self.post_calls
 
-    async def post(self, url: str, **kwargs):
+    async def _record(self, url: str, kwargs: dict) -> TextResponse:
         self.post_calls.append((url, kwargs))
         return TextResponse(self.response_text)
+
+    async def post(self, url: str, **kwargs):
+        return await self._record(url, kwargs)
+
+    async def get(self, url: str, **kwargs):
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self._record(url, kwargs)
 
 
 class RejectingSession:
     async def post(self, *args, **kwargs):
+        raise AssertionError("should fail before requesting")
+
+    async def get(self, *args, **kwargs):
         raise AssertionError("should fail before requesting")
 
 
@@ -94,6 +120,21 @@ class MockFeatureLayerSession:
             "params": dict(kwargs.get("params", {})),
         }
         self.get_calls.append((url, copied_kwargs))
+        # T8 (R-74): short ArcGIS /query calls flip from POST to GET.
+        # Reuse the same response routing as POST by interpreting
+        # ``params`` the same way a POST ``data`` payload was interpreted.
+        params = copied_kwargs["params"]
+        if url.endswith("/query"):
+            if params.get("returnCountOnly"):
+                return JsonResponse({"count": self.count})
+            if params.get("returnIdsOnly"):
+                return JsonResponse(
+                    {
+                        "objectIdFieldName": "OBJECTID",
+                        "objectIds": self.object_ids,
+                    },
+                )
+            return JsonResponse({"features": []})
         return JsonResponse(self.metadata)
 
     async def post(self, url: str, **kwargs):

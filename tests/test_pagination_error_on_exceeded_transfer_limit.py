@@ -35,6 +35,11 @@ class JsonSession:
 
         return Response(self.payloads.pop(0))
 
+    async def get(self, url, **kwargs):
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self.post(url, **kwargs)
+
 
 @pytest.mark.asyncio
 async def test_pagination_error_carries_page_size():

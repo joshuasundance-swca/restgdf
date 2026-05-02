@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import importlib
 from unittest.mock import AsyncMock, call, patch
 
@@ -11,6 +12,7 @@ from restgdf.errors import PaginationError
 from tests.pagination_fixtures import load_pagination_fixture
 
 from restgdf.utils.getgdf import (
+    _feature_batch_generator,
     chunk_generator,
     chunk_values,
     combine_where_clauses,
@@ -27,6 +29,14 @@ class RecordingSession:
     def __init__(self, response_text: str = "{}"):
         self.response_text = response_text
         self.post_calls: list[tuple[str, dict]] = []
+        self._closed = False
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    async def close(self) -> None:
+        self._closed = True
 
     async def post(self, url: str, **kwargs):
         self.post_calls.append((url, kwargs))
@@ -39,6 +49,16 @@ class RecordingSession:
                 return self._text_payload
 
         return Response(self.response_text)
+
+    async def get(self, url: str, **kwargs):
+        # Translate params→data so the recorded kwargs snapshot matches
+        # the legacy POST shape. T8 (R-74): short GETs now hit call sites
+        # that used to issue POST; preserving the POST-shaped record keeps
+        # existing assertions intact.
+        if "params" in kwargs:
+            params = kwargs.pop("params")
+            kwargs.setdefault("data", params)
+        return await self.post(url, **kwargs)
 
 
 class JsonSession:
@@ -57,6 +77,12 @@ class JsonSession:
                 return self._payload
 
         return Response(self.payloads.pop(0))
+
+    async def get(self, url: str, **kwargs):
+        if "params" in kwargs:
+            params = kwargs.pop("params")
+            kwargs.setdefault("data", params)
+        return await self.post(url, **kwargs)
 
 
 def _missing_optional_import(target: str):
@@ -311,6 +337,35 @@ async def test_get_gdf_list_builds_tasks_from_batches(sample_feature_gdf):
 
 
 @pytest.mark.asyncio
+async def test_get_gdf_list_cancels_sibling_tasks_on_failure() -> None:
+    gate = asyncio.Event()
+    sibling_cancelled = asyncio.Event()
+    session = RecordingSession()
+
+    async def fake_get_sub_gdf(url, session, query_data, **kwargs):
+        if query_data["where"] == "boom":
+            raise RuntimeError("boom")
+        try:
+            await gate.wait()
+        except asyncio.CancelledError:
+            sibling_cancelled.set()
+            raise
+        return GeoDataFrame()
+
+    with patch(
+        "restgdf.utils.getgdf.get_query_data_batches",
+        new=AsyncMock(return_value=[{"where": "boom"}, {"where": "slow"}]),
+    ), patch(
+        "restgdf.utils.getgdf.get_sub_gdf",
+        new=fake_get_sub_gdf,
+    ):
+        with pytest.raises(RuntimeError, match="boom"):
+            await get_gdf_list("https://example.com/layer/0", session)
+
+    assert sibling_cancelled.is_set()
+
+
+@pytest.mark.asyncio
 async def test_chunk_generator_yields_each_chunk(sample_feature_gdf):
     with patch(
         "restgdf.utils.getgdf.get_query_data_batches",
@@ -366,6 +421,11 @@ async def test_row_dict_generator_yields_rows(sample_feature_gdf):
 
                 return Response(self.responses.pop(0))
 
+            async def get(self, url: str, **kwargs):
+                if "params" in kwargs and "data" not in kwargs:
+                    kwargs = {**kwargs, "data": kwargs["params"]}
+                return await self.post(url, **kwargs)
+
         rows = [
             row
             async for row in row_dict_generator(
@@ -380,6 +440,54 @@ async def test_row_dict_generator_yields_rows(sample_feature_gdf):
 
 
 @pytest.mark.asyncio
+async def test_feature_batch_generator_caps_scheduled_tasks_and_cancels_on_close():
+    gate = asyncio.Event()
+    created: list[asyncio.Task] = []
+    orig_create_task = asyncio.create_task
+
+    async def fake_get_sub_features(*args, **kwargs):
+        await gate.wait()
+        return []
+
+    def spy_create_task(coro):
+        task = orig_create_task(coro)
+        created.append(task)
+        return task
+
+    cfg = type(
+        "Cfg",
+        (),
+        {"concurrency": type("Conc", (), {"max_concurrent_requests": 2})()},
+    )()
+
+    with patch(
+        "restgdf.utils.getgdf.get_query_data_batches",
+        new=AsyncMock(return_value=[{"resultOffset": i} for i in range(25)]),
+    ), patch(
+        "restgdf.utils.getgdf.get_sub_features",
+        new=fake_get_sub_features,
+    ), patch(
+        "restgdf.utils.getgdf.get_config",
+        return_value=cfg,
+    ), patch(
+        "asyncio.create_task",
+        new=spy_create_task,
+    ):
+        agen = _feature_batch_generator("https://example.com/layer/0", object())
+        consumer = orig_create_task(agen.__anext__())
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert len(created) == 2
+        consumer.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await consumer
+        await agen.aclose()
+        await asyncio.sleep(0)
+        assert all(task.done() for task in created)
+        gate.set()
+
+
+@pytest.mark.asyncio
 async def test_get_sub_features_should_reject_truncated_empty_feature_page():
     session = JsonSession(
         [load_pagination_fixture("query_exceeded_transfer_limit_empty_features.json")],
@@ -391,6 +499,57 @@ async def test_get_sub_features_should_reject_truncated_empty_feature_page():
             session,
             query_data={"where": "1=1"},
         )
+
+
+@pytest.mark.asyncio
+async def test_chunk_generator_caps_scheduled_tasks_and_cancels_on_close():
+    gate = asyncio.Event()
+    created: list[asyncio.Task] = []
+    orig_create_task = asyncio.create_task
+
+    async def fake_get_sub_gdf(*args, **kwargs):
+        await gate.wait()
+        return GeoDataFrame()
+
+    def spy_create_task(coro):
+        task = orig_create_task(coro)
+        created.append(task)
+        return task
+
+    cfg = type(
+        "Cfg",
+        (),
+        {"concurrency": type("Conc", (), {"max_concurrent_requests": 2})()},
+    )()
+
+    with patch(
+        "restgdf.utils.getgdf.get_query_data_batches",
+        new=AsyncMock(return_value=[{"resultOffset": i} for i in range(25)]),
+    ), patch(
+        "restgdf.utils.getgdf.get_sub_gdf",
+        new=fake_get_sub_gdf,
+    ), patch(
+        "restgdf.utils.getgdf.get_metadata",
+        new=AsyncMock(return_value={}),
+    ), patch(
+        "restgdf.utils.getgdf.get_config",
+        return_value=cfg,
+    ), patch(
+        "asyncio.create_task",
+        new=spy_create_task,
+    ):
+        agen = chunk_generator("https://example.com/layer/0", object())
+        consumer = orig_create_task(agen.__anext__())
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        assert len(created) == 2
+        consumer.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await consumer
+        await agen.aclose()
+        await asyncio.sleep(0)
+        assert all(task.done() for task in created)
+        gate.set()
 
 
 @pytest.mark.asyncio
@@ -464,6 +623,19 @@ async def test_get_gdf_forwards_token_and_detects_conflicts():
             token="abc",
             data={"token": "different"},
         )
+
+
+@pytest.mark.asyncio
+async def test_get_gdf_closes_internally_created_session():
+    with patch(
+        "restgdf.utils.getgdf.gdf_by_concat",
+        new=AsyncMock(return_value="sentinel"),
+    ) as mock_gdf_by_concat:
+        result = await get_gdf("https://example.com/layer/0", session=None)
+
+    assert result == "sentinel"
+    created_session = mock_gdf_by_concat.await_args.args[1]
+    assert created_session.closed is True
 
 
 @pytest.mark.asyncio

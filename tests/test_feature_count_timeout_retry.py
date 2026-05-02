@@ -8,6 +8,7 @@ the inline retry wrapper that converts ``asyncio.TimeoutError`` into
 from __future__ import annotations
 
 import asyncio
+import re
 
 import pytest
 from aiohttp import ClientSession
@@ -16,14 +17,18 @@ from aioresponses import aioresponses
 from restgdf.errors import RestgdfTimeoutError
 from restgdf.utils.getinfo import _feature_count_with_timeout
 
+# T8 (R-74): short count queries now route to GET with a query string,
+# so aioresponses needs a regex pattern that matches any `?...` suffix.
+_QUERY_URL_RE = re.compile(r"^https://svc\.example/0/query(\?.*)?$")
+
 
 @pytest.mark.asyncio
 async def test_feature_count_timeout_raises_RestgdfTimeoutError():
     """All attempts timeout → RestgdfTimeoutError raised."""
     async with ClientSession() as session:
         with aioresponses() as m:
-            m.post(
-                "https://svc.example/0/query",
+            m.get(
+                _QUERY_URL_RE,
                 exception=asyncio.TimeoutError(),
                 repeat=True,
             )
@@ -42,8 +47,8 @@ async def test_feature_count_chains_timeout_cause():
     """RestgdfTimeoutError.__cause__ should be the original TimeoutError."""
     async with ClientSession() as session:
         with aioresponses() as m:
-            m.post(
-                "https://svc.example/0/query",
+            m.get(
+                _QUERY_URL_RE,
                 exception=asyncio.TimeoutError(),
                 repeat=True,
             )
@@ -65,10 +70,10 @@ async def test_feature_count_retries_on_transient_failure():
     """Two failures then success → returns count."""
     async with ClientSession() as session:
         with aioresponses() as m:
-            m.post("https://svc.example/0/query", exception=asyncio.TimeoutError())
-            m.post("https://svc.example/0/query", exception=asyncio.TimeoutError())
-            m.post(
-                "https://svc.example/0/query",
+            m.get(_QUERY_URL_RE, exception=asyncio.TimeoutError())
+            m.get(_QUERY_URL_RE, exception=asyncio.TimeoutError())
+            m.get(
+                _QUERY_URL_RE,
                 payload={"count": 42},
             )
             result = await _feature_count_with_timeout(
@@ -85,8 +90,8 @@ async def test_feature_count_single_success_no_retry():
     """First attempt succeeds → no retry, returns count."""
     async with ClientSession() as session:
         with aioresponses() as m:
-            m.post(
-                "https://svc.example/0/query",
+            m.get(
+                _QUERY_URL_RE,
                 payload={"count": 100},
             )
             result = await _feature_count_with_timeout(

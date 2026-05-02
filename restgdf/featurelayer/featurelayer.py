@@ -7,8 +7,8 @@ import warnings
 from collections.abc import AsyncIterable, AsyncIterator
 from typing import TYPE_CHECKING, Any, Literal
 
-from aiohttp import ClientSession
 
+from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._compat import _warn_deprecated, aclosing
 from restgdf._models.responses import LayerMetadata
 from restgdf.errors import FieldDoesNotExistError
@@ -55,7 +55,6 @@ __all__ = [
     "getvaluecounts",
     "nestedcount",
 ]
-from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list, ends_with_num
 
 if TYPE_CHECKING:
@@ -92,7 +91,7 @@ class FeatureLayer:
     def __init__(
         self,
         url: str,
-        session: ClientSession | ArcGISTokenSession,
+        session: AsyncHTTPSession,
         where: str = "1=1",
         token: str | None = None,
         **kwargs,
@@ -393,7 +392,7 @@ class FeatureLayer:
         async for chunk in chunk_generator(self.url, self.session, **merged_kwargs):
             yield chunk
 
-    async def get_df(self) -> DataFrame:
+    async def get_df(self, resolve_domains: bool = False) -> DataFrame:
         """Get a pandas DataFrame from an ArcGIS FeatureLayer.
 
         Tabular row view: attributes plus any raw ``geometry`` dict returned
@@ -404,10 +403,36 @@ class FeatureLayer:
         This is the pandas-only counterpart to :meth:`get_gdf` — prefer it
         when callers only need tabular access and want to avoid the full geo
         dependency stack.
-        """
-        from restgdf.adapters.pandas import arows_to_dataframe
 
-        return await arows_to_dataframe(self.stream_rows())
+        Parameters
+        ----------
+        resolve_domains:
+            When ``True``, coded-value domain fields are post-processed
+            so the DataFrame contains the human-readable ``name`` rather
+            than the raw ``code``. Codes absent from the domain's
+            ``codedValues`` table pass through unchanged. Range domains
+            are not validated or coerced. Defaults to ``False`` — the
+            historical behavior where the DataFrame faithfully mirrors
+            the server payload. No additional HTTP traffic is issued;
+            resolution uses the already-loaded
+            :attr:`FeatureLayer.metadata` fetched during :meth:`prep`.
+
+        Examples
+        --------
+        >>> df = await layer.get_df(resolve_domains=True)  # doctest: +SKIP
+        >>> df["STATUS"].head().tolist()  # doctest: +SKIP
+        ['Active', 'Inactive', 'Active', ...]
+        """
+        from restgdf.adapters.pandas import (
+            arows_to_dataframe,
+            resolve_domains as _resolve_domains,
+        )
+
+        df = await arows_to_dataframe(self.stream_rows())
+        if resolve_domains:
+            fields = getattr(getattr(self, "metadata", None), "fields", None)
+            df = _resolve_domains(df, fields)
+        return df
 
     async def row_dict_generator(
         self,

@@ -141,10 +141,10 @@ source = ["restgdf"]
 
 [tool.coverage.report]
 show_missing = true
-# Floor reflects current measured coverage (96.53% as of 2.0.0 release).
-# Raise this back toward 97 as targeted tests land for resilience /
-# telemetry / getgdf edge paths (see tracking issue).
-fail_under = 96
+# Floor reflects current measured coverage (98.16% as of v3-followup).
+# Targeted tests for resilience/_retry, telemetry, credentials, and
+# getgdf edge paths lifted measured coverage from 96.53% to 98.16%.
+fail_under = 97
 # Regexes for lines to exclude from consideration
 exclude_also = [
     # Don't complain about missing debug-only code:
@@ -185,6 +185,7 @@ addopts = "--strict-markers"
 asyncio_mode = "strict"
 markers = [
     "network: tests that hit live external ArcGIS services",
+    "stress: resource-intensive or property-based tests excluded by default; pass --run-stress to include them",
     "characterization: tests that pin current behavior to guard refactors",
     "compat: backward-compatibility tests for preserved import/patch paths",
 ]

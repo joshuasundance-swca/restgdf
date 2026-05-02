@@ -10,8 +10,8 @@ that patching ``restgdf.utils.getinfo.<helper>`` intercepts those calls.
 
 from __future__ import annotations
 
-from aiohttp import ClientSession
 
+from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._client.request import build_conservative_query_data
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import (
@@ -19,13 +19,12 @@ from restgdf._models.responses import (
     LayerMetadata,
     ObjectIdsResponse,
 )
-from restgdf.utils._http import default_headers, default_timeout
-from restgdf.utils.token import ArcGISTokenSession
+from restgdf.utils._http import _arcgis_request, default_headers, default_timeout
 
 
 async def get_feature_count(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> int:
     """Get the feature count for a layer.
@@ -42,9 +41,10 @@ async def get_feature_count(
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
     xkwargs.setdefault("timeout", default_timeout())
     query_url = f"{url}/query"
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         query_url,
-        data=datadict,
+        datadict,
         headers=default_headers(xkwargs.pop("headers", None)),
         **xkwargs,
     )
@@ -55,7 +55,7 @@ async def get_feature_count(
 
 async def get_metadata(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     token: str | None = None,
 ) -> LayerMetadata:
     """Get the parsed metadata model for a layer.
@@ -69,9 +69,10 @@ async def get_metadata(
     data = {"f": "json"}
     if token is not None:
         data["token"] = token
-    response = await session.get(
+    response = await _arcgis_request(
+        session,
         url,
-        params=data,
+        data,
         headers=default_headers(),
         timeout=default_timeout(),
     )
@@ -81,7 +82,7 @@ async def get_metadata(
 
 async def get_object_ids(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> tuple[str, list[int]]:
     """Get the object id field name and matching object ids for a layer query.
@@ -99,9 +100,10 @@ async def get_object_ids(
     xkwargs: dict = {k: v for k, v in kwargs.items() if k != "data"}
     xkwargs.setdefault("timeout", default_timeout())
     query_url = f"{url}/query"
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         query_url,
-        data=datadict,
+        datadict,
         headers=default_headers(xkwargs.pop("headers", None)),
         **xkwargs,
     )

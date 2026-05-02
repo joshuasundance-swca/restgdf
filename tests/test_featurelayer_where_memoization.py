@@ -25,6 +25,10 @@ LAYER_URL = "https://svc.example/arcgis/rest/services/Demo/FeatureServer/0"
 METADATA_URL_RE = re.compile(
     r"^https://svc\.example/arcgis/rest/services/Demo/FeatureServer/0(\?.*)?$",
 )
+# T8 (R-74): short count queries ride on GET and carry a query string.
+QUERY_URL_RE = re.compile(
+    r"^https://svc\.example/arcgis/rest/services/Demo/FeatureServer/0/query(\?.*)?$",
+)
 
 
 def _metadata_payload() -> dict:
@@ -49,10 +53,12 @@ def _count_metadata_and_count_calls(mocker: aioresponses) -> tuple[int, int]:
         url_str = str(url).split("?", 1)[0]
         if method == "GET" and url_str.rstrip("/").endswith("FeatureServer/0"):
             metadata_calls += len(calls)
-        elif method == "POST" and url_str.endswith("FeatureServer/0/query"):
+        elif url_str.endswith("FeatureServer/0/query") and method in ("POST", "GET"):
             for call in calls:
-                data = call.kwargs.get("data") or {}
-                if str(data.get("returnCountOnly", "")).lower() == "true":
+                # T8 (R-74): count requests can ride on either verb. ``data``
+                # carries the payload on POST; ``params`` carries it on GET.
+                payload = call.kwargs.get("data") or call.kwargs.get("params") or {}
+                if str(payload.get("returnCountOnly", "")).lower() == "true":
                     count_calls += 1
     return metadata_calls, count_calls
 
@@ -70,6 +76,12 @@ async def test_where_reuses_parent_metadata_and_refreshes_count():
         m.get(METADATA_URL_RE, payload=_metadata_payload(), repeat=True)
         m.post(
             f"{LAYER_URL}/query",
+            payload={"count": 42},
+            repeat=True,
+        )
+        # T8 (R-74): short count queries now route to GET.
+        m.get(
+            QUERY_URL_RE,
             payload={"count": 42},
             repeat=True,
         )
@@ -98,15 +110,21 @@ async def test_where_reuses_parent_metadata_and_refreshes_count():
     refined_count_posts = [
         call
         for (method, url), calls in m.requests.items()
-        if method == "POST" and str(url).split("?", 1)[0].endswith("/query")
+        if method in ("POST", "GET") and str(url).split("?", 1)[0].endswith("/query")
         for call in calls
-        if str((call.kwargs.get("data") or {}).get("returnCountOnly", "")).lower()
+        if str(
+            (call.kwargs.get("data") or call.kwargs.get("params") or {}).get(
+                "returnCountOnly",
+                "",
+            ),
+        ).lower()
         == "true"
-        and (call.kwargs.get("data") or {}).get("where") == "STATUS = 'Open'"
+        and (call.kwargs.get("data") or call.kwargs.get("params") or {}).get("where")
+        == "STATUS = 'Open'"
     ]
     assert (
         refined_count_posts
-    ), "BL-46: refined count POST must carry the refined `where` clause"
+    ), "BL-46: refined count request must carry the refined `where` clause"
 
     assert refined.url == parent.url
     assert refined.session is parent.session
@@ -125,6 +143,12 @@ async def test_where_combines_with_existing_where_and_refreshes_count():
         m.get(METADATA_URL_RE, payload=_metadata_payload(), repeat=True)
         m.post(
             f"{LAYER_URL}/query",
+            payload={"count": 7},
+            repeat=True,
+        )
+        # T8 (R-74): short count queries now route to GET.
+        m.get(
+            QUERY_URL_RE,
             payload={"count": 7},
             repeat=True,
         )
