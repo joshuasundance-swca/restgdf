@@ -21,11 +21,11 @@ operator-visible bug, not schema drift.
 
 from __future__ import annotations
 
-import warnings
 from typing import Literal
 
 from pydantic import Field, SecretStr, field_validator, model_validator
 
+from restgdf._compat import _warn_deprecated
 from restgdf._models._drift import StrictModel
 
 
@@ -60,14 +60,12 @@ class TokenSessionConfig(StrictModel):
       * ``clock_skew_seconds`` (default ``30``, capped at ``30`` when
         derived from the legacy alias) — extra padding for client /
         server clock drift.
-      * ``refresh_threshold_seconds`` is retained as a
-        deprecation-warning alias. Reads return
-        ``refresh_leeway_seconds + clock_skew_seconds``; writes via the
-        constructor kwarg split the supplied total into
-        ``clock_skew_seconds = min(30, total)`` and
-        ``refresh_leeway_seconds = total - clock_skew_seconds``. The
-        future ``restgdf._compat._warn_deprecated`` helper (phase-1c
-        BL-56) will subsume this direct ``warnings.warn`` call.
+    ``refresh_threshold_seconds`` is retained as a
+    deprecation-warning alias. Reads return
+    ``refresh_leeway_seconds + clock_skew_seconds``; writes via the
+    constructor kwarg split the supplied total into
+    ``clock_skew_seconds = min(30, total)`` and
+    ``refresh_leeway_seconds = total - clock_skew_seconds``.
     """
 
     token_url: str
@@ -101,22 +99,18 @@ class TokenSessionConfig(StrictModel):
         keys are silently dropped during normal validation. This
         validator intercepts ``refresh_threshold_seconds`` *before* that
         filtering so the legacy alias keeps working and emits a
-        ``DeprecationWarning``. The helper lives here rather than in
-        ``restgdf._compat`` because the compat package is scheduled for
-        phase-1c (BL-56); the call will be migrated there once it lands.
+        ``DeprecationWarning`` via :func:`restgdf._compat._warn_deprecated`.
         """
         if not isinstance(data, dict):
             return data
         if "refresh_threshold_seconds" not in data:
             return data
         total = data.pop("refresh_threshold_seconds")
-        warnings.warn(
+        _warn_deprecated(
             "`TokenSessionConfig.refresh_threshold_seconds` is deprecated; "
             "set `refresh_leeway_seconds` and `clock_skew_seconds` "
             "explicitly instead. The alias will be removed in a future "
             "release.",
-            DeprecationWarning,
-            stacklevel=2,
         )
         if not isinstance(total, int) or isinstance(total, bool):
             # Let pydantic surface a clear type error by leaving the
@@ -132,12 +126,11 @@ class TokenSessionConfig(StrictModel):
     @property
     def refresh_threshold_seconds(self) -> int:
         """Return the legacy threshold sum (``leeway + skew``) and emit a ``DeprecationWarning``."""
-        warnings.warn(
+        _warn_deprecated(
             "`TokenSessionConfig.refresh_threshold_seconds` is deprecated; "
             "read `refresh_leeway_seconds` and `clock_skew_seconds` "
             "directly. The alias will be removed in a future release.",
-            DeprecationWarning,
-            stacklevel=2,
+            stacklevel=3,
         )
         return self.refresh_leeway_seconds + self.clock_skew_seconds
 

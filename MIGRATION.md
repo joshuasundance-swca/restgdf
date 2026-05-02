@@ -232,9 +232,11 @@ from the same row stream; raises `OptionalDependencyError`
   `(resultOffset, resultRecordCount)` tuples byte-identical to the
   previous inline arithmetic. When `factor` exceeds
   `advertised_factor` the planner clamps to the advertised value and
-  logs a warning via `restgdf.pagination`. Live
-  `advancedQueryCapabilities.maxRecordCountFactor` wiring into
-  `get_query_data_batches` remains a future follow-up.
+  logs a warning via `restgdf.pagination`. In 2.0.0,
+  `get_query_data_batches` now forwards live
+  `advancedQueryCapabilities.maxRecordCountFactor` values into
+  `build_pagination_plan(advertised_factor=...)` when the server
+  advertises a positive numeric factor.
 
 **Advanced query capabilities** (`restgdf._models.responses`)
 
