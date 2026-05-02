@@ -435,8 +435,8 @@ class ArcGISTokenSession:
         """Return ``True`` when the underlying :class:`aiohttp.ClientSession` is closed.
 
         Delegating lets :class:`ArcGISTokenSession` satisfy the
-        :class:`~restgdf._client._protocols.AsyncHTTPSession` Protocol
-        uniformly with ``aiohttp.ClientSession`` (R-71).
+        internal ``AsyncHTTPSession`` transport Protocol uniformly with
+        ``aiohttp.ClientSession`` (R-71).
         """
         return bool(self.session.closed)
 
@@ -445,8 +445,8 @@ class ArcGISTokenSession:
 
         Mirrors :meth:`aiohttp.ClientSession.close` so token sessions and
         raw aiohttp sessions are interchangeable through the
-        :class:`~restgdf._client._protocols.AsyncHTTPSession` Protocol.
-        Idempotent: closing an already-closed session is a no-op.
+        internal ``AsyncHTTPSession`` transport Protocol. Idempotent:
+        closing an already-closed session is a no-op.
         """
         if not self.session.closed:
             await self.session.close()

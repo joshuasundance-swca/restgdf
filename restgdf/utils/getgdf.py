@@ -187,22 +187,29 @@ def chunk_values(values: list[int], chunk_size: int) -> list[list[int]]:
 
 
 def _advertised_max_record_count_factor(
-    metadata: Mapping[str, Any],
+    metadata: Mapping[str, Any] | LayerMetadata,
 ) -> float | None:
     """Return the server-advertised ``maxRecordCountFactor`` or ``None``.
 
-    Checks ``advancedQueryCapabilities.maxRecordCountFactor`` in the
-    raw layer metadata dict (R-72). Returns ``None`` when the
-    ``advancedQueryCapabilities`` block is missing, when the factor
-    key itself is absent, or when the advertised value is not a
-    positive number (``None`` / 0 / negative / non-numeric). The
-    return value is intended to be threaded straight through to
-    :func:`build_pagination_plan` as ``advertised_factor=``.
+    Accepts both the raw metadata mapping returned by low-level helpers
+    and the typed :class:`LayerMetadata` model used by the live
+    :class:`~restgdf.featurelayer.FeatureLayer` path. Returns ``None``
+    when the ``advancedQueryCapabilities`` block is missing, when the
+    factor key itself is absent, or when the advertised value is not a
+    positive number (``None`` / 0 / negative / non-numeric). The return
+    value is intended to be threaded straight through to
+    ``build_pagination_plan(..., advertised_factor=...)``.
     """
-    aqc = metadata.get("advancedQueryCapabilities")
-    if not isinstance(aqc, Mapping):
-        return None
-    raw = aqc.get("maxRecordCountFactor")
+    if isinstance(metadata, Mapping):
+        aqc = metadata.get("advancedQueryCapabilities")
+    else:
+        aqc = metadata.advanced_query_capabilities
+
+    if isinstance(aqc, Mapping):
+        raw = aqc.get("maxRecordCountFactor")
+    else:
+        raw = getattr(aqc, "max_record_count_factor", None)
+
     if raw is None or isinstance(raw, bool):
         # bool is a subclass of int; reject it so True/False never leak
         # into the numeric path and silently wire advertised_factor=1.0.
@@ -227,7 +234,7 @@ async def get_query_data_batches(
 
     When the layer metadata advertises an explicit
     ``advancedQueryCapabilities.maxRecordCountFactor`` (R-72), the
-    value is forwarded to :func:`build_pagination_plan` as
+    value is forwarded to ``build_pagination_plan`` as
     ``advertised_factor=`` so pagination batch sizes honor the
     server-published upper bound. Layers that do **not** advertise the
     field keep today's byte-for-byte batching: no ``advertised_factor``
@@ -236,8 +243,8 @@ async def get_query_data_batches(
 
     Pages observed at stream time that return zero features while
     setting ``exceededTransferLimit=true`` are flagged with
-    :class:`restgdf.errors.PaginationInconsistencyWarning` (R-73) from
-    :func:`_resolve_page`; see that helper for details.
+    ``PaginationInconsistencyWarning`` (R-73) from the internal page
+    resolver; see that helper for details.
     """
     request_data = dict(kwargs.get("data") or {})
     feature_count = await get_feature_count(url, session, **kwargs)

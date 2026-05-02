@@ -482,3 +482,15 @@ def test_advertised_factor_still_accepts_normal_positive_values():
         metadata = {"advancedQueryCapabilities": {"maxRecordCountFactor": raw}}
         result = _advertised_max_record_count_factor(metadata)
         assert result is not None and result > 0
+
+
+def test_advertised_factor_accepts_typed_layer_metadata() -> None:
+    from restgdf._models.responses import LayerMetadata
+    from restgdf.utils.getgdf import _advertised_max_record_count_factor
+
+    metadata = LayerMetadata(
+        maxRecordCount=2000,
+        advancedQueryCapabilities={"maxRecordCountFactor": 5},
+    )
+
+    assert _advertised_max_record_count_factor(metadata) == 5

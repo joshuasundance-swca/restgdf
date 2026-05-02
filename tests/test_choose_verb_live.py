@@ -30,7 +30,7 @@ class _RecordingResponse:
 
         return _resolve().__await__()
 
-    async def __aenter__(self) -> "_RecordingResponse":
+    async def __aenter__(self) -> _RecordingResponse:
         return self
 
     async def __aexit__(self, exc_type, exc_value, traceback) -> None:
@@ -48,8 +48,16 @@ class _RecordingSession:
 
     def __init__(self, payload: Any):
         self._payload = payload
+        self._closed = False
         self.verbs: list[str] = []
         self.calls: list[tuple[str, str, dict]] = []
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    async def close(self) -> None:
+        self._closed = True
 
     def get(self, url: str, **kwargs) -> _RecordingResponse:
         self.verbs.append("GET")
