@@ -24,7 +24,7 @@ babel==2.18.0
     # via sphinx
 beautifulsoup4==4.14.3
     # via furo
-certifi==2026.2.25
+certifi==2026.4.22
     # via requests
 charset-normalizer==3.4.7
     # via requests
@@ -41,7 +41,7 @@ frozenlist==1.8.0
     #   aiosignal
 furo==2025.12.19
     # via restgdf (pyproject.toml)
-idna==3.11
+idna==3.13
     # via
     #   requests
     #   yarl
@@ -69,7 +69,7 @@ multidict==6.7.1
     #   yarl
 myst-parser[linkify]==5.0.0
     # via restgdf (pyproject.toml)
-packaging==26.1
+packaging==26.2
     # via sphinx
 propcache==0.4.1
     # via
