@@ -51,6 +51,7 @@ if TYPE_CHECKING:
     from geopandas import GeoDataFrame
 
 supported_drivers: dict[str, str] | None = None
+_METADATA_LOG = get_logger("transport")
 
 
 def _require_geo_query_support(feature: str) -> None:
@@ -389,7 +390,12 @@ async def chunk_generator(
     raw_sr: dict[str, Any] | None
     try:
         metadata = await get_metadata(url, session, token=token)
-    except Exception:  # pragma: no cover - metadata errors surface elsewhere
+    except Exception as exc:  # pragma: no cover - metadata errors surface elsewhere
+        _METADATA_LOG.debug(
+            "spatial_reference.metadata_lookup_failed url=%s operation=chunk_generator",
+            url,
+            exc_info=exc,
+        )
         raw_sr = None
     else:
         raw_sr = _extract_raw_spatial_reference(metadata)
@@ -573,7 +579,12 @@ async def _apply_spatial_reference_attr(
     token = request_data.get("token") if isinstance(request_data, Mapping) else None
     try:
         metadata = await get_metadata(url, session, token=token)
-    except Exception:  # pragma: no cover - metadata errors surface elsewhere
+    except Exception as exc:  # pragma: no cover - metadata errors surface elsewhere
+        _METADATA_LOG.debug(
+            "spatial_reference.metadata_lookup_failed url=%s operation=apply_attr",
+            url,
+            exc_info=exc,
+        )
         return
     raw_sr = _extract_raw_spatial_reference(metadata)
     if raw_sr is not None:

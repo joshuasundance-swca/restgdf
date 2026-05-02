@@ -3,8 +3,7 @@
 All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
-
+## [2.0.0] - 2026-05-02
 ### Changed
 
 - **Gate-3 hardening follow-up (post-T6-T11).** Three review-driven

@@ -39,6 +39,7 @@ if TYPE_CHECKING:
         TokenResponse,
         TokenSessionConfig,
         get_settings,
+        reset_settings_cache,
     )
     from .directory.directory import Directory
     from .errors import (
@@ -49,6 +50,7 @@ if TYPE_CHECKING:
         InvalidCredentialsError,
         OptionalDependencyError,
         OutputConversionError,
+        PaginationInconsistencyWarning,
         PaginationError,
         RateLimitError,
         RestgdfError,
@@ -90,6 +92,7 @@ __all__ = [
     "ObjectIdsResponse",
     "OptionalDependencyError",
     "OutputConversionError",
+    "PaginationInconsistencyWarning",
     "PaginationError",
     "RateLimitError",
     "ResilienceConfig",
@@ -114,6 +117,7 @@ __all__ = [
     "get_config",
     "get_settings",
     "reset_config_cache",
+    "reset_settings_cache",
     "utils",
 ]
 
@@ -157,6 +161,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
             "TokenResponse",
             "TokenSessionConfig",
             "get_settings",
+            "reset_settings_cache",
         )
     },
     **{
@@ -170,6 +175,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
             "InvalidCredentialsError",
             "OptionalDependencyError",
             "OutputConversionError",
+            "PaginationInconsistencyWarning",
             "PaginationError",
             "RateLimitError",
             "RestgdfError",

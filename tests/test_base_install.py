@@ -300,6 +300,9 @@ async def test_row_dict_generator_uses_query_batch_data_without_duplicate_kwargs
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings(
+    r"ignore:FeatureLayer\.row_dict_generator is deprecated:DeprecationWarning",
+)
 async def test_featurelayer_row_dict_generator_merges_data_kwargs():
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",

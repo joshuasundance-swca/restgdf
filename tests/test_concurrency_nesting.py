@@ -86,7 +86,7 @@ async def test_fetch_all_data_shares_semaphore_across_nested_fanout(monkeypatch)
     nested ``service_metadata`` call. With cap=2 and 3 services × 3 layers
     each, the observed peak must be ≤ 2 — not ≤ 4 (2*2) as the pre-fix
     nested-unshared semaphore would allow."""
-    monkeypatch.setenv("RESTGDF_MAX_CONCURRENT_REQUESTS", "2")
+    monkeypatch.setenv("RESTGDF_CONCURRENCY_MAX_CONCURRENT_REQUESTS", "2")
     reset_settings_cache()
     try:
         peak_of = _install_counting_metadata_fakes(monkeypatch)
@@ -114,7 +114,7 @@ async def test_fetch_all_data_shares_semaphore_across_nested_fanout(monkeypatch)
 async def test_safe_crawl_shares_semaphore_across_nested_fanout(monkeypatch):
     """``safe_crawl`` must share ONE ``BoundedSemaphore`` with every nested
     ``service_metadata`` call (same contract as ``fetch_all_data``)."""
-    monkeypatch.setenv("RESTGDF_MAX_CONCURRENT_REQUESTS", "2")
+    monkeypatch.setenv("RESTGDF_CONCURRENCY_MAX_CONCURRENT_REQUESTS", "2")
     reset_settings_cache()
     try:
         peak_of = _install_counting_metadata_fakes(monkeypatch)

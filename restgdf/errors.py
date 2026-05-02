@@ -425,6 +425,7 @@ __all__ = [
     "InvalidCredentialsError",
     "OptionalDependencyError",
     "OutputConversionError",
+    "PaginationInconsistencyWarning",
     "PaginationError",
     "RateLimitError",
     "RestgdfError",

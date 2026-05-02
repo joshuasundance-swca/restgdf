@@ -8,6 +8,7 @@ through re-exports). See Phase 6 of the TDD refactor plan and
 
 from __future__ import annotations
 
+import inspect
 import warnings
 from functools import wraps
 from typing import Any, Callable, TypeVar
@@ -48,9 +49,7 @@ def deprecated_alias(new_func: F, old_name: str, new_name: str) -> F:
 
 
 def _is_async_callable(obj: Any) -> bool:
-    import asyncio
-
-    return asyncio.iscoroutinefunction(obj)
+    return inspect.iscoroutinefunction(obj)
 
 
 __all__ = ["deprecated_alias"]

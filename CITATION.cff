@@ -13,7 +13,7 @@ repository-code: "https://github.com/joshuasundance-swca/restgdf"
 url: "https://restgdf.readthedocs.io/"
 license: MIT
 version: 2.0.0
-date-released: "2026-04-20"
+date-released: "2026-05-02"
 keywords:
   - geopandas
   - esri

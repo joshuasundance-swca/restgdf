@@ -91,7 +91,7 @@ def test_default_timeout_uses_explicit_settings_timeout_seconds():
 def test_default_timeout_default_resolves_to_settings_30_float(monkeypatch):
     from restgdf.utils._http import default_timeout
 
-    monkeypatch.delenv("RESTGDF_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.delenv("RESTGDF_TIMEOUT_TOTAL_S", raising=False)
     reset_settings_cache()
     try:
         result = default_timeout()
@@ -104,7 +104,7 @@ def test_default_timeout_default_resolves_to_settings_30_float(monkeypatch):
 def test_default_timeout_reads_env_as_float(monkeypatch):
     from restgdf.utils._http import default_timeout
 
-    monkeypatch.setenv("RESTGDF_TIMEOUT_SECONDS", "7.25")
+    monkeypatch.setenv("RESTGDF_TIMEOUT_TOTAL_S", "7.25")
     reset_settings_cache()
     try:
         result = default_timeout()
@@ -183,7 +183,7 @@ async def test_update_token_forwards_timeout(monkeypatch):
                 {"token": "t", "expires": 32503680000000},
             )
 
-    monkeypatch.setenv("RESTGDF_TIMEOUT_SECONDS", "12.5")
+    monkeypatch.setenv("RESTGDF_TIMEOUT_TOTAL_S", "12.5")
     reset_settings_cache()
     try:
         token_session = ArcGISTokenSession(

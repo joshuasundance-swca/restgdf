@@ -6,10 +6,10 @@ Private submodule; all public names are re-exported by
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 import inspect
 from typing import Any, Literal
-from collections.abc import Mapping
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import urlencode
 
 import aiohttp
 
@@ -42,14 +42,6 @@ def default_data(
     default_dict = default_dict or DEFAULTDICT
     return {**default_dict, **(data or {})}
 
-
-_POST_ENDPOINT_SUFFIXES: tuple[str, ...] = ("/query", "/queryRelatedRecords")
-_GET_PARENT_SEGMENTS: tuple[str, ...] = (
-    "MapServer",
-    "FeatureServer",
-    "ImageServer",
-    "GPServer",
-)
 
 # T8 (R-74): ArcGIS REST practical URL-length ceiling. Past this many bytes
 # (URL + encoded body), servers (and intermediaries like IIS/WAFs) routinely
@@ -91,12 +83,6 @@ def _choose_verb(
     if len(url) + separator + encoded_len <= _ARCGIS_URL_BODY_LIMIT:
         return "GET"
     return "POST"
-
-
-# Legacy endpoint-classification data kept for potential diagnostic reuse
-# (see git blame for BL-20). The active verb decision is length-based —
-# these constants are intentionally unused at runtime.
-_ = (_POST_ENDPOINT_SUFFIXES, _GET_PARENT_SEGMENTS, urlsplit)
 
 
 async def _arcgis_request(

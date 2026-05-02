@@ -27,6 +27,7 @@ Covers three follow-up-on-follow-up fixes on top of T6–T11:
 from __future__ import annotations
 
 import math
+from urllib.parse import urlencode
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -261,6 +262,59 @@ def test_coerce_params_for_get_normalizes_bool_none_and_preserves_other_values()
         "resultRecordCount": 1000,
         "objectIds": [1, 2, 3],
     }
+
+
+def test_encoded_body_length_matches_urlencode_doseq_behavior():
+    """The length helper must mirror ``urlencode(..., doseq=True)`` exactly."""
+    from restgdf.utils._http import _encoded_body_length
+
+    body = {
+        "where": "NAME IN ('A', 'B')",
+        "objectIds": [1, 2, 3],
+        "returnGeometry": True,
+    }
+
+    assert _encoded_body_length(None) == 0
+    assert _encoded_body_length({}) == 0
+    assert _encoded_body_length(body) == len(urlencode(body, doseq=True))
+
+
+def test_safe_static_attr_value_handles_descriptor_and_attributeerror():
+    """Static attr reads must resolve properties without fabricating values."""
+    from restgdf.utils._http import _safe_static_attr_value
+
+    class _PropertyBacked:
+        @property
+        def _transport(self) -> str:
+            return "query"
+
+    class _MissingAtRuntime:
+        @property
+        def _transport(self) -> str:
+            raise AttributeError("not set")
+
+    assert _safe_static_attr_value(_PropertyBacked(), "_transport") == "query"
+    assert _safe_static_attr_value(_MissingAtRuntime(), "_transport") is None
+
+
+def test_session_requires_body_transport_walks_property_backed_inner_chain():
+    """Property-backed wrapper chains should still surface a query/body transport."""
+    from restgdf.utils._http import _session_requires_body_transport
+
+    class _TokenInner:
+        @property
+        def _transport(self) -> str:
+            return "query"
+
+    class _Wrapper:
+        def __init__(self, inner) -> None:
+            self._wrapped = inner
+
+        @property
+        def _inner(self):
+            return self._wrapped
+
+    assert _session_requires_body_transport(_Wrapper(_TokenInner())) is True
 
 
 @pytest.mark.asyncio

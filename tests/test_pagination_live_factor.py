@@ -246,8 +246,7 @@ async def test_no_exceeded_limit_no_inconsistency_warning():
 
 def test_pagination_inconsistency_warning_importable_from_errors_module():
     """The sentinel lives in :mod:`restgdf.errors` alongside the error
-    taxonomy, even though (as a ``UserWarning`` subclass) it is not in
-    ``errors.__all__`` and not re-exported at the package root.
+    taxonomy and is re-exported through the package root for consistency.
     """
     from restgdf import errors
 
@@ -255,3 +254,10 @@ def test_pagination_inconsistency_warning_importable_from_errors_module():
     assert isinstance(cls, type)
     assert issubclass(cls, UserWarning)
     assert cls.__name__ == "PaginationInconsistencyWarning"
+
+
+def test_pagination_inconsistency_warning_importable_from_package_root():
+    from restgdf import PaginationInconsistencyWarning
+
+    assert isinstance(PaginationInconsistencyWarning, type)
+    assert issubclass(PaginationInconsistencyWarning, UserWarning)

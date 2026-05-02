@@ -25,7 +25,8 @@ from restgdf.errors import (
     TransportError,
 )
 from restgdf.resilience import ResilientSession
-from restgdf.resilience._retry import _ResponseCtx
+from restgdf.resilience._limiter import CooldownRegistry
+from restgdf.resilience._retry import _ResponseCtx, _do_retried_request, _enter_request
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +164,36 @@ class TestResponseCtx:
             assert resp.status == 200
 
         assert exited is True
+
+
+class TestEnterRequest:
+    @pytest.mark.asyncio
+    async def test_awaitable_response_is_wrapped_in_response_ctx(self) -> None:
+        class _AwaitableResponse(_FakeResponse):
+            def __await__(self):
+                async def _resolve() -> _AwaitableResponse:
+                    return self
+
+                return _resolve().__await__()
+
+        resp = _AwaitableResponse(200, body=b"awaited")
+
+        ctx, entered = await _enter_request(resp)
+
+        assert isinstance(ctx, _ResponseCtx)
+        assert entered is resp
+
+    @pytest.mark.asyncio
+    async def test_plain_response_is_wrapped_in_response_ctx(self) -> None:
+        class _PlainResponse:
+            status = 204
+
+        plain = _PlainResponse()
+
+        ctx, entered = await _enter_request(plain)
+
+        assert isinstance(ctx, _ResponseCtx)
+        assert entered is plain
 
 
 # ---------------------------------------------------------------------------
@@ -375,6 +406,86 @@ class TestRateLimitExhaustion:
             body = await resp.read()
         assert body == b"after-cooldown"
         assert stub._call_count == 2
+
+    @pytest.mark.asyncio
+    async def test_retry_after_invalid_header_uses_fallback_cooldown(
+        self,
+        _fast_sleep: None,
+    ) -> None:
+        class _CooldownSpy(CooldownRegistry):
+            def __init__(self) -> None:
+                super().__init__()
+                self.wait_keys: list[str] = []
+                self.set_calls: list[tuple[str, float]] = []
+
+            async def wait_if_cooling(self, key: str) -> None:
+                self.wait_keys.append(key)
+
+            def set_cooldown(self, key: str, seconds: float) -> None:
+                self.set_calls.append((key, seconds))
+
+        stub = StubSession(
+            [
+                _FakeResponse(429, {"Retry-After": "not-a-number"}),
+                _FakeResponse(200, body=b"ok"),
+            ],
+        )
+        cooldown = _CooldownSpy()
+
+        ctx, resp = await _do_retried_request(
+            stub,
+            ResilienceConfig(enabled=True, fallback_retry_after_seconds=7.5),
+            "get",
+            "http://host/rest/services/X/FeatureServer/0/query",
+            {},
+            cooldown=cooldown,
+        )
+
+        assert resp.status == 200
+        assert cooldown.wait_keys == ["http://host/rest/services/X/FeatureServer"] * 2
+        assert cooldown.set_calls == [
+            ("http://host/rest/services/X/FeatureServer", 7.5),
+        ]
+        await ctx.__aexit__(None, None, None)
+
+    @pytest.mark.asyncio
+    async def test_retry_after_is_capped_before_setting_cooldown(
+        self,
+        _fast_sleep: None,
+    ) -> None:
+        class _CooldownSpy(CooldownRegistry):
+            def __init__(self) -> None:
+                super().__init__()
+                self.set_calls: list[tuple[str, float]] = []
+
+            async def wait_if_cooling(self, key: str) -> None:
+                return None
+
+            def set_cooldown(self, key: str, seconds: float) -> None:
+                self.set_calls.append((key, seconds))
+
+        stub = StubSession(
+            [
+                _FakeResponse(429, {"Retry-After": "120"}),
+                _FakeResponse(200, body=b"ok"),
+            ],
+        )
+        cooldown = _CooldownSpy()
+
+        ctx, resp = await _do_retried_request(
+            stub,
+            ResilienceConfig(enabled=True, respect_retry_after_max_s=4.0),
+            "get",
+            "http://host/rest/services/X/FeatureServer/0/query",
+            {},
+            cooldown=cooldown,
+        )
+
+        assert resp.status == 200
+        assert cooldown.set_calls == [
+            ("http://host/rest/services/X/FeatureServer", 4.0),
+        ]
+        await ctx.__aexit__(None, None, None)
 
 
 # ---------------------------------------------------------------------------

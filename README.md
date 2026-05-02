@@ -27,11 +27,10 @@ lightweight async Esri REST client with optional GeoPandas extras
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
-## What's new in 3.0 (in progress)
+## Release highlights
 
-The `integration/3.0-rewrite` branch is the active development line for
-restgdf 3.0. Everything below ships alongside the 2.0 surface on the
-same `main` until the version number is rolled.
+restgdf 2.0.0 includes the following major additions alongside the core
+typed-model migration described below.
 
 - **Streaming APIs.** `FeatureLayer.stream_features`,
   `stream_feature_batches`, and `stream_rows` expose ArcGIS
@@ -67,9 +66,9 @@ same `main` until the version number is rolled.
 
 See [`CHANGELOG.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/CHANGELOG.md)
 and [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md)
-for the complete list.
+for the full release notes and upgrade guidance.
 
-## What's new in 2.0
+## 2.0 migration changes
 
 restgdf 2.0 is a **major release** built on [pydantic 2.13](https://docs.pydantic.dev/).
 See [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md) for the full breaking-changes table and
@@ -94,7 +93,7 @@ code-rewrite recipes.
   upgrade window.
 - **Deprecated shim.** `restgdf._types.*` still imports the legacy
   `TypedDict` names, but they now re-export the pydantic classes and
-  emit `DeprecationWarning`. The shim will be removed in 3.x.
+  emit `DeprecationWarning`. The shim will be removed in a future major release.
 - **Dependency bump.** `pydantic>=2.13.3,<3` is a new required
   dependency.
 
@@ -153,11 +152,10 @@ pip install "restgdf[geo]"
 - pandas-backed helpers like `get_value_counts()` and `get_nested_count()`
 - low-level `restgdf.utils.getgdf` helpers
 
-Planning a 2.x → 3.x rollout? Treat the split above as the stable dependency
-boundary: geo-enabled environments should depend on `restgdf[geo]`
-explicitly. [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md)
-now starts with the upcoming optional-dependency notes and keeps the full
-1.x → 2.0 rewrite table below.
+Treat the split above as the stable dependency boundary: geo-enabled
+environments should depend on `restgdf[geo]` explicitly. See
+[`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md)
+for the full 1.x → 2.0 rewrite table and upgrade recipes.
 
 ## Light-core usage
 
@@ -414,7 +412,7 @@ contents.
   taxonomy, logger hierarchy, config precedence, session ownership,
   streaming shapes, extras matrix.
 - [CHANGELOG.md](CHANGELOG.md) — every user-visible change.
-- [MIGRATION.md](MIGRATION.md) — upgrading from 2.x to 3.x.
+- [MIGRATION.md](MIGRATION.md) — upgrading from 1.x to 2.0.
 
 # Uses
 

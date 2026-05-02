@@ -41,6 +41,7 @@ _EXPECTED_CLASSES = {
     "ObjectIdsResponse",
     "OptionalDependencyError",
     "OutputConversionError",
+    "PaginationInconsistencyWarning",
     "PaginationError",
     "RateLimitError",
     "ResilienceConfig",
@@ -66,6 +67,7 @@ _EXPECTED_CALLABLES = {
     "get_config",
     "get_settings",
     "reset_config_cache",
+    "reset_settings_cache",
 }
 
 _EXPECTED_MODULES = {
@@ -129,6 +131,7 @@ def test_flat_import_forms_work() -> None:
         TokenSessionConfig,
         compat,
         get_settings,
+        reset_settings_cache,
         utils,
     )
 

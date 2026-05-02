@@ -425,6 +425,9 @@ async def test_featurelayer_get_gdf_requires_geo_extra_before_query():
 
 
 @pytest.mark.asyncio
+@pytest.mark.filterwarnings(
+    r"ignore:FeatureLayer\.row_dict_generator is deprecated:DeprecationWarning",
+)
 async def test_row_dict_generator_merges_data_kwargs():
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
@@ -735,14 +738,13 @@ async def test_featurelayer(client_session):
         session=client_session,
         where="City <> 'fgsfds'",
     )
-    beaches_gdf = await beaches.getgdf()
-    assert len(await beaches.samplegdf(2)) == 2
-    assert len(await beaches.headgdf(2)) == 2
+    beaches_gdf = await beaches.get_gdf()
+    assert len(await beaches.sample_gdf(2)) == 2
+    assert len(await beaches.head_gdf(2)) == 2
     assert len(beaches_gdf) > 0
 
-    row_gen = beaches.row_dict_generator()
     beaches_row_gen_count = 0
-    async for row in row_gen:
+    async for row in beaches.stream_rows():
         assert isinstance(row, dict)
         beaches_row_gen_count += 1
     assert beaches_row_gen_count == len(beaches_gdf)
