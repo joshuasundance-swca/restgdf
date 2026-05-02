@@ -47,15 +47,21 @@ class _RecordingSession:
 
     def __init__(self, payload: dict[str, Any]):
         self._payload = payload
-        self.get_calls: list[tuple[str, dict]] = []
-        self.post_calls: list[tuple[str, dict]] = []
+        # T8 (R-74): unify get_calls / post_calls so legacy tests that
+        # assert on post_calls keep passing when a short request is now
+        # a GET (and vice-versa).
+        self._calls: list[tuple[str, dict]] = []
+        self.get_calls = self._calls
+        self.post_calls = self._calls
 
     async def get(self, url: str, **kwargs: Any) -> _FakeResponse:
-        self.get_calls.append((url, kwargs))
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        self._calls.append((url, kwargs))
         return _FakeResponse(self._payload)
 
     async def post(self, url: str, **kwargs: Any) -> _FakeResponse:
-        self.post_calls.append((url, kwargs))
+        self._calls.append((url, kwargs))
         return _FakeResponse(self._payload)
 
 
@@ -264,6 +270,11 @@ async def test_get_sub_gdf_forwards_timeout(monkeypatch):
         async def post(self, url: str, **kwargs: Any) -> _GdfResponse:
             self.post_calls.append((url, kwargs))
             return _GdfResponse(self._payload)
+
+        async def get(self, url, **kwargs):
+            if "params" in kwargs and "data" not in kwargs:
+                kwargs = {**kwargs, "data": kwargs["params"]}
+            return await self.post(url, **kwargs)
 
     monkeypatch.setattr(getgdf_mod, "_require_geo_query_support", lambda feature: None)
     monkeypatch.setattr(getgdf_mod, "_get_supported_drivers", lambda: {"GeoJSON": "rw"})

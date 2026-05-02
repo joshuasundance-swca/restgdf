@@ -3,6 +3,7 @@ import importlib
 from unittest.mock import AsyncMock, patch
 
 import pytest
+from aiohttp import ClientSession
 from pandas import DataFrame
 
 from restgdf.errors import FieldDoesNotExistError
@@ -31,6 +32,30 @@ from restgdf.utils.getinfo import (
     supports_pagination,
     getvaluecounts,
 )
+
+
+@pytest.fixture(autouse=True)
+def _proxy_client_session_get_to_post():
+    """T8 (R-74): short ArcGIS requests now go through ``session.get``.
+
+    Legacy tests in this module only patch ``ClientSession.post``. This
+    autouse fixture redirects ``ClientSession.get`` to whatever
+    ``ClientSession.post`` is currently patched to, so the existing
+    POST-oriented side effects continue to work without rewriting each
+    decorator.
+    """
+
+    def _proxy(self, url, **kwargs):
+        # When a GET is issued with ``params=...``, the body lives there;
+        # forward it as ``data=...`` so POST-shaped side_effects see the
+        # same payload they used to.
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return ClientSession.post(self, url, **kwargs)
+
+    with patch("restgdf.utils.getinfo.ClientSession.get", new=_proxy):
+        yield
+
 
 TESTJSON = {"count": 500, "maxRecordCount": 100}
 
@@ -448,6 +473,9 @@ async def test_getuniquevalues_multi_field_requires_geo_extra_before_request():
         async def post(self, *args, **kwargs):
             raise AssertionError("should fail before requesting")
 
+        async def get(self, *args, **kwargs):
+            raise AssertionError("should fail before requesting")
+
     with patch(
         "restgdf.utils._optional.import_module",
         side_effect=_missing_optional_import("pandas"),
@@ -483,6 +511,9 @@ async def test_getvaluecounts_mock(mock_response, client_session):
 async def test_getvaluecounts_requires_geo_extra_before_request():
     class Session:
         async def post(self, *args, **kwargs):
+            raise AssertionError("should fail before requesting")
+
+        async def get(self, *args, **kwargs):
             raise AssertionError("should fail before requesting")
 
     with patch(
@@ -571,6 +602,9 @@ async def test_nestedcount_shapes_output(mock_response, client_session):
 async def test_nestedcount_requires_geo_extra_before_request():
     class Session:
         async def post(self, *args, **kwargs):
+            raise AssertionError("should fail before requesting")
+
+        async def get(self, *args, **kwargs):
             raise AssertionError("should fail before requesting")
 
     with patch(

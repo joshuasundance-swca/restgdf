@@ -33,7 +33,7 @@ async def test_missing_pagination_flag_does_not_drive_offset_batching() -> None:
     ):
         batches = await get_query_data_batches(
             "https://example.com/layer/0",
-            object(),
+            object(),  # type: ignore[arg-type]
             data={"where": "1=1"},
         )
 

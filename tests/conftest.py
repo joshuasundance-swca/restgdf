@@ -15,18 +15,32 @@ def pytest_addoption(parser):
         default=False,
         help="run tests marked as requiring live network access",
     )
+    parser.addoption(
+        "--run-stress",
+        action="store_true",
+        default=False,
+        help="run tests marked as resource-intensive or property-based",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--run-network"):
-        return
+    skip_network = None
+    if not config.getoption("--run-network"):
+        skip_network = pytest.mark.skip(
+            reason="network test; pass --run-network to include live-service checks",
+        )
 
-    skip_network = pytest.mark.skip(
-        reason="network test; pass --run-network to include live-service checks",
-    )
+    skip_stress = None
+    if not config.getoption("--run-stress"):
+        skip_stress = pytest.mark.skip(
+            reason="stress test; pass --run-stress to include resource-intensive checks",
+        )
+
     for item in items:
-        if "network" in item.keywords:
+        if skip_network is not None and "network" in item.keywords:
             item.add_marker(skip_network)
+        if skip_stress is not None and "stress" in item.keywords:
+            item.add_marker(skip_stress)
 
 
 @pytest_asyncio.fixture
@@ -119,30 +133,43 @@ class FakeSession:
     ):
         self.default_post = default_post if default_post is not None else {"ok": True}
         self.default_get = default_get if default_get is not None else {"ok": True}
-        self.post_responses: list[Any] = []
-        self.get_responses: list[Any] = []
-        self.post_calls: list[tuple[str, dict]] = []
-        self.get_calls: list[tuple[str, dict]] = []
+        # T8 (R-74): after the GET/POST length-based routing change, the
+        # same logical ArcGIS request may flip between ``session.post`` and
+        # ``session.get`` depending on the encoded body size. We unify the
+        # recorded-call and scripted-response queues here so pre-existing
+        # tests that assert on ``post_calls`` / ``post_responses`` keep
+        # working without having to rewrite each call site individually.
+        self._responses: list[Any] = []
+        self.post_responses = self._responses
+        self.get_responses = self._responses
+        self._calls: list[tuple[str, dict]] = []
+        self.post_calls = self._calls
+        self.get_calls = self._calls
 
-    def _snapshot_kwargs(self, kwargs: dict) -> dict:
+    def _snapshot_kwargs(self, kwargs: dict, *, body_key: str) -> dict:
         snapshot: dict = {}
         for key, value in kwargs.items():
             if isinstance(value, dict):
                 snapshot[key] = dict(value)
             else:
                 snapshot[key] = value
+        # Mirror the body under both ``data`` (POST) and ``params`` (GET)
+        # so tests written against the legacy POST-only contract keep
+        # resolving ``kwargs["data"]`` when a short request now flips to
+        # GET (and vice-versa).
+        mirror_key = "params" if body_key == "data" else "data"
+        if body_key in snapshot and mirror_key not in snapshot:
+            snapshot[mirror_key] = snapshot[body_key]
         return snapshot
 
     def post(self, url: str, **kwargs) -> FakeResponse:
-        self.post_calls.append((url, self._snapshot_kwargs(kwargs)))
-        payload = (
-            self.post_responses.pop(0) if self.post_responses else self.default_post
-        )
+        self._calls.append((url, self._snapshot_kwargs(kwargs, body_key="data")))
+        payload = self._responses.pop(0) if self._responses else self.default_post
         return FakeResponse(payload)
 
     def get(self, url: str, **kwargs) -> FakeResponse:
-        self.get_calls.append((url, self._snapshot_kwargs(kwargs)))
-        payload = self.get_responses.pop(0) if self.get_responses else self.default_get
+        self._calls.append((url, self._snapshot_kwargs(kwargs, body_key="params")))
+        payload = self._responses.pop(0) if self._responses else self.default_get
         return FakeResponse(payload)
 
 

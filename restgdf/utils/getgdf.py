@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import math
+import warnings
 from asyncio import gather
 from collections.abc import AsyncGenerator, Mapping
 from functools import reduce
@@ -10,10 +12,16 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from aiohttp import ClientSession
 
+from restgdf._client._protocols import AsyncHTTPSession
+from restgdf._config import get_config
 from restgdf._logging import get_logger
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse, LayerMetadata
-from restgdf.errors import PaginationError, RestgdfResponseError
+from restgdf.errors import (
+    PaginationError,
+    PaginationInconsistencyWarning,
+    RestgdfResponseError,
+)
 from restgdf.telemetry._spans import start_feature_layer_stream_span
 from restgdf.utils.getinfo import (
     default_data,
@@ -24,7 +32,7 @@ from restgdf.utils.getinfo import (
     get_object_ids,
     supports_pagination,
 )
-from restgdf.utils._http import default_timeout
+from restgdf.utils._http import _arcgis_request, default_timeout
 from restgdf.utils._metadata import (
     normalize_spatial_reference,
     supports_pagination_explicitly,
@@ -37,7 +45,6 @@ from restgdf.utils._optional import (
     require_pyogrio_list_drivers,
 )
 from restgdf.utils._pagination import build_pagination_plan
-from restgdf.utils.token import ArcGISTokenSession
 from restgdf.utils.utils import where_var_in_list
 
 if TYPE_CHECKING:
@@ -66,7 +73,7 @@ def _get_supported_drivers() -> dict[str, str]:
 
 async def _get_sub_features(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     query_data: dict,
     *,
     batch_index: int | None = None,
@@ -75,9 +82,10 @@ async def _get_sub_features(
     """Fetch a single query batch as raw ArcGIS feature dicts."""
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
     kwargs.setdefault("timeout", default_timeout())
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         f"{url}/query",
-        data=dict(query_data),
+        dict(query_data),
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )
@@ -95,13 +103,22 @@ async def _get_sub_features(
 
 async def _feature_batch_generator(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> AsyncGenerator[list[dict[str, Any]]]:
     """Yield raw ArcGIS feature batches without requiring pandas/geopandas."""
     query_data_batches = await get_query_data_batches(url, session, **kwargs)
-    tasks = {
-        asyncio.create_task(
+    max_inflight = get_config().concurrency.max_concurrent_requests
+    batch_iter = iter(enumerate(query_data_batches))
+    tasks: set[asyncio.Task] = set()
+    task_order: dict[asyncio.Task, int] = {}
+
+    def _submit_next() -> asyncio.Task | None:
+        try:
+            idx, query_data = next(batch_iter)
+        except StopIteration:
+            return None
+        task = asyncio.create_task(
             get_sub_features(
                 url,
                 session,
@@ -110,10 +127,35 @@ async def _feature_batch_generator(
                 **kwargs,
             ),
         )
-        for idx, query_data in enumerate(query_data_batches)
-    }
-    for feature_batch_future in asyncio.as_completed(tasks):
-        yield await feature_batch_future
+        tasks.add(task)
+        task_order[task] = idx
+        return task
+
+    try:
+        for _ in range(max_inflight):
+            task = _submit_next()
+            if task is None:
+                break
+
+        while tasks:
+            done, pending = await asyncio.wait(
+                tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            tasks = set(pending)
+            completed_batches: list[list[dict[str, Any]]] = []
+            for task in sorted(done, key=task_order.__getitem__):
+                replacement = _submit_next()
+                if replacement is not None:
+                    tasks.add(replacement)
+                completed_batches.append(await task)
+                task_order.pop(task, None)
+            for feature_batch in completed_batches:
+                yield feature_batch
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
 
 
 def get_sub_features(*args, **kwargs):
@@ -144,12 +186,66 @@ def chunk_values(values: list[int], chunk_size: int) -> list[list[int]]:
     return [values[i : i + chunk_size] for i in range(0, len(values), chunk_size)]
 
 
+def _advertised_max_record_count_factor(
+    metadata: Mapping[str, Any] | LayerMetadata,
+) -> float | None:
+    """Return the server-advertised ``maxRecordCountFactor`` or ``None``.
+
+    Accepts both the raw metadata mapping returned by low-level helpers
+    and the typed :class:`LayerMetadata` model used by the live
+    :class:`~restgdf.featurelayer.FeatureLayer` path. Returns ``None``
+    when the ``advancedQueryCapabilities`` block is missing, when the
+    factor key itself is absent, or when the advertised value is not a
+    positive number (``None`` / 0 / negative / non-numeric). The return
+    value is intended to be threaded straight through to
+    ``build_pagination_plan(..., advertised_factor=...)``.
+    """
+    if isinstance(metadata, Mapping):
+        aqc = metadata.get("advancedQueryCapabilities")
+    else:
+        aqc = metadata.advanced_query_capabilities
+
+    if isinstance(aqc, Mapping):
+        raw = aqc.get("maxRecordCountFactor")
+    else:
+        raw = getattr(aqc, "max_record_count_factor", None)
+
+    if raw is None or isinstance(raw, bool):
+        # bool is a subclass of int; reject it so True/False never leak
+        # into the numeric path and silently wire advertised_factor=1.0.
+        return None
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value) or value <= 0:
+        # Reject NaN and ±inf; both are parseable by float() but
+        # nonsensical as pagination multipliers.
+        return None
+    return value
+
+
 async def get_query_data_batches(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> list[dict]:
-    """Build query payloads for each request needed to read a layer."""
+    """Build query payloads for each request needed to read a layer.
+
+    When the layer metadata advertises an explicit
+    ``advancedQueryCapabilities.maxRecordCountFactor`` (R-72), the
+    value is forwarded to ``build_pagination_plan`` as
+    ``advertised_factor=`` so pagination batch sizes honor the
+    server-published upper bound. Layers that do **not** advertise the
+    field keep today's byte-for-byte batching: no ``advertised_factor``
+    kwarg is supplied and the planner falls back to its
+    ``_DEFAULT_FACTOR`` (``1.0``).
+
+    Pages observed at stream time that return zero features while
+    setting ``exceededTransferLimit=true`` are flagged with
+    ``PaginationInconsistencyWarning`` (R-73) from the internal page
+    resolver; see that helper for details.
+    """
     request_data = dict(kwargs.get("data") or {})
     feature_count = await get_feature_count(url, session, **kwargs)
     token = request_data.get("token")
@@ -174,13 +270,18 @@ async def get_query_data_batches(
                 }
                 for offset in range(0, feature_count, page_size)
             ]
-        plan = build_pagination_plan(feature_count, max_record_count)
-        # NOTE (BL-21/22 deferred): maxRecordCountFactor from
-        # advancedQueryCapabilities is intentionally NOT plumbed here in
-        # phase-2c. The planner API accepts `advertised_factor` / `factor`
-        # and will clamp with a warning via `get_logger("pagination")`;
-        # the live wire-up is deferred to a future phase to preserve
-        # byte-exact batch sizes during the 3.0 migration.
+        # R-72: opt-in wire of advertised maxRecordCountFactor. Only
+        # pass ``advertised_factor`` when the server actually publishes
+        # it, so layers without the field keep byte-exact 3.0 batching.
+        planner_kwargs: dict[str, Any] = {}
+        advertised_factor = _advertised_max_record_count_factor(metadata)
+        if advertised_factor is not None:
+            planner_kwargs["advertised_factor"] = advertised_factor
+        plan = build_pagination_plan(
+            feature_count,
+            max_record_count,
+            **planner_kwargs,
+        )
         return [
             {
                 **request_data,
@@ -206,7 +307,7 @@ async def get_query_data_batches(
 
 async def get_sub_gdf(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     query_data: dict,
     **kwargs,
 ) -> GeoDataFrame:
@@ -218,9 +319,10 @@ async def get_sub_gdf(
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
     kwargs.setdefault("timeout", default_timeout())
 
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         f"{url}/query",
-        data=data,
+        data,
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )
@@ -234,22 +336,43 @@ async def get_sub_gdf(
 
 async def get_gdf_list(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> list[GeoDataFrame]:
     _require_geo_query_support("get_gdf_list()")
     query_data_batches = await get_query_data_batches(url, session, **kwargs)
+    sem = asyncio.BoundedSemaphore(get_config().concurrency.max_concurrent_requests)
     tasks = [
-        get_sub_gdf(url, session, query_data=query_data, **kwargs)
+        asyncio.create_task(
+            _run_get_sub_gdf_bounded(url, session, sem, query_data, **kwargs),
+        )
         for query_data in query_data_batches
     ]
-    gdf_list = await gather(*tasks)
-    return gdf_list
+    try:
+        gdf_list = await gather(*tasks)
+        return gdf_list
+    except Exception:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await gather(*tasks, return_exceptions=True)
+        raise
+
+
+async def _run_get_sub_gdf_bounded(
+    url: str,
+    session: AsyncHTTPSession,
+    sem: asyncio.BoundedSemaphore,
+    query_data: dict,
+    **kwargs,
+) -> GeoDataFrame:
+    async with sem:
+        return await get_sub_gdf(url, session, query_data=query_data, **kwargs)
 
 
 async def chunk_generator(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> AsyncGenerator[GeoDataFrame]:
     """
@@ -270,20 +393,59 @@ async def chunk_generator(
         raw_sr = None
     else:
         raw_sr = _extract_raw_spatial_reference(metadata)
-    tasks = {
-        asyncio.create_task(get_sub_gdf(url, session, query_data=query_data, **kwargs))
-        for query_data in query_data_batches
-    }
-    for sub_gdf_future in asyncio.as_completed(tasks):
-        chunk = await sub_gdf_future
-        if raw_sr is not None:
-            chunk.attrs["spatial_reference"] = raw_sr
-        yield chunk
+    max_inflight = get_config().concurrency.max_concurrent_requests
+    batch_iter = iter(query_data_batches)
+    tasks: set[asyncio.Task] = set()
+    task_order: dict[asyncio.Task, int] = {}
+    next_index = 0
+
+    def _submit_next() -> asyncio.Task | None:
+        nonlocal next_index
+        try:
+            query_data = next(batch_iter)
+        except StopIteration:
+            return None
+        task = asyncio.create_task(
+            get_sub_gdf(url, session, query_data=query_data, **kwargs),
+        )
+        tasks.add(task)
+        task_order[task] = next_index
+        next_index += 1
+        return task
+
+    try:
+        for _ in range(max_inflight):
+            task = _submit_next()
+            if task is None:
+                break
+
+        while tasks:
+            done, pending = await asyncio.wait(
+                tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            tasks = set(pending)
+            completed_chunks: list[GeoDataFrame] = []
+            for task in sorted(done, key=task_order.__getitem__):
+                replacement = _submit_next()
+                if replacement is not None:
+                    tasks.add(replacement)
+                chunk = await task
+                task_order.pop(task, None)
+                if raw_sr is not None:
+                    chunk.attrs["spatial_reference"] = raw_sr
+                completed_chunks.append(chunk)
+            for chunk in completed_chunks:
+                yield chunk
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
 
 
 async def row_dict_generator(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> AsyncGenerator[dict]:
     """Yield row-shaped dicts from an ArcGIS FeatureLayer.
@@ -320,7 +482,7 @@ async def concat_gdfs(gdfs: list[GeoDataFrame]) -> GeoDataFrame:
 
 async def gdf_by_concat(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> GeoDataFrame:
     _require_geo_query_support("gdf_by_concat()")
@@ -338,6 +500,7 @@ async def get_gdf(
     **kwargs,
 ) -> GeoDataFrame:
     _require_geo_query_support("get_gdf()")
+    owns_session = session is None
     session = session or ClientSession()
     datadict = default_data(kwargs.pop("data", None) or {})
     if where is not None:
@@ -349,7 +512,11 @@ async def get_gdf(
                 "Pass token either via token= or data['token'], not both with different values.",
             )
         datadict["token"] = token
-    return await gdf_by_concat(url, session, data=datadict, **kwargs)
+    try:
+        return await gdf_by_concat(url, session, data=datadict, **kwargs)
+    finally:
+        if owns_session:
+            await session.close()
 
 
 # ---------------------------------------------------------------------------
@@ -395,7 +562,7 @@ def _extract_raw_spatial_reference(
 async def _apply_spatial_reference_attr(
     gdf: GeoDataFrame,
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     **kwargs,
 ) -> None:
     """Stamp ``gdf.attrs['spatial_reference']`` from layer metadata (R-65).
@@ -420,26 +587,34 @@ async def _apply_spatial_reference_attr(
 
 async def _fetch_page_dict(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     query_data: Mapping[str, Any],
     **kwargs,
 ) -> dict[str, Any]:
     """Fetch one query page and return the raw envelope dict."""
     kwargs = {k: v for k, v in kwargs.items() if k != "data"}
     kwargs.setdefault("timeout", default_timeout())
-    response = await session.post(
+    response = await _arcgis_request(
+        session,
         f"{url}/query",
-        data=dict(query_data),
+        dict(query_data),
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )
     raw = await response.json(content_type=None)
-    return raw if isinstance(raw, dict) else {}
+    if not isinstance(raw, dict):
+        raise RestgdfResponseError(
+            f"{url}/query returned a non-object JSON payload.",
+            context="query_response_shape",
+            raw=raw,
+            url=f"{url}/query",
+        )
+    return raw
 
 
 async def _resolve_page(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     page: dict[str, Any],
     query_data: Mapping[str, Any],
     *,
@@ -457,6 +632,21 @@ async def _resolve_page(
     if not envelope.exceeded_transfer_limit:
         yield page
         return
+
+    # R-73: 0-feature + exceededTransferLimit=true is an ArcGIS-side
+    # pagination bug — the cursor cannot advance but the service claims
+    # more rows exist. Flag it regardless of ``on_truncation`` so the
+    # inconsistency is visible to callers who choose to ignore the
+    # normal truncation signal.
+    if not envelope.features:
+        warnings.warn(
+            (
+                f"{url}/query returned exceededTransferLimit=true with "
+                "zero features; pagination cursor cannot advance."
+            ),
+            PaginationInconsistencyWarning,
+            stacklevel=2,
+        )
 
     if on_truncation == "ignore":
         get_logger("pagination").warning(
@@ -532,7 +722,7 @@ async def _resolve_page(
 
 async def _iter_pages_raw(
     url: str,
-    session: ClientSession | ArcGISTokenSession,
+    session: AsyncHTTPSession,
     *,
     order: Literal["request", "completion"] = "request",
     max_concurrent_pages: int | None = None,
@@ -585,55 +775,120 @@ async def _iter_pages_raw(
     try:
         query_data_batches = await get_query_data_batches(url, session, **kwargs)
         fetch_kwargs = {k: v for k, v in kwargs.items() if k != "data"}
-        sem = (
-            asyncio.Semaphore(max_concurrent_pages)
-            if max_concurrent_pages is not None
-            else None
-        )
 
         async def _fetch_bounded(query_data: dict) -> tuple[dict, dict[str, Any]]:
-            if sem is None:
-                page = await _fetch_page_dict(url, session, query_data, **fetch_kwargs)
-            else:
-                async with sem:
-                    page = await _fetch_page_dict(
-                        url,
-                        session,
-                        query_data,
-                        **fetch_kwargs,
-                    )
+            page = await _fetch_page_dict(
+                url,
+                session,
+                query_data,
+                **fetch_kwargs,
+            )
             return query_data, page
 
-        tasks = [asyncio.create_task(_fetch_bounded(qd)) for qd in query_data_batches]
+        if max_concurrent_pages is None:
+            tasks = [
+                asyncio.create_task(_fetch_bounded(qd)) for qd in query_data_batches
+            ]
+
+            if order == "completion":
+                for fut in asyncio.as_completed(tasks):
+                    query_data, page = await fut
+                    async for resolved in _resolve_page(
+                        url,
+                        session,
+                        page,
+                        query_data,
+                        on_truncation=on_truncation,
+                        depth=0,
+                        max_depth=max_split_depth,
+                        request_kwargs=kwargs,
+                    ):
+                        yield resolved
+            else:
+                for task in tasks:
+                    query_data, page = await task
+                    async for resolved in _resolve_page(
+                        url,
+                        session,
+                        page,
+                        query_data,
+                        on_truncation=on_truncation,
+                        depth=0,
+                        max_depth=max_split_depth,
+                        request_kwargs=kwargs,
+                    ):
+                        yield resolved
+            return
+
+        batch_iter = iter(query_data_batches)
+
+        def _submit_next() -> asyncio.Task | None:
+            try:
+                query_data = next(batch_iter)
+            except StopIteration:
+                return None
+            task = asyncio.create_task(_fetch_bounded(query_data))
+            tasks.append(task)
+            return task
 
         if order == "completion":
-            for fut in asyncio.as_completed(tasks):
-                query_data, page = await fut
-                async for resolved in _resolve_page(
-                    url,
-                    session,
-                    page,
-                    query_data,
-                    on_truncation=on_truncation,
-                    depth=0,
-                    max_depth=max_split_depth,
-                    request_kwargs=kwargs,
-                ):
-                    yield resolved
-        else:
-            for task in tasks:
-                query_data, page = await task
-                async for resolved in _resolve_page(
-                    url,
-                    session,
-                    page,
-                    query_data,
-                    on_truncation=on_truncation,
-                    depth=0,
-                    max_depth=max_split_depth,
-                    request_kwargs=kwargs,
-                ):
-                    yield resolved
+            pending: set[asyncio.Task] = set()
+            for _ in range(max_concurrent_pages):
+                next_task = _submit_next()
+                if next_task is None:
+                    break
+                pending.add(next_task)
+
+            while pending:
+                done, pending = await asyncio.wait(
+                    pending,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                completed_pages: list[tuple[dict, dict[str, Any]]] = []
+                for task in done:
+                    query_data, page = await task
+                    replacement = _submit_next()
+                    if replacement is not None:
+                        pending.add(replacement)
+                    completed_pages.append((query_data, page))
+                for query_data, page in completed_pages:
+                    async for resolved in _resolve_page(
+                        url,
+                        session,
+                        page,
+                        query_data,
+                        on_truncation=on_truncation,
+                        depth=0,
+                        max_depth=max_split_depth,
+                        request_kwargs=kwargs,
+                    ):
+                        yield resolved
+            return
+
+        pending_in_order: list[asyncio.Task] = []
+        for _ in range(max_concurrent_pages):
+            next_task = _submit_next()
+            if next_task is None:
+                break
+            pending_in_order.append(next_task)
+
+        while pending_in_order:
+            task = pending_in_order.pop(0)
+            query_data, page = await task
+            replacement = _submit_next()
+            if replacement is not None:
+                pending_in_order.append(replacement)
+            async for resolved in _resolve_page(
+                url,
+                session,
+                page,
+                query_data,
+                on_truncation=on_truncation,
+                depth=0,
+                max_depth=max_split_depth,
+                request_kwargs=kwargs,
+            ):
+                yield resolved
     finally:
         for task in tasks:
             if not task.done():

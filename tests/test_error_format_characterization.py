@@ -66,6 +66,11 @@ class ScriptedQuerySession:
         self.post_calls.append((url, dict(kwargs)))
         return self.response
 
+    async def get(self, url, **kwargs):
+        if "params" in kwargs and "data" not in kwargs:
+            kwargs = {**kwargs, "data": kwargs["params"]}
+        return await self.post(url, **kwargs)
+
 
 class ScriptedTokenSession:
     def __init__(self, response: FixtureResponse):
@@ -86,7 +91,7 @@ async def test_get_feature_count_consumes_text_plain_json_fixture() -> None:
         ),
     )
 
-    count = await get_feature_count("https://example.com/service/0", session)
+    count = await get_feature_count("https://example.com/service/0", session)  # type: ignore[arg-type]
 
     assert count == 42
     assert session.post_calls[0][0] == "https://example.com/service/0/query"
@@ -102,7 +107,7 @@ async def test_get_feature_count_html_body_bubbles_json_decode_error() -> None:
     )
 
     with pytest.raises(JSONDecodeError):
-        await get_feature_count("https://example.com/service/0", session)
+        await get_feature_count("https://example.com/service/0", session)  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
