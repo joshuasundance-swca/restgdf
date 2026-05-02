@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import warnings
 from asyncio import gather
 from collections.abc import AsyncGenerator, Mapping
@@ -12,6 +13,7 @@ from typing import TYPE_CHECKING, Any, Literal
 from aiohttp import ClientSession
 
 from restgdf._client._protocols import AsyncHTTPSession
+from restgdf._config import get_config
 from restgdf._logging import get_logger
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse, LayerMetadata
@@ -106,8 +108,17 @@ async def _feature_batch_generator(
 ) -> AsyncGenerator[list[dict[str, Any]]]:
     """Yield raw ArcGIS feature batches without requiring pandas/geopandas."""
     query_data_batches = await get_query_data_batches(url, session, **kwargs)
-    tasks = {
-        asyncio.create_task(
+    max_inflight = get_config().concurrency.max_concurrent_requests
+    batch_iter = iter(enumerate(query_data_batches))
+    tasks: set[asyncio.Task] = set()
+    task_order: dict[asyncio.Task, int] = {}
+
+    def _submit_next() -> asyncio.Task | None:
+        try:
+            idx, query_data = next(batch_iter)
+        except StopIteration:
+            return None
+        task = asyncio.create_task(
             get_sub_features(
                 url,
                 session,
@@ -116,10 +127,35 @@ async def _feature_batch_generator(
                 **kwargs,
             ),
         )
-        for idx, query_data in enumerate(query_data_batches)
-    }
-    for feature_batch_future in asyncio.as_completed(tasks):
-        yield await feature_batch_future
+        tasks.add(task)
+        task_order[task] = idx
+        return task
+
+    try:
+        for _ in range(max_inflight):
+            task = _submit_next()
+            if task is None:
+                break
+
+        while tasks:
+            done, pending = await asyncio.wait(
+                tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            tasks = set(pending)
+            completed_batches: list[list[dict[str, Any]]] = []
+            for task in sorted(done, key=task_order.__getitem__):
+                replacement = _submit_next()
+                if replacement is not None:
+                    tasks.add(replacement)
+                completed_batches.append(await task)
+                task_order.pop(task, None)
+            for feature_batch in completed_batches:
+                yield feature_batch
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
 
 
 def get_sub_features(*args, **kwargs):
@@ -167,13 +203,17 @@ def _advertised_max_record_count_factor(
     if not isinstance(aqc, Mapping):
         return None
     raw = aqc.get("maxRecordCountFactor")
-    if raw is None:
+    if raw is None or isinstance(raw, bool):
+        # bool is a subclass of int; reject it so True/False never leak
+        # into the numeric path and silently wire advertised_factor=1.0.
         return None
     try:
         value = float(raw)
     except (TypeError, ValueError):
         return None
-    if value <= 0:
+    if not math.isfinite(value) or value <= 0:
+        # Reject NaN and ±inf; both are parseable by float() but
+        # nonsensical as pagination multipliers.
         return None
     return value
 
@@ -294,12 +334,33 @@ async def get_gdf_list(
 ) -> list[GeoDataFrame]:
     _require_geo_query_support("get_gdf_list()")
     query_data_batches = await get_query_data_batches(url, session, **kwargs)
+    sem = asyncio.BoundedSemaphore(get_config().concurrency.max_concurrent_requests)
     tasks = [
-        get_sub_gdf(url, session, query_data=query_data, **kwargs)
+        asyncio.create_task(
+            _run_get_sub_gdf_bounded(url, session, sem, query_data, **kwargs),
+        )
         for query_data in query_data_batches
     ]
-    gdf_list = await gather(*tasks)
-    return gdf_list
+    try:
+        gdf_list = await gather(*tasks)
+        return gdf_list
+    except Exception:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await gather(*tasks, return_exceptions=True)
+        raise
+
+
+async def _run_get_sub_gdf_bounded(
+    url: str,
+    session: AsyncHTTPSession,
+    sem: asyncio.BoundedSemaphore,
+    query_data: dict,
+    **kwargs,
+) -> GeoDataFrame:
+    async with sem:
+        return await get_sub_gdf(url, session, query_data=query_data, **kwargs)
 
 
 async def chunk_generator(
@@ -325,15 +386,54 @@ async def chunk_generator(
         raw_sr = None
     else:
         raw_sr = _extract_raw_spatial_reference(metadata)
-    tasks = {
-        asyncio.create_task(get_sub_gdf(url, session, query_data=query_data, **kwargs))
-        for query_data in query_data_batches
-    }
-    for sub_gdf_future in asyncio.as_completed(tasks):
-        chunk = await sub_gdf_future
-        if raw_sr is not None:
-            chunk.attrs["spatial_reference"] = raw_sr
-        yield chunk
+    max_inflight = get_config().concurrency.max_concurrent_requests
+    batch_iter = iter(query_data_batches)
+    tasks: set[asyncio.Task] = set()
+    task_order: dict[asyncio.Task, int] = {}
+    next_index = 0
+
+    def _submit_next() -> asyncio.Task | None:
+        nonlocal next_index
+        try:
+            query_data = next(batch_iter)
+        except StopIteration:
+            return None
+        task = asyncio.create_task(
+            get_sub_gdf(url, session, query_data=query_data, **kwargs),
+        )
+        tasks.add(task)
+        task_order[task] = next_index
+        next_index += 1
+        return task
+
+    try:
+        for _ in range(max_inflight):
+            task = _submit_next()
+            if task is None:
+                break
+
+        while tasks:
+            done, pending = await asyncio.wait(
+                tasks,
+                return_when=asyncio.FIRST_COMPLETED,
+            )
+            tasks = set(pending)
+            completed_chunks: list[GeoDataFrame] = []
+            for task in sorted(done, key=task_order.__getitem__):
+                replacement = _submit_next()
+                if replacement is not None:
+                    tasks.add(replacement)
+                chunk = await task
+                task_order.pop(task, None)
+                if raw_sr is not None:
+                    chunk.attrs["spatial_reference"] = raw_sr
+                completed_chunks.append(chunk)
+            for chunk in completed_chunks:
+                yield chunk
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
 
 
 async def row_dict_generator(
@@ -393,6 +493,7 @@ async def get_gdf(
     **kwargs,
 ) -> GeoDataFrame:
     _require_geo_query_support("get_gdf()")
+    owns_session = session is None
     session = session or ClientSession()
     datadict = default_data(kwargs.pop("data", None) or {})
     if where is not None:
@@ -404,7 +505,11 @@ async def get_gdf(
                 "Pass token either via token= or data['token'], not both with different values.",
             )
         datadict["token"] = token
-    return await gdf_by_concat(url, session, data=datadict, **kwargs)
+    try:
+        return await gdf_by_concat(url, session, data=datadict, **kwargs)
+    finally:
+        if owns_session:
+            await session.close()
 
 
 # ---------------------------------------------------------------------------
@@ -490,7 +595,14 @@ async def _fetch_page_dict(
         **kwargs,
     )
     raw = await response.json(content_type=None)
-    return raw if isinstance(raw, dict) else {}
+    if not isinstance(raw, dict):
+        raise RestgdfResponseError(
+            f"{url}/query returned a non-object JSON payload.",
+            context="query_response_shape",
+            raw=raw,
+            url=f"{url}/query",
+        )
+    return raw
 
 
 async def _resolve_page(
@@ -656,55 +768,120 @@ async def _iter_pages_raw(
     try:
         query_data_batches = await get_query_data_batches(url, session, **kwargs)
         fetch_kwargs = {k: v for k, v in kwargs.items() if k != "data"}
-        sem = (
-            asyncio.Semaphore(max_concurrent_pages)
-            if max_concurrent_pages is not None
-            else None
-        )
 
         async def _fetch_bounded(query_data: dict) -> tuple[dict, dict[str, Any]]:
-            if sem is None:
-                page = await _fetch_page_dict(url, session, query_data, **fetch_kwargs)
-            else:
-                async with sem:
-                    page = await _fetch_page_dict(
-                        url,
-                        session,
-                        query_data,
-                        **fetch_kwargs,
-                    )
+            page = await _fetch_page_dict(
+                url,
+                session,
+                query_data,
+                **fetch_kwargs,
+            )
             return query_data, page
 
-        tasks = [asyncio.create_task(_fetch_bounded(qd)) for qd in query_data_batches]
+        if max_concurrent_pages is None:
+            tasks = [
+                asyncio.create_task(_fetch_bounded(qd)) for qd in query_data_batches
+            ]
+
+            if order == "completion":
+                for fut in asyncio.as_completed(tasks):
+                    query_data, page = await fut
+                    async for resolved in _resolve_page(
+                        url,
+                        session,
+                        page,
+                        query_data,
+                        on_truncation=on_truncation,
+                        depth=0,
+                        max_depth=max_split_depth,
+                        request_kwargs=kwargs,
+                    ):
+                        yield resolved
+            else:
+                for task in tasks:
+                    query_data, page = await task
+                    async for resolved in _resolve_page(
+                        url,
+                        session,
+                        page,
+                        query_data,
+                        on_truncation=on_truncation,
+                        depth=0,
+                        max_depth=max_split_depth,
+                        request_kwargs=kwargs,
+                    ):
+                        yield resolved
+            return
+
+        batch_iter = iter(query_data_batches)
+
+        def _submit_next() -> asyncio.Task | None:
+            try:
+                query_data = next(batch_iter)
+            except StopIteration:
+                return None
+            task = asyncio.create_task(_fetch_bounded(query_data))
+            tasks.append(task)
+            return task
 
         if order == "completion":
-            for fut in asyncio.as_completed(tasks):
-                query_data, page = await fut
-                async for resolved in _resolve_page(
-                    url,
-                    session,
-                    page,
-                    query_data,
-                    on_truncation=on_truncation,
-                    depth=0,
-                    max_depth=max_split_depth,
-                    request_kwargs=kwargs,
-                ):
-                    yield resolved
-        else:
-            for task in tasks:
-                query_data, page = await task
-                async for resolved in _resolve_page(
-                    url,
-                    session,
-                    page,
-                    query_data,
-                    on_truncation=on_truncation,
-                    depth=0,
-                    max_depth=max_split_depth,
-                    request_kwargs=kwargs,
-                ):
-                    yield resolved
+            pending: set[asyncio.Task] = set()
+            for _ in range(max_concurrent_pages):
+                next_task = _submit_next()
+                if next_task is None:
+                    break
+                pending.add(next_task)
+
+            while pending:
+                done, pending = await asyncio.wait(
+                    pending,
+                    return_when=asyncio.FIRST_COMPLETED,
+                )
+                completed_pages: list[tuple[dict, dict[str, Any]]] = []
+                for task in done:
+                    query_data, page = await task
+                    replacement = _submit_next()
+                    if replacement is not None:
+                        pending.add(replacement)
+                    completed_pages.append((query_data, page))
+                for query_data, page in completed_pages:
+                    async for resolved in _resolve_page(
+                        url,
+                        session,
+                        page,
+                        query_data,
+                        on_truncation=on_truncation,
+                        depth=0,
+                        max_depth=max_split_depth,
+                        request_kwargs=kwargs,
+                    ):
+                        yield resolved
+            return
+
+        pending_in_order: list[asyncio.Task] = []
+        for _ in range(max_concurrent_pages):
+            next_task = _submit_next()
+            if next_task is None:
+                break
+            pending_in_order.append(next_task)
+
+        while pending_in_order:
+            task = pending_in_order.pop(0)
+            query_data, page = await task
+            replacement = _submit_next()
+            if replacement is not None:
+                pending_in_order.append(replacement)
+            async for resolved in _resolve_page(
+                url,
+                session,
+                page,
+                query_data,
+                on_truncation=on_truncation,
+                depth=0,
+                max_depth=max_split_depth,
+                request_kwargs=kwargs,
+            ):
+                yield resolved
     finally:
         for task in tasks:
             if not task.done():

@@ -136,6 +136,23 @@ jobs:
       - name: Run live network tests
         run: python -m pytest -q -m network --run-network
 
+  stress:
+    name: pytest-stress
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package with all test extras
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,geo,resilience,telemetry]"
+      - name: Run stress tests
+        run: python -m pytest -q -m stress --run-stress
+
   docs:
     name: docs (strict)
     runs-on: ubuntu-latest
@@ -163,13 +180,13 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [lint, test, install_combinations, base_install, network, docs]
+    needs: [lint, test, install_combinations, base_install, network, stress, docs]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate job results
         run: |
-          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
-            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} network=${{ needs.network.result }} docs=${{ needs.docs.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ] || [ "${{ needs.stress.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} network=${{ needs.network.result }} stress=${{ needs.stress.result }} docs=${{ needs.docs.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."

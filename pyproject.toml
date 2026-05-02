@@ -185,6 +185,7 @@ addopts = "--strict-markers"
 asyncio_mode = "strict"
 markers = [
     "network: tests that hit live external ArcGIS services",
+    "stress: resource-intensive or property-based tests excluded by default; pass --run-stress to include them",
     "characterization: tests that pin current behavior to guard refactors",
     "compat: backward-compatibility tests for preserved import/patch paths",
 ]

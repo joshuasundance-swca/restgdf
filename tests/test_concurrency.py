@@ -7,6 +7,7 @@ materializes ``restgdf.utils._concurrency`` and the Settings field.
 from __future__ import annotations
 
 import asyncio
+import inspect
 
 import pytest
 
@@ -77,18 +78,23 @@ async def test_bounded_gather_cancellation_releases_slots():
 
     sem = asyncio.BoundedSemaphore(2)
     started = asyncio.Event()
+    release = asyncio.Event()
 
     async def slow() -> None:
         started.set()
-        await asyncio.sleep(10)
+        await release.wait()
 
+    coros = [slow() for _ in range(5)]
     outer = asyncio.create_task(
-        bounded_gather(*(slow() for _ in range(5)), semaphore=sem),
+        bounded_gather(*coros, semaphore=sem),
     )
     await started.wait()
     outer.cancel()
     with pytest.raises(asyncio.CancelledError):
         await outer
+    for coro in coros:
+        if inspect.getcoroutinestate(coro) == inspect.CORO_CREATED:
+            coro.close()
 
     # All slots must be free afterwards — we should be able to acquire
     # ``sem._value`` times without blocking.

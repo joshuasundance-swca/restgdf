@@ -6,6 +6,7 @@ Private submodule; all public names are re-exported by
 
 from __future__ import annotations
 
+import inspect
 from typing import Any, Literal
 from collections.abc import Mapping
 from urllib.parse import urlencode, urlsplit
@@ -116,12 +117,66 @@ async def _arcgis_request(
     keys. Any extra ``kwargs`` (``headers``, ``timeout``, ``ssl`` …) are
     passed through to the underlying session call verbatim so request
     semantics stay byte-for-byte identical below the verb switch.
+
+    **Credential safety (Gate-3 fix).** ``ArcGISTokenSession`` configured
+    with ``transport="body"`` or ``transport="query"`` injects the
+    bearer token into the outgoing payload. If the length-based router
+    chose ``GET`` for such a session, the token would be serialized
+    into the URL query string — a credential leak. To preserve the
+    pre-T8 wire shape, this helper walks the session's ``_inner`` chain
+    and forces ``POST`` whenever any layer reports a non-``"header"``
+    transport (``ResilientSession(ArcGISTokenSession(transport="body"))``
+    and similar wrappers included).
     """
+    if _session_requires_body_transport(session):
+        return await session.post(url, data=body, **kwargs)
     verb = _choose_verb(url, body=body)
     if verb == "GET":
         params = _coerce_params_for_get(body) if body else body
         return await session.get(url, params=params, **kwargs)
     return await session.post(url, data=body, **kwargs)
+
+
+def _session_requires_body_transport(session: Any) -> bool:
+    """Return ``True`` if ``session`` (or any wrapped inner session)
+    injects an auth token into the request payload rather than the
+    ``X-Esri-Authorization`` header.
+
+    Walks the ``_inner`` attribute chain so adapters such as
+    :class:`restgdf.resilience.ResilientSession` wrapping an
+    :class:`restgdf.utils.token.ArcGISTokenSession` still trigger the
+    safe ``POST`` path. ``transport="header"`` (and sessions without a
+    ``_transport`` attribute at all, e.g. plain
+    :class:`aiohttp.ClientSession`) are treated as verb-neutral.
+    """
+    current: Any = session
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        transport = _safe_static_attr_value(current, "_transport")
+        if transport in ("body", "query"):
+            return True
+        current = _safe_static_attr_value(current, "_inner")
+    return False
+
+
+def _safe_static_attr_value(obj: Any, name: str) -> Any:
+    """Read an attribute without fabricating mock children.
+
+    ``inspect.getattr_static`` protects against ``AsyncMock`` creating
+    synthetic attributes on demand, but returns raw descriptors for
+    property-backed attributes. Resolve descriptors only after confirming
+    the attribute exists statically.
+    """
+    value = inspect.getattr_static(obj, name, None)
+    if value is None:
+        return None
+    if hasattr(value, "__get__"):
+        try:
+            return object.__getattribute__(obj, name)
+        except AttributeError:
+            return None
+    return value
 
 
 def _coerce_params_for_get(

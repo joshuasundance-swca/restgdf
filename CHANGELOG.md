@@ -7,6 +7,37 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Changed
 
+- **Gate-3 hardening follow-up (post-T6-T11).** Three review-driven
+  safety fixes land on top of the v3-followup tranche:
+  - ArcGIS requests routed through `_choose_verb` now force `POST`
+    whenever the effective session transport is `"body"` or `"query"`
+    (including wrapped `ResilientSession(ArcGISTokenSession(...))`
+    stacks), preventing auth tokens from leaking into URL query
+    strings on short requests.
+  - `restgdf.resilience._retry._RetriedCtx` now mirrors
+    `aiohttp`'s dual request-manager shape so
+    `await session.get(...)` and `async with session.get(...)` both
+    work against `ResilientSession`.
+  - `getgdf._advertised_max_record_count_factor()` now rejects
+    `bool`, `NaN`, and infinity inputs so malformed vendor metadata
+    falls back to the byte-identical pre-T9 path.
+  - Module-level `get_gdf(..., session=None)` now closes the temporary
+    `aiohttp.ClientSession` it creates internally, eliminating the
+    unclosed-session leak on direct helper usage.
+  - `_iter_pages_raw(..., max_concurrent_pages=N)` now keeps at most
+    `N` fetch tasks scheduled at once instead of pre-creating one task
+    per page and only bounding execution with a semaphore, preventing
+    pagination plans with many batches from exploding task memory.
+  - Legacy streaming helpers (`_feature_batch_generator`,
+    `chunk_generator`) now honor the repository-wide concurrency cap
+    while they stream results and cancel outstanding work on early
+    generator close, preventing abandoned page-fetch tasks from
+    accumulating behind partially-consumed iterators.
+  - Hypothesis-backed property tests now live behind a dedicated
+    ``pytest --run-stress`` opt-in so the default suite remains a
+    representative production-validation pass instead of mixing in a
+    separate stress tier by default.
+
 - **Pagination planner wiring (R-72, v3-followup T9).** When an ArcGIS
   layer advertises `advancedQueryCapabilities.maxRecordCountFactor`,
   `get_query_data_batches` now forwards that value to

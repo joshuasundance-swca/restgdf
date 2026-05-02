@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 
 import aiohttp
@@ -86,9 +87,19 @@ class ResilientSession:
 
 
 class _RetriedCtx:
-    """Async context manager that performs retried request on __aenter__."""
+    """Dual-interface wrapper: works as ``await session.get(url)`` AND
+    as ``async with session.get(url) as resp:``.
 
-    __slots__ = ("_session", "_method", "_url", "_kwargs", "_resp")
+    Mirrors :class:`aiohttp.client._RequestContextManager` so
+    :class:`ResilientSession` behaves identically to
+    :class:`aiohttp.ClientSession` regardless of whether callers use
+    the awaitable or async-context-manager pattern. :mod:`restgdf.utils._http`
+    awaits the result of ``session.get`` / ``session.post`` directly,
+    so this dual shape is required for the helper to work against a
+    :class:`ResilientSession`-wrapped inner session.
+    """
+
+    __slots__ = ("_session", "_method", "_url", "_kwargs", "_resp", "_resp_ctx")
 
     def __init__(
         self,
@@ -102,9 +113,10 @@ class _RetriedCtx:
         self._url = url
         self._kwargs = kwargs
         self._resp: Any = None
+        self._resp_ctx: Any = None
 
-    async def __aenter__(self) -> Any:
-        self._resp = await _do_retried_request(
+    async def _run(self) -> Any:
+        self._resp_ctx, self._resp = await _do_retried_request(
             self._session._inner,
             self._session._config,
             self._method,
@@ -115,8 +127,15 @@ class _RetriedCtx:
         )
         return self._resp
 
+    async def __aenter__(self) -> Any:
+        return await self._run()
+
     async def __aexit__(self, *args: Any) -> None:
-        pass
+        if self._resp_ctx is not None:
+            await self._resp_ctx.__aexit__(*args)
+
+    def __await__(self) -> Any:
+        return self._run().__await__()
 
 
 class _RetryableHTTPError(Exception):
@@ -136,7 +155,7 @@ async def _do_retried_request(
     *,
     limiter: LimiterRegistry | None = None,
     cooldown: CooldownRegistry | None = None,
-) -> Any:
+) -> tuple[Any, Any]:
     """Execute request with stamina retry, token-bucket, and cooldown."""
     svc_root = _service_root(url)
     retry_on = (
@@ -162,8 +181,7 @@ async def _do_retried_request(
             await limiter.get(svc_root).acquire()
         try:
             dispatch = getattr(inner, method)
-            ctx = dispatch(url, **kwargs)
-            resp = await ctx.__aenter__()
+            ctx, resp = await _enter_request(dispatch(url, **kwargs))
         except aiohttp.ClientConnectorError:
             raise  # retryable
         except aiohttp.ServerTimeoutError:
@@ -180,9 +198,11 @@ async def _do_retried_request(
                     else config.fallback_retry_after_seconds
                 )
                 cooldown.set_cooldown(svc_root, cd)
+            await ctx.__aexit__(None, None, None)
             raise _RetryableHTTPError(resp.status, headers)
 
         if 400 <= resp.status < 500:
+            await ctx.__aexit__(None, None, None)
             raise RestgdfResponseError(
                 f"Client error ({resp.status}) at {url}",
                 model_name="",
@@ -192,7 +212,7 @@ async def _do_retried_request(
                 status_code=resp.status,
             )
 
-        return resp
+        return ctx, resp
 
     try:
         return await _attempt()
@@ -225,3 +245,17 @@ async def _do_retried_request(
             url=url,
             timeout_kind="read",
         ) from exc
+
+
+async def _enter_request(result: Any) -> tuple[Any, Any]:
+    """Normalize a session dispatch result to an entered async context."""
+    if inspect.isawaitable(result):
+        response = await result
+        ctx = _ResponseCtx(response)
+        return ctx, await ctx.__aenter__()
+
+    if hasattr(result, "__aenter__") and hasattr(result, "__aexit__"):
+        return result, await result.__aenter__()
+
+    ctx = _ResponseCtx(result)
+    return ctx, await ctx.__aenter__()

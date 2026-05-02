@@ -138,6 +138,32 @@ class TestResponseCtx:
         assert ctx.status == 418
         assert ctx.headers == {"X-Flavor": "tea"}
 
+    @pytest.mark.asyncio
+    async def test_retried_context_manager_forwards_aexit(self) -> None:
+        exited = False
+
+        class _Ctx:
+            async def __aenter__(self) -> _FakeResponse:
+                return _FakeResponse(200)
+
+            async def __aexit__(self, *args: Any) -> None:
+                nonlocal exited
+                exited = True
+
+        class _Inner(StubSession):
+            def get(self, url: str, **kwargs: Any) -> Any:
+                return _Ctx()
+
+        session = ResilientSession(
+            inner=_Inner(),
+            config=ResilienceConfig(enabled=True),
+        )
+
+        async with session.get("http://test/query") as resp:
+            assert resp.status == 200
+
+        assert exited is True
+
 
 # ---------------------------------------------------------------------------
 # ResilientSession lifecycle / delegation

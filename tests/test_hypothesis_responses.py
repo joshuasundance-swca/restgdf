@@ -7,6 +7,7 @@ pipeline.  Expand with additional strategies as coverage targets require.
 
 from __future__ import annotations
 
+import pytest
 from hypothesis import given, settings, strategies as st
 
 from restgdf._models.responses import (
@@ -15,6 +16,9 @@ from restgdf._models.responses import (
     _epoch_ms_to_iso,
     iter_normalized_features,
 )
+
+
+pytestmark = pytest.mark.stress
 
 
 # ── strategy: arbitrary epoch-ms values ────────────────────────────

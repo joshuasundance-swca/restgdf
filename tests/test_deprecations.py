@@ -139,6 +139,8 @@ def test_legacy_getvaluecounts_warns_and_delegates():
         )
         session = AsyncMock()
         session.post = AsyncMock(return_value=response)
+        # T8 (R-74): short ``get_value_counts`` bodies now route to GET.
+        session.get = AsyncMock(return_value=response)
 
         with pytest.warns(DeprecationWarning, match=r"get_value_counts"):
             df = loop.run_until_complete(
@@ -169,6 +171,8 @@ def test_legacy_nestedcount_warns_and_delegates():
         )
         session = AsyncMock()
         session.post = AsyncMock(return_value=response)
+        # T8 (R-74): short ``nested_count`` bodies now route to GET.
+        session.get = AsyncMock(return_value=response)
 
         with pytest.warns(DeprecationWarning, match=r"nested_count"):
             df = loop.run_until_complete(

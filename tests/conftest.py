@@ -15,18 +15,32 @@ def pytest_addoption(parser):
         default=False,
         help="run tests marked as requiring live network access",
     )
+    parser.addoption(
+        "--run-stress",
+        action="store_true",
+        default=False,
+        help="run tests marked as resource-intensive or property-based",
+    )
 
 
 def pytest_collection_modifyitems(config, items):
-    if config.getoption("--run-network"):
-        return
+    skip_network = None
+    if not config.getoption("--run-network"):
+        skip_network = pytest.mark.skip(
+            reason="network test; pass --run-network to include live-service checks",
+        )
 
-    skip_network = pytest.mark.skip(
-        reason="network test; pass --run-network to include live-service checks",
-    )
+    skip_stress = None
+    if not config.getoption("--run-stress"):
+        skip_stress = pytest.mark.skip(
+            reason="stress test; pass --run-stress to include resource-intensive checks",
+        )
+
     for item in items:
-        if "network" in item.keywords:
+        if skip_network is not None and "network" in item.keywords:
             item.add_marker(skip_network)
+        if skip_stress is not None and "stress" in item.keywords:
+            item.add_marker(skip_stress)
 
 
 @pytest_asyncio.fixture
