@@ -138,6 +138,10 @@ suppress_warnings = [
 
 # -- Autodoc / napoleon / autodoc-pydantic -----------------------------------
 
+# Mock optional-extra dependencies so autodoc can import modules that guard
+# behind ImportError (e.g. restgdf.resilience requires stamina/aiolimiter).
+autodoc_mock_imports = ["stamina", "aiolimiter"]
+
 autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented"
 autodoc_member_order = "bysource"
