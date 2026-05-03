@@ -112,7 +112,37 @@ Explore the docs
 
       Low-level crawl, HTTP, token, raw-record, and GeoDataFrame helpers.
 
-   .. grid-item-card:: 🔁 Migration notes
+   .. grid-item-card:: Output adapters
+      :link: adapters
+      :link-type: doc
+
+      Compose streaming primitives into dict, DataFrame, or GeoDataFrame shapes.
+
+   .. grid-item-card:: ⚙️ Configuration
+      :link: configuration
+      :link-type: doc
+
+      Layered config with ``RESTGDF_*`` env vars, frozen sub-configs, and sensible defaults.
+
+   .. grid-item-card:: 🛡 Resilience
+      :link: resilience
+      :link-type: doc
+
+      Automatic retry, exponential back-off, and per-service-root rate limiting.
+
+   .. grid-item-card:: 📡 Telemetry
+      :link: telemetry
+      :link-type: doc
+
+      OpenTelemetry spans, log correlation, and ``RestgdfInstrumentor``.
+
+   .. grid-item-card:: ⚠️ Error handling
+      :link: errors
+      :link-type: doc
+
+      Exception hierarchy, structured attributes, and recovery patterns.
+
+   .. grid-item-card:: Migration notes
       :link: migration
       :link-type: doc
 
@@ -140,7 +170,12 @@ Explore the docs
 
    restgdf
    models
+   adapters
+   configuration
+   errors
    utils
+   resilience
+   telemetry
 
 .. toctree::
    :hidden:
@@ -149,12 +184,6 @@ Explore the docs
 
    recipes/observability
    recipes/streaming
-
-.. toctree::
-   :hidden:
-   :maxdepth: 1
-   :caption: Recipes
-
    recipes/tracing
 
 .. toctree::

@@ -27,6 +27,30 @@ lightweight async Esri REST client with optional GeoPandas extras
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
+> **Python ≥ 3.9** | async-first | zero mandatory geo dependencies | pydantic-validated responses
+
+```python
+import asyncio
+from aiohttp import ClientSession
+from restgdf import FeatureLayer
+
+async def main():
+    async with ClientSession() as session:
+        layer = await FeatureLayer.from_url(
+            "https://maps1.vcgov.org/arcgis/rest/services/Beaches/MapServer/6",
+            session=session,
+        )
+        print(layer.name, layer.count)
+        async for row in layer.stream_rows():
+            print(row)
+            break
+
+asyncio.run(main())
+```
+
+<details>
+<summary><strong>2.0 release highlights and migration summary</strong> (click to expand)</summary>
+
 ## Release highlights
 
 restgdf 2.0.0 includes the following major additions alongside the core
@@ -111,6 +135,8 @@ This adds `stamina` and `aiolimiter`. Wrap any `AsyncHTTPSession` with
 `restgdf.resilience.ResilienceConfig` or `RESTGDF_RESILIENCE_ENABLED=1`.
 See [`MIGRATION.md`](MIGRATION.md) for details.
 
+</details>
+
 `gpd.read_file(url, driver="ESRIJSON")` does not account for max record count
 limitations, so large services get truncated at the server's
 `maxRecordCount`.
@@ -120,6 +146,8 @@ page, while letting you choose between a light-core install and an optional
 GeoPandas extra.
 
 # Installation
+
+**Requires Python ≥ 3.9.**
 
 Install the lightweight core package when you want typed metadata, query
 helpers, crawl/auth utilities, or raw feature rows without pulling in

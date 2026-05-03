@@ -3,10 +3,12 @@
 All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
 ## [2.0.0] - 2026-05-02
 ### Changed
 
-- **Gate-3 hardening follow-up (post-T6-T11).** Three review-driven
+- **Gate-3 hardening follow-up.** Three review-driven
   safety fixes land on top of the v3-followup tranche:
   - ArcGIS requests routed through `_choose_verb` now force `POST`
     whenever the effective session transport is `"body"` or `"query"`
@@ -37,14 +39,14 @@ All notable changes to restgdf are documented here. This project follows
     representative production-validation pass instead of mixing in a
     separate stress tier by default.
 
-- **Pagination planner wiring (R-72, v3-followup T9).** When an ArcGIS
+- **Pagination planner wiring.** When an ArcGIS
   layer advertises `advancedQueryCapabilities.maxRecordCountFactor`,
   `get_query_data_batches` now forwards that value to
   `build_pagination_plan(advertised_factor=...)`. The wiring is strictly
   opt-in: servers that do not expose the field (or expose a non-positive
   / non-numeric value) get the previous byte-exact plan with no
   `advertised_factor` kwarg. This replaces the deferred-plumbing stub.
-- **Feature-count retry delegation (BL-51, v3-followup T10).**
+- **Feature-count retry delegation.**
   `restgdf.utils.getinfo._feature_count_with_timeout` now delegates its
   bounded timeout-retry loop to `restgdf.resilience.bounded_retry_timeout`
   (a new public helper) when the `resilience` extra is installed, giving
@@ -55,7 +57,7 @@ All notable changes to restgdf are documented here. This project follows
   and R-69 (`ClientConnectionError` propagates without retry) are
   preserved on both paths.
 
-- **GET/POST verb selection wiring (R-74, v3-followup T8).** ArcGIS
+- **GET/POST verb selection wiring.** ArcGIS
   query requests now route through a single `_arcgis_request` helper
   in `restgdf/utils/_http.py` that consults `_choose_verb` (8,192-byte
   threshold on URL + urlencoded body). Previously every call site was
@@ -64,7 +66,7 @@ All notable changes to restgdf are documented here. This project follows
   coerces `bool`/`None` values in `params` to `"true"`/`"false"`/`""`
   so yarl can serialize them; POST payloads are untouched. Zero
   behavior change for bodies above the threshold.
-- **Transport typing (R-71, v3-followup T7).** `ArcGISTokenSession` now
+- **Transport typing.** `ArcGISTokenSession` now
   exposes `close()` and `closed` that delegate to its inner
   `aiohttp.ClientSession`, making it fully satisfy the
   `restgdf._client._protocols.AsyncHTTPSession` Protocol. Internal call
@@ -78,7 +80,7 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Added
 
-#### Pagination (R-73, v3-followup T9)
+#### Pagination
 
 - `restgdf.errors.PaginationInconsistencyWarning` — new `UserWarning`
   subclass emitted by `_resolve_page` when a batch page returns zero
@@ -90,7 +92,7 @@ All notable changes to restgdf are documented here. This project follows
   taxonomy; import via `from restgdf.errors import
   PaginationInconsistencyWarning`.
 
-#### Domain resolution (R-75, v3-followup T6)
+#### Domain resolution
 
 - `FeatureLayer.get_df(resolve_domains=False)` — new kwarg on the
   pandas-first tabular accessor. When `True`, coded-value domain fields
@@ -102,7 +104,7 @@ All notable changes to restgdf are documented here. This project follows
   a `pandas.DataFrame`. Requires the `geo` extra (pandas is part of
   that install surface).
 
-#### Resilience (BL-51, v3-followup T10)
+#### Resilience
 
 - `restgdf.resilience.bounded_retry_timeout` — new public helper
   exposing a stamina-backed bounded retry loop for timeout-class
@@ -113,7 +115,7 @@ All notable changes to restgdf are documented here. This project follows
   `aiohttp.ServerTimeoutError`); `aiohttp.ClientConnectionError`
   propagates immediately (R-69 preserved).
 
-#### Streaming (BL-24, Q-A11, R-61, R-65)
+#### Streaming
 
 - `FeatureLayer.iter_pages` — low-level async generator yielding raw
   ArcGIS query-page envelopes with `order` (`"request"` default /
@@ -149,7 +151,7 @@ All notable changes to restgdf are documented here. This project follows
   `spatialReference` fallback). Normalization uses
   `restgdf.utils._metadata.normalize_spatial_reference`.
 
-#### Adapters + tabular output (BL-34, Q-S6)
+#### Adapters and tabular output
 
 - `restgdf.adapters` subpackage (lazy-loaded via PEP 562): four
   submodules covering dict / stream / pandas / geopandas shapes. All
@@ -168,7 +170,7 @@ All notable changes to restgdf are documented here. This project follows
   Sibling to `get_gdf()` that returns a `pandas.DataFrame` from the
   same row stream and does **not** require the geo extra.
 
-#### Configuration (BL-18)
+#### Configuration
 
 - `restgdf.Config` — frozen pydantic 2.x aggregate of seven frozen
   sub-configs (`TransportConfig`, `TimeoutConfig`, `RetryConfig`,
@@ -195,7 +197,7 @@ All notable changes to restgdf are documented here. This project follows
   `RESTGDF_MAX_CONCURRENT_REQUESTS` env-var coercion (BL-01). Default
   matches aiohttp `TCPConnector` pool size.
 
-#### Errors (BL-06, BL-10, BL-36)
+#### Errors
 
 - `restgdf.errors` module exposing the canonical exception taxonomy:
   `RestgdfError`, `ConfigurationError`, `OptionalDependencyError`,
@@ -224,7 +226,7 @@ All notable changes to restgdf are documented here. This project follows
   `AuthNotAttachedError`. All carry `.context`, `.attempt`, `.cause`
   attributes with `SecretStr` auto-redaction.
 
-#### Auth runtime (BL-12, BL-15, BL-16, R-15)
+#### Auth runtime
 
 - `TokenSessionConfig.refresh_leeway_seconds` (default `60`) +
   `TokenSessionConfig.clock_skew_seconds` (default `30`) — explicit
@@ -241,7 +243,7 @@ All notable changes to restgdf are documented here. This project follows
 - Referer binding — `token_request_payload` honours `config.referer`
   and switches ArcGIS `client` to `"referer"` when set.
 
-#### Normalization (BL-23, BL-28, BL-54)
+#### Normalization
 
 - `restgdf._models.responses.NormalizedGeometry`,
   `NormalizedFeature`, and `iter_normalized_features(response, *,
@@ -268,7 +270,7 @@ All notable changes to restgdf are documented here. This project follows
   converts ArcGIS `esriFieldTypeDate` epoch-ms integers to ISO-8601
   UTC strings. Opt-in via `normalize_dates=True` on the adapter layer.
 
-#### Pagination (BL-22)
+#### Pagination
 
 - `restgdf.utils._pagination.PaginationPlan` (frozen dataclass) +
   `build_pagination_plan(total_records, max_record_count, *,
@@ -281,7 +283,7 @@ All notable changes to restgdf are documented here. This project follows
   through the planner with no public-signature change and all pinned
   fixtures preserved.
 
-#### Observability (BL-25, BL-26, BL-32, BL-33)
+#### Observability
 
 - `restgdf._logging.get_logger(suffix)` library-wide logger factory
   and `build_log_extra` standard `extra=` envelope helper. Existing
@@ -298,7 +300,7 @@ All notable changes to restgdf are documented here. This project follows
   `on_truncation` options, `order` variants, and
   `max_concurrent_pages` knob.
 
-#### Resilience (BL-31, BL-52)
+#### Resilience
 
 - `restgdf.ResilienceConfig` — frozen pydantic sub-config controlling
   the stamina-based retry wrapper and per-service-root token-bucket
@@ -321,7 +323,7 @@ All notable changes to restgdf are documented here. This project follows
   `FeatureServer` / `MapServer` / `ImageServer` / `SceneServer` path
   segment.
 
-#### Transport protocols + drift (BL-17, BL-20, BL-27)
+#### Transport protocols and drift
 
 - `restgdf._client._protocols.AsyncHTTPSession` —
   `@runtime_checkable` `typing.Protocol` capturing the
@@ -586,3 +588,6 @@ Earlier releases were not formally tracked here. See the
 [Git tag history](https://github.com/joshuasundance-swca/restgdf/tags) and
 [PyPI release notes](https://pypi.org/project/restgdf/#history) for pre-2.0
 changes.
+
+[Unreleased]: https://github.com/joshuasundance-swca/restgdf/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/joshuasundance-swca/restgdf/releases/tag/v2.0.0

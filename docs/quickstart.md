@@ -1,5 +1,7 @@
 # Quickstart
 
+**Requires Python ≥ 3.9.**
+
 Choose the install that matches the workflow you want:
 
 | Install command | Capabilities |

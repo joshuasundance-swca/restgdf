@@ -1,3 +1,11 @@
+"""Low-level utility modules for HTTP transport, pagination, and data helpers.
+
+Most users should interact with :class:`~restgdf.FeatureLayer` and
+:class:`~restgdf.Directory` instead of calling these directly.
+Submodules are lazily loaded to avoid importing heavy optional
+dependencies at package init time.
+"""
+
 from __future__ import annotations
 
 import importlib
