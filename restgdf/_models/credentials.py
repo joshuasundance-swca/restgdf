@@ -60,6 +60,7 @@ class TokenSessionConfig(StrictModel):
       * ``clock_skew_seconds`` (default ``30``, capped at ``30`` when
         derived from the legacy alias) — extra padding for client /
         server clock drift.
+
     ``refresh_threshold_seconds`` is retained as a
     deprecation-warning alias. Reads return
     ``refresh_leeway_seconds + clock_skew_seconds``; writes via the
