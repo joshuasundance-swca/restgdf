@@ -6,6 +6,35 @@ pydantic :class:`~pydantic.BaseModel`. These classes are the single source of
 truth for payload shape and are re-exported from ``restgdf`` directly. Use
 :func:`restgdf.compat.as_dict` if you need a plain dict during a migration.
 
+Model relationships
+-------------------
+
+The models nest in a natural hierarchy that mirrors the ArcGIS REST API
+response structure:
+
+.. code-block:: text
+
+   FeatureLayer.metadata → LayerMetadata
+   │                        ├── .fields → list[FieldSpec]
+   │                        ├── .extent → dict (raw spatial extent)
+   │                        └── .advanced_query_capabilities → AdvancedQueryCapabilities
+   │
+   FeatureLayer.get_gdf() internally parses → FeaturesResponse
+   │                                          ├── .features → list[Feature]
+   │                                          └── .exceeded_transfer_limit → bool
+   │
+   Directory.crawl() → list[CrawlServiceEntry]
+   │                    ├── .metadata → LayerMetadata | None
+   │                    └── .name, .url, .type
+   │
+   Directory.report → CrawlReport
+                      ├── .services → list[CrawlServiceEntry]
+                      └── .errors → list[CrawlError]
+
+Use ``model.model_dump(by_alias=True)`` to round-trip any model back to ArcGIS
+camelCase JSON. Use :func:`restgdf.compat.as_dict` for a plain ``dict`` during
+migration.
+
 Response envelopes
 ------------------
 

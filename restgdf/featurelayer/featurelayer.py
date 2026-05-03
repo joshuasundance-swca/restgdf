@@ -96,7 +96,39 @@ class FeatureLayer:
         token: str | None = None,
         **kwargs,
     ):
-        """A class for interacting with ArcGIS FeatureLayers."""
+        """Initialize a FeatureLayer instance.
+
+        Prefer :meth:`from_url` for most use-cases — it calls :meth:`prep`
+        automatically so metadata attributes are immediately available.
+
+        Parameters
+        ----------
+        url : str
+            ArcGIS REST FeatureLayer endpoint URL.  Must end with a numeric
+            layer ID (e.g. ``".../MapServer/0"``).
+        session : AsyncHTTPSession
+            An aiohttp-compatible async HTTP session used for transport.
+        where : str, default "1=1"
+            ArcGIS WHERE clause filter applied to all queries.  The default
+            ``"1=1"`` selects all features.
+        token : str or None, optional
+            Optional ArcGIS token for secured services.  If also supplied
+            inside ``kwargs["data"]["token"]`` with a *different* value, a
+            :class:`ValueError` is raised.
+        **kwargs
+            Additional keyword arguments forwarded to the underlying HTTP
+            requests (e.g. ``data``, ``params``).
+
+        Raises
+        ------
+        ValueError
+            If *url* does not end with a numeric layer ID, or if conflicting
+            token values are provided via *token* and ``data["token"]``.
+
+        See Also
+        --------
+        from_url : Recommended async constructor that also calls :meth:`prep`.
+        """
         if not ends_with_num(url):
             raise ValueError(
                 "The url must end with a number, which is the layer id of the FeatureLayer.",
@@ -134,7 +166,23 @@ class FeatureLayer:
         self.count: int
 
     async def prep(self):
-        """Prepare the Rest object."""
+        """Fetch and validate layer metadata from the server.
+
+        Populates :attr:`metadata`, :attr:`name`, :attr:`fields`,
+        :attr:`object_id_field`, and :attr:`count`.  Must be called before
+        accessing any metadata attributes unless the instance was created via
+        :meth:`from_url` (which calls this method automatically).
+
+        Raises
+        ------
+        ValueError
+            If the URL does not point to a Feature Layer (e.g. a Table or
+            Map Service root).
+
+        See Also
+        --------
+        from_url : Recommended constructor that calls ``prep`` automatically.
+        """
         raw = await get_metadata(
             self.url,
             self.session,
@@ -162,13 +210,51 @@ class FeatureLayer:
 
     @classmethod
     async def from_url(cls, url: str, **kwargs) -> FeatureLayer:
-        """Create a Rest object from a url."""
+        """Create a prepared FeatureLayer from a URL.
+
+        This is the recommended constructor.  It instantiates the class and
+        calls :meth:`prep` so all metadata attributes are immediately
+        available on the returned instance.
+
+        Parameters
+        ----------
+        url : str
+            ArcGIS REST FeatureLayer endpoint URL (must end with a numeric
+            layer ID).
+        **kwargs
+            Forwarded to :meth:`__init__` — accepts ``session``, ``where``,
+            ``token``, and any extra HTTP request arguments.
+
+        Returns
+        -------
+        FeatureLayer
+            A fully prepared instance with metadata loaded.
+
+        Raises
+        ------
+        ValueError
+            If *url* does not end with a number, conflicting tokens are
+            provided, or the endpoint is not a Feature Layer.
+
+        See Also
+        --------
+        __init__ : Low-level constructor (requires a manual ``prep`` call).
+        """
         self = cls(url, **kwargs)
         await self.prep()
         return self
 
     async def get_oids(self) -> list[int]:
-        """Get the object ids for the Rest object."""
+        """Return all object IDs matching the current WHERE filter.
+
+        Delegates to :meth:`get_unique_values` using the resolved
+        :attr:`object_id_field`.
+
+        Returns
+        -------
+        list[int]
+            Sorted list of object ID values for the filtered feature set.
+        """
         object_id_field = getattr(self, "object_id_field", "OBJECTID")
         return await self.get_unique_values(object_id_field)
 
@@ -466,7 +552,31 @@ class FeatureLayer:
         fields: tuple | str,
         sortby: str | None = None,
     ) -> list | DataFrame:
-        """Get the unique values for a field."""
+        """Get unique values for one or more fields.
+
+        Results are cached per ``(fields, sortby)`` key for the lifetime of
+        this instance.
+
+        Parameters
+        ----------
+        fields : str or tuple of str
+            A single field name (returns a list) or a tuple of field names
+            (returns a :class:`~pandas.DataFrame`; requires the geo extra).
+        sortby : str or None, optional
+            Field name to sort results by.  When ``None``, the server's
+            default ordering is used.
+
+        Returns
+        -------
+        list or DataFrame
+            A plain list when *fields* is a single string, or a DataFrame
+            when *fields* is a tuple.
+
+        Raises
+        ------
+        FieldDoesNotExistError
+            If any requested field is not present in the layer schema.
+        """
         cache_key = (fields, sortby)
         if cache_key not in self.uniquevalues:
             if (isinstance(fields, str) and fields not in self.fields) or (
@@ -487,7 +597,26 @@ class FeatureLayer:
         return self.uniquevalues[cache_key]
 
     async def get_value_counts(self, field: str) -> DataFrame:
-        """Get the value counts for a field."""
+        """Get value counts for a single field.
+
+        Results are cached per field for the lifetime of this instance.
+
+        Parameters
+        ----------
+        field : str
+            The field name to compute value counts for.
+
+        Returns
+        -------
+        DataFrame
+            A pandas DataFrame with one row per distinct value and an
+            associated count column.
+
+        Raises
+        ------
+        FieldDoesNotExistError
+            If *field* is not present in the layer schema.
+        """
         if field not in self.valuecounts:
             if field not in self.fields:
                 raise FieldDoesNotExistError(
@@ -503,7 +632,27 @@ class FeatureLayer:
         return self.valuecounts[field]
 
     async def get_nested_count(self, fields: tuple) -> DataFrame:
-        """Get the nested value counts for a field."""
+        """Get nested (cross-tabulated) value counts for multiple fields.
+
+        Results are cached per *fields* tuple for the lifetime of this
+        instance.
+
+        Parameters
+        ----------
+        fields : tuple of str
+            Two or more field names to cross-tabulate.
+
+        Returns
+        -------
+        DataFrame
+            A pandas DataFrame with one row per unique combination of
+            values across the requested fields and an associated count.
+
+        Raises
+        ------
+        FieldDoesNotExistError
+            If any field in *fields* is not present in the layer schema.
+        """
         if fields not in self.nestedcount:
             if any(field not in self.fields for field in fields):
                 raise FieldDoesNotExistError(

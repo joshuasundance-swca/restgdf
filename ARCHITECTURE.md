@@ -23,21 +23,25 @@ downward; nothing in a lower layer imports from a higher one.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ 7. Typed public surface (restgdf/__init__.py)                │
+│ 8. Typed public surface (restgdf/__init__.py)                │
 │    FeatureLayer, Directory, models, exceptions, helpers       │
 ├──────────────────────────────────────────────────────────────┤
-│ 6. Feature layer API (restgdf/featurelayer/)                 │
+│ 7. Feature layer API (restgdf/featurelayer/)                 │
 │    FeatureLayer, streaming generators, pagination            │
 ├──────────────────────────────────────────────────────────────┤
-│ 5. Directory / service discovery (restgdf/directory.py)      │
+│ 6. Directory / service discovery (restgdf/directory/)        │
 │    Directory, service enumeration, crawl helpers             │
 ├──────────────────────────────────────────────────────────────┤
-│ 4. Typed response models (restgdf/models/)                   │
+│ 5. Output adapters (restgdf/adapters/)                       │
+│    dict, stream, pandas, geopandas — tabular output shapes   │
+├──────────────────────────────────────────────────────────────┤
+│ 4. Typed response models (restgdf/_models/)                  │
 │    Pydantic v2 models for layer metadata, query responses    │
 ├──────────────────────────────────────────────────────────────┤
 │ 3. Transport & auth (restgdf/utils/_http.py, utils/token.py) │
 │    aiohttp session wiring, token sessions, verb selection    │
 │    Optional: restgdf/resilience/ (stamina retry + rate limit)│
+│    Optional: restgdf/telemetry/ (OTel spans + log correlation│
 ├──────────────────────────────────────────────────────────────┤
 │ 2. Errors & protocols (restgdf/errors.py,                    │
 │    restgdf/_client/_protocols.py)                            │

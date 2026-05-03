@@ -1,3 +1,5 @@
+"""General-purpose string helpers for URL and query construction."""
+
 import re
 from collections.abc import Iterable
 from typing import Union

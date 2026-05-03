@@ -98,6 +98,29 @@ nitpick_ignore_regex = [
     # parsed as malformed class references by Sphinx.
     (r"py:class", r"^(Optional|Union|List|Dict|Tuple|tuple|list|dict)\[.*"),
     (r"py:class", r"^\.\.\]$"),
+    # Type-annotation fragments: ``dict[str, Any]`` parsed as trailing ``Any]``.
+    (r"py:class", r"^.*Any\]?\]$"),
+    # Private internal modules – deliberately not part of public API docs.
+    (r"py:(func|class|meth|obj|attr)", r"restgdf\._client\..*"),
+    (r"py:(func|class)", r"restgdf\.utils\._optional\..*"),
+    (r"py:func", r"restgdf\.utils\.getgdf\._.*"),
+    # Config fields rendered by autodoc-pydantic with unresolvable :obj: refs.
+    (r"py:(obj|attr|meth)", r"restgdf\._config\.Config\..*"),
+    (r"py:meth", r"^Config\.from_env$"),
+    # Bare attribute / method names in docstrings (``self.metadata``, etc.).
+    (
+        r"py:(attr|obj)",
+        r"^(metadata|name|fields|object_id_field|count|services|report|services_with_feature_count)$",
+    ),
+    (r"py:(meth|obj)", r"^__init__$"),
+    # OpenTelemetry has no intersphinx inventory we can consume.
+    (r"py:class", r"^opentelemetry\..*"),
+    (r"py:class", r"^span \| None$"),
+    (r"py:func", r"^start_feature_layer_stream_span$"),
+    # Bare ``DataFrame`` from numpy-style return annotations.
+    (r"py:class", r"^DataFrame$"),
+    # Dotted attr paths through instance attributes.
+    (r"py:attr", r"^restgdf\.FeatureLayer\.metadata\..*"),
 ]
 
 # autodoc-pydantic re-renders nested models (e.g. TokenSessionConfig nests
@@ -114,6 +137,10 @@ suppress_warnings = [
 ]
 
 # -- Autodoc / napoleon / autodoc-pydantic -----------------------------------
+
+# Mock optional-extra dependencies so autodoc can import modules that guard
+# behind ImportError (e.g. restgdf.resilience requires stamina/aiolimiter).
+autodoc_mock_imports = ["stamina", "aiolimiter"]
 
 autodoc_typehints = "description"
 autodoc_typehints_description_target = "documented"

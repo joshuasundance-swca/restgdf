@@ -85,9 +85,10 @@ except RestgdfTimeoutError as exc:
 
 ## Integrating with OpenTelemetry
 
-For production tracing, attach an OTel span around each top-level call.
-`restgdf` does not ship OTel instrumentation, but the structured error
-attributes make it straightforward to populate span attributes:
+For full distributed tracing with automatic span creation, install the
+``restgdf[telemetry]`` extra — see the :doc:`/recipes/observability` recipe.
+The example below shows how to add *manual* spans around resilience-wrapped
+calls using the structured error attributes:
 
 ```python
 from opentelemetry import trace

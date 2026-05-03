@@ -1,3 +1,10 @@
+"""Recursive ArcGIS Server directory crawling and service discovery.
+
+Provides :func:`fetch_all_data` for raw-dict output and :func:`safe_crawl`
+for structured :class:`~restgdf.CrawlReport` output with per-stage error
+capture.
+"""
+
 from __future__ import annotations
 
 import asyncio

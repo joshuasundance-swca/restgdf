@@ -49,6 +49,23 @@ guide follows below.
   `PaginationPlan` / `build_pagination_plan`, pure-helper
   `normalize_spatial_reference` and `normalize_date_fields`, and
   `ResilientSession` / `RestgdfInstrumentor`.
+
+### Quick upgrading checklist
+
+> **TL;DR** — follow these eight steps to migrate an existing 1.x codebase.
+> Detailed explanations of each breaking change appear in the sections below.
+
+1. **Pin the geo extra** if you use GeoDataFrames: change `restgdf` to
+   `"restgdf[geo]"` in requirements/lockfiles.
+2. **Widen `except` clauses**: `except RuntimeError:` → `except PaginationError:`;
+   replace `FIELDDOESNOTEXIST` sentinel with `except FieldDoesNotExistError:`.
+3. **Swap `get_settings()` for `get_config()`** (env vars keep old names during transition).
+4. **Migrate `row_dict_generator` to `stream_rows`** and pick an `on_truncation` policy.
+5. **Audit auth config**: header is now the default token transport; set `transport="body"` if needed.
+6. **Split `refresh_threshold_seconds`** into `refresh_leeway_seconds` + `clock_skew_seconds`.
+7. **Attach handlers** to the named loggers you care about (`restgdf.auth`, `.pagination`, etc.).
+8. **(Optional)** Install extras: `restgdf[resilience]`, `restgdf[telemetry]`.
+
 ### Breaking changes
 
 **Install**

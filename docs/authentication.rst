@@ -76,3 +76,35 @@ Notes
 - ``ArcGISTokenSession`` delegates network I/O to the wrapped ``aiohttp.ClientSession``.
 - If you provide ``credentials``, the token is refreshed when it is missing or near expiry.
 - Existing request kwargs and ``data`` payloads still work; the token session only augments them with auth data.
+
+Security best practices
+-----------------------
+
+.. warning::
+
+   Never hard-code credentials in source files. Use environment variables or
+   a secrets manager.
+
+Load credentials from environment variables:
+
+.. code-block:: python
+
+   import os
+
+   from restgdf import AGOLUserPass
+
+   credentials = AGOLUserPass(
+       username=os.environ["ARCGIS_USER"],
+       password=os.environ["ARCGIS_PASSWORD"],
+   )
+
+Or use a ``.env`` file (supported by pydantic-settings):
+
+.. code-block:: bash
+
+   # .env (add to .gitignore!)
+   ARCGIS_USER=my-username
+   ARCGIS_PASSWORD=my-password
+
+``AGOLUserPass.password`` is stored as a :class:`pydantic.SecretStr` — it
+is never shown in ``repr()`` output or log messages.
