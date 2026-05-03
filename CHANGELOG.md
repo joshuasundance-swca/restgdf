@@ -3,7 +3,7 @@
 All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [3.0.0] - 2026-05-02
 
 ## [2.0.0] - 2026-05-02
 ### Changed
