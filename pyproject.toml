@@ -11,7 +11,7 @@ restgdf = ["py.typed"]
 
 [project]
 name = "restgdf"
-version = "2.0.0"
+version = "3.0.0"
 description = "lightweight async Esri REST client with optional GeoPandas extras"
 authors = [{ name = "Joshua Sundance Bailey" }]
 readme = "README.md"
@@ -108,7 +108,7 @@ doc = [
 ]
 
 [tool.bumpver]
-current_version = "2.0.0"
+current_version = "3.0.0"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message = "Bump version {old_version} -> {new_version}"
 commit = true

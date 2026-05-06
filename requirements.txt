@@ -234,11 +234,11 @@ uc-micro-py==2.0.0
     # via linkify-it-py
 urllib3==2.6.3
     # via requests
-virtualenv==21.3.0
+virtualenv==21.3.1
     # via pre-commit
 yarl==1.23.0
     # via aiohttp
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
-zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
+zipp>=3.23.1 # not directly required, pinned by Snyk to avoid a vulnerability
