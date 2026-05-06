@@ -38,6 +38,7 @@ from restgdf.utils._metadata import (
     getfields_df,
     supports_pagination,
 )
+from restgdf.utils._geometry import build_spatial_filter_payload
 from restgdf._models._drift import _parse_response
 from restgdf._config import get_config
 from restgdf._models.responses import LayerMetadata
@@ -63,6 +64,7 @@ __all__ = [
     "DEFAULTDICT",
     "DEFAULT_METADATA_HEADERS",
     "PaginationPlan",
+    "build_spatial_filter_payload",
     "build_pagination_plan",
     "default_data",
     "default_headers",
