@@ -41,7 +41,7 @@ frozenlist==1.8.0
     #   aiosignal
 furo==2025.12.19
     # via restgdf (pyproject.toml)
-idna==3.13
+idna==3.14
     # via
     #   requests
     #   yarl
@@ -75,12 +75,12 @@ propcache==0.4.1
     # via
     #   aiohttp
     #   yarl
-pydantic==2.13.3
+pydantic==2.13.4
     # via
     #   autodoc-pydantic
     #   pydantic-settings
     #   restgdf (pyproject.toml)
-pydantic-core==2.46.3
+pydantic-core==2.46.4
     # via pydantic
 pydantic-settings==2.14.0
     # via autodoc-pydantic
