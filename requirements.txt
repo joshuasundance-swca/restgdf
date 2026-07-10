@@ -135,7 +135,7 @@ pydantic==2.13.3
     #   restgdf (pyproject.toml)
 pydantic-core==2.46.3
     # via pydantic
-pydantic-settings==2.14.0
+pydantic-settings==2.14.2
     # via autodoc-pydantic
 pygments==2.20.0
     # via
