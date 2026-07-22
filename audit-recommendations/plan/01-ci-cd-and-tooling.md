@@ -87,7 +87,7 @@ that runs on the `push:tags` / `workflow_dispatch` paths and that `build-distrib
 (and therefore `publish-pypi`) `needs:`. Out-of-scope: do NOT add the live `network`
 or `stress` markers to the release gate (they require `--run-network`/`--run-stress`
 and hit external ArcGIS endpoints — a flaky upstream would block legitimate releases);
-do NOT re-run the full 6-version 3.9–3.14 matrix on the release path (a single-version
+do NOT re-run the full 4-version 3.11–3.14 matrix on the release path (a single-version
 `-m "not network"` run is sufficient and avoids latency); the actual CHANGELOG empty-section
 gate is W1-4; the CHANGELOG content fix is W6-5.
 
@@ -261,7 +261,7 @@ reconciliation ("CI will re-run the same gates", gate #2 coverage claim) is **W6
 **Scope** — In: add a coverage-enforcing PR job to `.github/workflows/pytest.yml` (or a
 dedicated job) mirroring CONTRIBUTING gate #2 exactly, and wire it into the `ci`
 aggregator `needs:`/result check. Out-of-scope: do NOT add a coverage step inside the
-existing `test` matrix (running `--fail-under=97` across all six 3.9–3.14 legs is wasteful
+existing `test` matrix (running `--fail-under=97` across all four 3.11–3.14 legs is wasteful
 and risks spurious floor failures from interpreter-dependent branch counts); do NOT edit
 `CONTRIBUTING.md` (W6-2); do NOT change `fail_under` (`pyproject.toml:147`).
 
@@ -276,7 +276,7 @@ and risks spurious floor failures from interpreter-dependent branch counts); do 
    `coverage.yml` uses (verified: `.github/workflows/coverage.yml:36`) must NOT be copied —
    pass the markers explicitly to match CONTRIBUTING gate #2 (verified: `CONTRIBUTING.md:91`).
 3. Pin the job to a single Python version (3.14, matching `coverage.yml`) to avoid
-   measuring coverage 6× and version-skew noise on `TYPE_CHECKING`/py-gated branches.
+   measuring coverage 4× and version-skew noise on `TYPE_CHECKING`/py-gated branches.
 4. Add the new job to the `ci` aggregator's `needs:` list AND its result-check shell
    (verified: `.github/workflows/pytest.yml:184` `needs:` and `:188-192` the
    `if [ "${{ needs.<job>.result }}" != "success" ]` chain) so a sub-97% PR cannot go green.

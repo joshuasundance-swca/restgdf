@@ -5,11 +5,16 @@
 > specifications, `CONTRIBUTING.md`, `pyproject.toml`, pre-commit, and every workflow. The
 > finding claims remain pinned to `4673b08`; re-verify them against the current tree before
 > changing code.
+>
+> **Amended 2026-07-22** after a 5-lane adversarial validation (95 claims checked: 50 confirmed /
+> 15 refuted / 25 adjusted / 5 unverified): corrected the P0B CI diagnosis and remedy, revised
+> the floor decision to Python 3.11, and repaired sequencing/guardrail defects. This text
+> supersedes the original `95f402b` version.
 
 ## Verdict
 
 Do not start the 55 audit work items directly. First raise the supported floor from end-of-life
-Python 3.9 to Python 3.10, restore a trustworthy fresh-dependency CI baseline, dispose of the
+Python 3.9 (and soon-EOL 3.10) to Python 3.11, restore a trustworthy fresh-dependency CI baseline, dispose of the
 existing human PR before it collides with auth/pagination work, preserve and merge the audit
 artifacts, and make the aggregate CI job required. Then execute M1–M4 through three independent
 writer lanes plus one integration coordinator, with the full gate at every PR head and milestone
@@ -24,7 +29,8 @@ not replace their behavioral acceptance criteria.
 Use this precedence in a fresh session:
 
 1. live Git/GitHub state and observable code/test behavior;
-2. repository policy (`AGENTS.md`, `CONTRIBUTING.md`, `pyproject.toml`, workflows);
+2. repository policy (`CLAUDE.md` — `AGENTS.md` is a pointer to it — plus `CONTRIBUTING.md`,
+   `pyproject.toml`, workflows);
 3. this execution runbook for sequencing, integration, and current-state decisions;
 4. `00-master-plan.md` and workstream files `01`–`06` for item-level scope and acceptance;
 5. `99-traceability.md` and `findings.json` for completeness counts;
@@ -36,26 +42,36 @@ and update the durable source that was wrong. Never silently choose the more con
 ## Reconciled starting state (2026-07-22)
 
 - `origin/main` and local `main`: `4673b08` (v3.0.0).
-- Current clean local branch: `audit/comprehensive-review-2026-06`, four local commits ahead of
-  `main`, no upstream. It contains the audit/plan plus agent and tooling documentation.
+- Current clean local branch: `audit/comprehensive-review-2026-06`, ahead of `main` with no
+  upstream (re-derive the count with `git rev-list --count origin/main..HEAD`; a hardcoded count
+  here goes stale). It contains the audit/plan plus agent and tooling documentation.
 - Audit scope: 61 confirmed findings = 5 high + 20 medium + 36 low; 55 work items across six
   collision-domain workstreams; zero findings unassigned in the traceability ledger.
 - GitHub: 9 open PRs, 0 open issues. PR #175 is the only human feature PR. PRs #176, #178, and
   #184–#189 are Dependabot work; #188 is a broad grouped Python update and #189 an Actions group.
-- Current fresh CI is not trustworthy-green. Python 3.10–3.14 jobs fail four tests while Python
-  3.9 passes. The observed failure is `aioresponses 0.7.8` constructing an aiohttp response
-  without the newer `stream_writer` argument. Local `.venv` is Python 3.11 and its offline suite
-  passed 1,163 tests with 4 skipped and 2 deselected, but that installed environment is older
-  than fresh resolution. It is corroborating evidence, not the baseline.
-- Local pre-commit previously exceeded a 244-second command limit. That is **UNVERIFIED**, not a
-  failure and not a pass. Re-run it with an adequate timeout and retained log.
+- Current fresh CI is not trustworthy-green. The Python 3.10–3.14 jobs fail exactly four tests
+  (`test_feature_count_timeout_retry` ×2, `test_featurelayer_where_memoization` ×2) while the
+  3.9 job passes. Verified from the CI job logs 2026-07-22: the failing legs already resolve
+  `aioresponses 0.7.9` with `aiohttp 3.14.2`, and the failure is aiohttp 3.14's new **required**
+  `ClientResponse` `stream_writer` argument, which aioresponses' test double does not pass. The
+  3.9 leg is green only because aiohttp 3.14 requires Python >=3.10, so 3.9 resolves aiohttp
+  3.13.5. An aioresponses upgrade is therefore NOT a remedy — 0.7.9 is already installed in the
+  failing runs. Local `.venv` is Python 3.11 (aiohttp 3.13.5 + aioresponses 0.7.8) and its
+  offline suite passed 1,163 tests with 4 skipped and 2 deselected, but that installed
+  environment is older than fresh resolution. It is corroborating evidence, not the baseline.
+- Local gates re-derived at `95f402b` on 2026-07-22: offline pytest 1,163 passed / 4 skipped /
+  2 deselected; coverage 98% (floor 97); `pre-commit run --all-files` green. Deps-present mypy
+  over `restgdf/` reports **16 errors in 9 files** (7 missing-stub `import-untyped` + 9 real
+  code errors) — the audited "six TYPING-01 errors" undercounts what W1-2's first real run will
+  see; treat that run as discovery (the job's stub/ignore configuration changes the count).
 - No release is allowed until `W1-1` test-gates publishing and the full release candidate gate is
   green.
-- Maintainer decision (2026-07-22): Python 3.9 support ends now. It reached upstream end-of-life
-  on 2025-10-31 and no longer receives security updates (official
-  [Python 3.9.25 release notice](https://www.python.org/downloads/release/python-3925/)). Set
-  `requires-python = ">=3.10"` and test 3.10–3.14. Do not silently drop 3.10 while upstream still
-  supports it; schedule a support-floor review before Python 3.10's upstream end-of-life.
+- Maintainer decision (2026-07-22, revised the same day): Python 3.9 **and 3.10** support ends
+  now. 3.9 reached upstream end-of-life on 2025-10-31 (official
+  [Python 3.9.25 release notice](https://www.python.org/downloads/release/python-3925/)); 3.10
+  reaches end-of-life 2026-10-31 — under three months away — and keeping it would force a second
+  floor-bump release almost immediately. Set `requires-python = ">=3.11"` and test 3.11–3.14
+  (Python 3.11 EOL: October 2027). Schedule a support-floor review at each minor release.
 
 Re-run the inventory commands below at the start of every phase. Counts above are a dated
 snapshot, not an evergreen claim.
@@ -65,6 +81,7 @@ git status --short --branch
 git fetch --prune origin
 git rev-parse HEAD
 git rev-parse origin/main
+git rev-list --left-right --count origin/main...HEAD
 git log --oneline --decorate --graph -12
 gh pr list --state open --limit 100
 gh issue list --state open --limit 100
@@ -76,20 +93,11 @@ publishing releases remain permission-gated outward actions.
 
 ## Program state ledger
 
-Update this table in the same PR that changes a phase state. A phase is complete only when its
-exit evidence is linked or recorded in the commit/PR.
-
-| Phase | Initial state | Exit evidence |
-|------|---------------|---------------|
-| P0A Preserve the plan | local-only | audit branch published and audit PR merged |
-| P0B Raise Python floor and repair fresh CI | blocked/red | 3.10+ metadata/docs and 3.10–3.14 aggregate `ci` green |
-| P0C Reconcile open PRs | 9 open | each PR merged, superseded, refreshed, or deliberately deferred |
-| V0 Establish baseline | not started | fresh main clone passes the complete gate |
-| M1 Validation/security | not started | M1 exit gate plus 3.1.0 release evidence |
-| M2 High correctness | not started | all five high findings closed with regression evidence |
-| M3 Medium correctness | not started | M3 item/decision gates green |
-| M4 Docs/polish | not started | 61/61 findings closed or explicitly dispositioned |
-| R32 Release 3.2.0 | not started | clean tag-to-PyPI-to-install verification |
+The ledger lives in [`PROGRAM-LEDGER.md`](PROGRAM-LEDGER.md), not in this file. Until the audit
+PR merges, ledger updates are commits to the audit branch (the ledger exists only there — P0B/P0C
+branches cut from `origin/main` cannot carry it); after the audit PR merges, update the ledger in
+the same PR that changes a phase state. A phase is complete only when its exit evidence is linked
+or recorded in the commit/PR.
 
 ## Phase P0 — make the work safe to begin
 
@@ -98,48 +106,70 @@ exit evidence is linked or recorded in the commit/PR.
 1. Commit this runbook and its consistency corrections locally on
    `audit/comprehensive-review-2026-06` after the documentation checks below pass.
 2. With explicit permission, push the branch and open an audit-only PR. Do not mix runtime fixes
-   into it. Expect fresh CI to expose the current dependency/test-double failure.
+   into it. Expect fresh CI to expose the current dependency/test-double failure: this audit PR
+   is the **sole sanctioned red-at-open PR** in the program (a scoped exception to the
+   every-PR-head-green contract, closed by step 4 before merge). Do not generalize it.
 3. Land P0B on a new branch from `origin/main`; do not repair CI on the audit branch.
-4. Rebase the audit branch onto the repaired `main`, re-run its gate, and merge the audit PR.
+4. Merge the repaired `main` INTO the audit branch (never rebase after publication — that would
+   require a force-push, forbidden by the branch contract), re-run its gate, and merge the
+   audit PR.
 5. Preserve both local and remote branches until the audit PR is merged and its commit is on
    `main`. Never delete the only copy of planning history.
 
-### P0B · Raise the Python floor and repair fresh-dependency CI (`W0`, prerequisite work)
+### P0B · Raise the Python floor to 3.11 and repair fresh-dependency CI (`W0`, prerequisite work)
 
 This is a newly discovered prerequisite, not one of the original 55 items. It combines an explicit
 maintainer support-policy decision with the CI repair that decision simplifies. Treat the test
 fixture as the first suspect; do not infer a runtime incompatibility from a mocked-response
 constructor.
 
-1. From current `origin/main`, create `build/drop-py39-and-fix-fresh-ci`.
+1. From current `origin/main`, create `build/raise-floor-py311-and-fix-fresh-ci`.
 2. Make the support-floor change as one reviewable commit:
-   - set `requires-python = ">=3.10"`, remove the 3.9 classifier, and change tool targets from
-     `py39` to `py310` where they describe generated/accepted syntax;
-   - remove Python 3.9 from every CI matrix and add/retain 3.10–3.14 explicitly;
+   - set `requires-python = ">=3.11"`, remove the 3.9 and 3.10 classifiers, and change tool
+     targets from `py39` to `py311` where they describe generated/accepted syntax (known set:
+     ruff `target-version` in `pyproject.toml`; pre-commit `pyupgrade` `--py39-plus` →
+     `--py311-plus`);
+   - drop the `eval_type_backport; python_version < '3.10'` dependency from `pyproject.toml` —
+     dead weight on 3.11+;
+   - remove Python 3.9 and 3.10 from every CI matrix and set 3.11–3.14 explicitly;
    - update README, quickstart, architecture/contribution claims, CHANGELOG `Unreleased`, and
-     MIGRATION with the exact floor and the upstream-EOL rationale;
-   - inspect and remove only compatibility code proven unreachable on 3.10+ (notably the Python
-     3.9 `contextlib.aclosing` fallback), with tests proving the supported path;
-   - build wheel/sdist and assert their `Requires-Python` metadata is `>=3.10`; prove installation
-     rejection on 3.9 from the built artifact if a 3.9 interpreter is available.
+     MIGRATION with the exact floor and the EOL/near-EOL rationale;
+   - inspect and remove only compatibility code proven unreachable on 3.11+ (notably the Python
+     3.9 `contextlib.aclosing` fallback in `restgdf/_compat.py`), with tests proving the
+     supported path; sweep for remaining `python_version <` / `sys.version_info` gates below
+     3.11 and stale interpreter pins in `Dockerfile`/readthedocs/docs;
+   - build wheel/sdist and assert their `Requires-Python` metadata is `>=3.11`; prove
+     installation rejection on 3.9/3.10 from the built artifact if an old interpreter is
+     available.
 3. In repo-local `scratch/`, create clean environments for every available supported interpreter.
    Record interpreter version, `pip freeze`, and `pip check`. Never mutate `.venv` for this probe.
 4. Reproduce the four failing tests under the same unconstrained install used by CI. Retain raw
    output and exact resolved versions. A parser summary is not sufficient evidence.
 5. Test the smallest candidate matrix:
-   - Python 3.10–3.14 with `aioresponses 0.7.9` and current `aiohttp`;
-   - the exact four failures first, then their full modules, then offline pytest.
-6. Select the remedy from evidence, in this order:
-   - prefer a compatible test dependency release; `aioresponses 0.7.9` is now admissible because
-     it shares the new Python >=3.10 floor;
-   - otherwise add the smallest local test-double adaptation or a **dev/test-only** compatible
-     bound with an expiry comment and tracking issue;
+   - Python 3.11–3.14 with EXACT pinned resolutions recorded per leg (`pip freeze`); "current
+     aiohttp" is not reproducible — name the version under test (3.14.2 at validation time);
+   - first re-confirm the diagnosis (aioresponses 0.7.9 + aiohttp 3.14.x still fails the four
+     tests), then apply the candidate remedy and re-run: the exact four failures, their full
+     modules, then offline pytest.
+6. Select the remedy from evidence, in this order (an aioresponses version bump is NOT a
+   candidate — 0.7.9 is current, already resolved in the failing runs, declares no Python floor
+   on PyPI, and records no aiohttp-3.14 fix):
+   - the smallest local test-double adaptation (e.g. a conftest shim supplying `stream_writer`
+     to aioresponses' response construction), OR a **dev/test-only** `aiohttp<3.14` bound with
+     an expiry comment and a tracking issue watching aioresponses upstream for aiohttp-3.14
+     support;
+   - adopt the upstream aioresponses release that supports aiohttp 3.14 when one exists, and
+     remove the shim/bound in the same PR;
    - do not add a runtime-core `aiohttp` upper bound unless real client behavior also fails and a
      supported upstream range requires it.
 7. Add a regression that exercises the real fixture path responsible for the failure. Verify the
    guard fires through the consumer path, not by directly constructing an internal marker.
-8. Run the full local gate and the hosted Python 3.10–3.14 matrix. Merge only when the aggregate
-   `ci` check is green. Capture exact test counts per interpreter with a script.
+8. In the same PR, restructure the aggregate: add an offline-only aggregate job (needing
+   `lint`, `test`, `install_combinations`, `base_install`, `docs`) alongside the committed
+   `ci`, which hard-requires the live-network and stress jobs and must NOT become the required
+   check. Run the full local gate and the hosted Python 3.11–3.14 matrix; merge only when the
+   offline aggregate is green, treating network/stress as advisory evidence. Capture exact
+   test counts per interpreter with a script.
 
 If the first candidate fails, that is useful evidence, not a reason to weaken the matrix. Record
 the attempted versions and raw exception before choosing the fallback.
@@ -151,12 +181,17 @@ Never treat May/June green checks as current. Every surviving PR must be updated
 
 1. Review #175 first. It changes spatial-filter geometry behavior and overlaps the auth,
    `getgdf`, and pagination collision domains. Rebase it, inspect all behavior and test changes,
-   run the complete gate, then either merge it **before W2/W4 begins** or explicitly close/defer
-   it. Leaving it open while those workstreams proceed creates avoidable semantic and merge risk.
+   run the complete gate, then either merge it **before W2/W4 begins** or explicitly close it.
+   **Hard rule:** while #175 is open and undispositioned, no W2/W4 item may edit `token.py`,
+   `getgdf.py`, or `getinfo.py` — "defer with it open" is valid only if those files' work items
+   are frozen with it. Leaving it open while those workstreams proceed creates avoidable
+   semantic and merge risk.
 2. After #175's disposition, re-verify affected audit line references and acceptance tests. The
    finding IDs stay stable; locations may move.
-3. Refresh grouped Python PR #188 after P0B. Compare its dependency set mechanically with #176,
-   #178, and #184–#187. Prefer one reviewed grouped update; close individual PRs as superseded
+3. Refresh grouped Python PR #188 after P0B. Its aiohttp bump can re-break the P0B remedy: if
+   P0B chose a dev/test `aiohttp<3.14` bound, #188 must respect it; either way re-run the full
+   3.11–3.14 matrix on the refreshed PR before merging. Compare its dependency set mechanically
+   with #176, #178, and #184–#187. Prefer one reviewed grouped update; close individual PRs as superseded
    only after the replacement has merged. Do not merge a stale green individual merely to reduce
    the count.
 4. Refresh Actions group #189 separately. Review permissions, action SHAs/tags, and workflow
@@ -166,12 +201,20 @@ Never treat May/June green checks as current. Every surviving PR must be updated
 
 ### P0D · Turn CI into policy
 
-After the repaired aggregate job exists and has succeeded on `main`, request/obtain permission to:
+After the repaired aggregate job exists and has succeeded on the PR whose merge became `main`
+(`pytest.yml` has no push trigger, so `ci` never runs on `main` directly), request/obtain
+permission to:
 
-- require the aggregate `ci` status on `main`;
-- require one approval and dismissal of stale approvals (recommended for a public library);
-- apply the rule to administrators unless the repository has a documented emergency exception;
-- add an environment reviewer to the release environment;
+- require the offline-only aggregate that P0B added on `main` — NOT the committed `ci`, which
+  hard-requires the **live-network and stress jobs** (`needs: [lint, test,
+  install_combinations, base_install, network, stress, docs]`) and would tie every merge in
+  the program to live ArcGIS availability; keep network/stress visible but advisory
+  (decided 2026-07-22);
+- do NOT require pull-request approvals or admin enforcement: this is a solo-maintainer repo
+  (CODEOWNERS `* @joshuasundance-swca`) — a required-approval rule deadlocks every merge, and
+  admin enforcement breaks `coverage.yml`'s auto-commit-to-main and `bumpver.yml`'s direct push
+  (decided 2026-07-22; revisit if the maintainer count grows);
+- add an environment reviewer to the `release` environment;
 - prohibit a release while required checks are pending or red.
 
 Export or screenshot the resulting ruleset. A workflow named `ci` is not a gate until GitHub
@@ -179,9 +222,10 @@ actually requires it.
 
 ## Phase V0 — establish the baseline oracle
 
-Start from a fresh clone/worktree of repaired `main`, not from the long-lived `.venv`. Install the
-documented full extras, record resolved dependencies, and run every gate. Do not begin M1 while
-V0 is red or unverified.
+Start from a fresh clone/worktree of repaired `main` with its own freshly created venv, not from
+the long-lived working-copy `.venv` (the commands below then resolve to the fresh clone's own
+`.venv`). Install the documented full extras, record resolved dependencies, and run every gate.
+Do not begin M1 while V0 is red or unverified.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest -q -m "not network"
@@ -203,8 +247,10 @@ ID, monitor to completion, and never leave them silently running.
 ## Parallel execution model
 
 Use at most four active roles: one integration coordinator and three writer lanes. Parallelism is
-by disjoint file set, not by topic. Future agent delegation requires explicit user permission;
-this layout remains valid for humans or sequential sessions.
+by disjoint file set, not by topic. Subagent delegation for implementation and validation is the
+standard operating mode of this harness for reversible in-repo work (outward actions — push, PR,
+merge, settings, release — stay permission-gated); this layout remains valid for humans or
+sequential sessions.
 
 - **Coordinator:** owns branch inventory, collision reservations, central gate, traceability
   counts, checkpoint, and merges. It does not edit a file reserved by a writer.
@@ -228,7 +274,9 @@ full gate once centrally after all selected lane heads are integrated.
 - For behavior changes, commit the failing regression first, confirm it fails for the intended
   reason, then commit the minimum fix. The red and green commits travel in the same PR; never
   merge the red commit alone. The targeted red command is expected to fail, while every PR head
-  and every merge commit must pass the full gate.
+  and every merge commit must pass the full gate. DECIDED (maintainer, 2026-07-22): PRs carrying
+  a red demonstration commit merge via **squash**, so every commit on `main` passes the full
+  gate and `git bisect` stays useful; the red demonstration survives in PR history.
 - Add a CHANGELOG bullet under `Unreleased` for runtime-visible behavior in the same PR.
 - Commit subjects are Conventional Commits, imperative, <=72 characters. Never bypass hooks.
 - Push/open/merge remains permission-gated. No force-push; update branches with ordinary rebase
@@ -237,7 +285,9 @@ full gate once centrally after all selected lane heads are integrated.
 ## Milestone execution graph
 
 The item specifications remain in files `01`–`06`. The sequences below override only their
-integration order where present-day dependencies make that necessary.
+integration order where present-day dependencies make that necessary. **Any work item not named
+below executes in its traceability-ledger milestone under its workstream's lane and hot-file
+rules** — the graph names only items whose ordering is constrained.
 
 ### M1 · Validation spine, security fix, and release truth
 
@@ -246,13 +296,22 @@ Run these lanes concurrently only when their file reservations do not overlap:
 - Lane A serial spine: `W1-1 -> W1-4 -> W1-3 -> W1-7`; `W1-5` and `W1-6` may be separate
   disjoint reviews. Implement `W1-8` as fail-fast-only unless new evidence justifies auto-format.
 - Lane B: `W2-1` (AUTH-01) red-first. This is the highest-priority runtime fix.
-- Lane C quick wins: `W3-7`, `W6-1`, then `W6-2` after `W1-3` defines the truthful coverage
-  behavior.
+- Lane C quick wins: `W3-7`, `W5-7` (prerequisite of M2's `W5-8` — capture W5-8's red-state
+  evidence against the pre-W5-7 tree when W5-7 lands), `W6-1`, then `W6-2` after `W1-3` defines
+  the truthful coverage behavior.
 
 `W1-2` (real mypy) is a transition stack, not a knowingly red standalone merge. First capture
-the six real type failures. Repair its coupled items (`W4-6`, `W5-9`, `W5-10`, `W5-11`) on a
-coordinated integration branch or ordered stack, then make the strict gate required in the final
-PR. Each repair gets targeted tests/type evidence; the stack head gets the complete gate.
+the CURRENT real type failures as discovery — deps-present mypy at `95f402b` reports 16 errors
+in 9 files (7 missing-stub + 9 code; the audited "six" is the TYPING-01 subset, and the job's
+stub/ignore configuration changes the count). Repair its coupled items (`W4-6`, `W5-9`, `W5-10`,
+`W5-11` — a deliberate M2→M1 pull, see the discrepancies section) on a coordinated integration
+branch or ordered stack, then make the strict gate required in the final PR. **The stack is
+coordinator-owned**: it reserves `pyproject.toml`/`pytest.yml`/`.pre-commit-config.yaml`
+(Lane A), `getgdf.py` (W4-6), and the W5 surface files (`_drift.py`, `_metadata.py`,
+`responses.py`, `_bounded_retry.py`, `featurelayer.py`); Lanes B/C idle their overlapping items
+until the stack merges, and W1-2's config-file edits land before `W1-3`/`W1-7` touch the same
+files (workstream 01 hot-file order). Each repair gets targeted tests/type evidence; the stack
+head gets the complete gate.
 
 Pull the historical 3.0.0 correction and a valid nonempty `Unreleased` section from `W6-5`
 forward into 3.1.0 release preparation. A release validator cannot truthfully bless the currently
@@ -260,20 +319,25 @@ empty 3.0.0 narrative.
 
 M1 exits only when W1-1/W1-2/W1-3 are real and green, AUTH-01 is fixed, the full local/hosted gate
 is green, and required-check configuration is verified. At that point release **3.1.0** with the
-Python >=3.10 floor, security fix, CI/release safeguards, corrected release metadata, and explicit
-migration notice. Do not label this 3.0.1: raising `Requires-Python` is a compatibility-policy
-change and must not be hidden in a patch. Do not pull unfinished M2 behavior into this release.
+Python >=3.11 floor, security fix, CI/release safeguards, corrected release metadata, and explicit
+migration notice. DECIDED (maintainer, 2026-07-22): the version is 3.1.0 — not 3.0.1 (raising
+`Requires-Python` is a compatibility-policy change, never a patch) and not 4.0.0 (dropping
+EOL/near-EOL Python minors follows ecosystem practice — SPEC-0/NEP-29 — rather than strict-SemVer
+major). Do not pull unfinished M2 behavior into this release.
 
 ### M2 · All remaining high-severity correctness
 
 After #175 is resolved and the typing transition lands:
 
-- Config/auth lane: `W3-1 -> W2-10`; then prove `verify_ssl=False` and user-agent propagation
-  through the real request consumer. `W2-7` and `W2-8` may run in parallel if disjoint.
+- Config/auth lane: `W3-1 -> W2-10 -> W2-4` (single-flight token refresh — `token.py` stays
+  single-writer through the chain); `W2-6` rides the same lane where it touches auth files; then
+  prove `verify_ssl=False` and user-agent propagation through the real request consumer. `W2-7`
+  and `W2-8` may run in parallel if disjoint.
 - Pagination lane, serial in `getgdf.py`: `W4-6 -> W4-5 -> W4-1 -> W4-2`. For W4-1, test
   excluded/truncated rows through the real GeoDataFrame path and raise `PaginationError`.
-- Surface/adapters lane: `W5-1`, `W5-4`, and `W5-12` may be separate disjoint PRs; `W5-8` follows
-  the extras decision. The typing fixes already landed in M1's transition stack.
+- Surface/adapters lane: `W5-1`, `W5-4`, and `W5-12` may be separate disjoint PRs; `W5-8`
+  follows `W5-7` (its actual dependency, landed in M1). The typing fixes already landed in M1's
+  transition stack.
 - Config/docs lane: `W3-5` records the `.env` doc-down decision in M2; `W3-6` follows the actual
   config shape. `W6-3` waits until M3 to finalize all architecture decisions.
 
@@ -290,6 +354,8 @@ M2 exits only when all five high findings are closed with regressions and the ve
   precedence unless a separately scoped feature is approved.
 - Pagination lane: `W4-3`; `W4-4` remains documentation/design-only until an implementation is
   justified.
+- Test-suite lane: `W1-9` (characterization-test verb pinning; `Depends: W2-1`, unblocked since
+  M1 — schedule it early in M3).
 - Surface lane: `W5-2 -> W5-3`; then `W5-6`, `W5-13`, and `W5-14`. W5-3 exposes exactly the two
   audited stats methods. W5-13 adds context to emitted messages but not to the dedup key. Under
   the doc-down config decision, close W5-14 as an evidenced no-op.
@@ -322,8 +388,10 @@ version solely to preserve the numbering in this document.
 3. build once, `twine check --strict`, inspect wheel/sdist contents, and publish those exact bits;
 4. require the release environment approval and green test-gated publish workflow;
 5. verify GitHub release, PyPI metadata/provenance, and installation/import in a clean environment;
-6. record rollback guidance. Published artifacts are immutable—fix forward with a new version,
-   never replace a release file.
+6. record rollback guidance. Published artifacts are immutable — never replace a release file.
+   If a published release is broken or leaks credentials, **yank it on PyPI immediately** (yank
+   preserves immutability while blocking new default installs) and fix forward with a new
+   version.
 
 ## Evidence packet required for every PR
 
@@ -351,6 +419,13 @@ Use scripts for counts. Never hand-count tests, findings, PRs, or terminal dispo
   and revert or repair within that collision domain. Other read-only review may continue.
 - Stop for maintainer direction before an API-breaking choice, runtime dependency ceiling,
   outward GitHub change, release, or expansion beyond the audited scope.
+- **No `*.*.*` tag push and no `bumpver.yml` dispatch before W1-1 and P0D land.** bumpver's
+  BL-42 step does run the offline suite before pushing its tag, but a manually pushed tag
+  publishes with no test gate at all while the `release` environment has no reviewer.
+- A new aiohttp minor appearing in fresh resolution re-runs the P0B matrix before any merge that
+  relies on it; a PyPI yank of a pinned test dependency is the same trigger.
+- `coverage.yml` auto-commits to `main` on every push, so `origin/main` advances on its own —
+  re-run the inventory before branching, and treat an unexplained `main` move as a stop signal.
 - Security regressions, credential exposure, silent data loss, required-check removal, or coverage
   below 97% are hard stops.
 
@@ -358,8 +433,9 @@ Use scripts for counts. Never hand-count tests, findings, PRs, or terminal dispo
 
 A new session should do exactly this before implementation:
 
-1. Read `AGENTS.md`/repo instructions, this file in full, then `00-master-plan.md`, the relevant
-   workstream file, and `99-traceability.md` in full.
+1. Read `CLAUDE.md` (repo instructions; `AGENTS.md` is a pointer to it), this file in full, then
+   `PROGRAM-LEDGER.md`, `00-master-plan.md`, the relevant workstream file, and
+   `99-traceability.md` in full.
 2. Read `checkpoint.local.md` if present, then distrust and reconcile it with Git/disk/GitHub.
 3. Run the inventory commands under “Reconciled starting state”; update this runbook snapshot or
    ledger when durable state has changed.
@@ -382,6 +458,19 @@ A new session should do exactly this before implementation:
   explicit there and in M3 above.
 - Red-first and green-commit requirements are reconciled by keeping red+green commits in one PR:
   the targeted red commit demonstrates the net; the PR head and every merge remain fully green.
-- Python support policy is now explicit: drop 3.9 in P0B because upstream ended support on
-  2025-10-31; retain 3.10 until a separately recorded review changes the floor. This supersedes
-  every older plan sentence that assumes Python >=3.9.
+- Python support policy is now explicit: drop 3.9 AND 3.10 in P0B (3.9 EOL 2025-10-31; 3.10 EOL
+  2026-10-31, under three months out — revised maintainer decision 2026-07-22); the floor is
+  >=3.11, tested 3.11–3.14. This supersedes every older plan sentence that assumes Python >=3.9
+  or >=3.10; the known stale spec lines (plan/01's "six 3.9–3.14 legs" wording, plan/05 W5-12's
+  and plan/06 W6-7's `Formatter(defaults=...)` rationale) were edited 2026-07-22.
+- Deliberate milestone overrides in this runbook (dependency-driven, per the override authority
+  above): `W1-8` M2→M1; `W4-6`/`W5-9`/`W5-10`/`W5-11` M2→M1 inside the W1-2 transition stack
+  (W4-6's appearance at the head of the M2 pagination lane is the same item shown in its serial
+  context, not a second execution); the 3.0.0-narrative slice of `W6-5` M4→M1 for the 3.1.0
+  release notes.
+- plan/06 labeled `W3-5` an M3 code item in three places; corrected 2026-07-22 to M2 (matching
+  plan/03, `99-traceability.md`, and this runbook — W6-3 still gates at M3, after W3-5 lands).
+- A 5-lane adversarial validation (2026-07-22; 95 claims: 50 confirmed / 15 refuted / 25
+  adjusted / 5 unverified) drove this amendment: corrected P0B diagnosis/remedy, the ledger
+  extraction, P0A merge-not-rebase, the scoped red-at-open exception, the P0D solo-repo shape,
+  W1-2 stack ownership, W2-4/W5-7/W2-6/W1-9 scheduling, and the reconciled-state fact fixes.
