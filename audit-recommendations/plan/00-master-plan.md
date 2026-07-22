@@ -3,7 +3,9 @@
 > Turns the [restgdf audit](../README.md) (61 verified findings at commit `4673b08`) into an
 > executable program. 2026-06-13. Companion files: per-workstream specs
 > [`01`](01-ci-cd-and-tooling.md)–[`06`](06-docs-release-narrative.md), and the
-> [`99-traceability`](99-traceability.md) ledger (every finding → work item).
+> [`99-traceability`](99-traceability.md) ledger (every finding → work item). Execute it through
+> the current-state prerequisites, integration order, parallel lanes, and recovery rules in
+> [`07-execution-runbook.md`](07-execution-runbook.md).
 
 ## Vocabulary
 

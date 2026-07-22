@@ -19,6 +19,9 @@ did not hold were discarded and are not published.
   `id, axis, title, severity, effort, governance, location, files`). This is the contract a
   remediation plan consumes; **re-verify cited line numbers before acting — they are
   perishable, the claims are not.**
+- **[`plan/07-execution-runbook.md`](plan/07-execution-runbook.md)** — the durable operational
+  sequence: current-state prerequisites, safe parallel lanes, gates, rollback rules, releases,
+  and the bootstrap procedure for a fresh session.
 
 Finding IDs are axis-prefixed and stable (e.g. `AUTH-01`). Severities reflect the verifier's
 calibrated value, which sometimes differs from the auditor's initial grade.

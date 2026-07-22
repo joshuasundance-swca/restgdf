@@ -146,7 +146,7 @@ Findings mapped to more than one item are **split-ownership**: each owning item 
 | `W5-5` | W5 | M4 | low | S | `ADAPTERS-02` | Fix the self-contradicting geopandas adapter docstrings |
 | `W6-1` | W6 | M1 | medium | S | `PACKAGING-02`, `DOCS-10` | SECURITY.md: add the 3.x supported row |
 | `W6-2` | W6 | M1 | low | S | `DOCS-08`, `CICD-04`, `PACKAGING-03` | CONTRIBUTING.md: fix stale branch, coverage claim, dev-extra claim |
-| `W6-3` | W6 | M2 | medium | M | `DOCS-03`, `DOCS-04`, `DOCS-06`, `DOCS-07`, `CONFIG-03`, `CONFIG-04`, `PACKAGING-03`, `AUTH-02` | ARCHITECTURE.md: remove code-contradicting claims |
+| `W6-3` | W6 | M3 | medium | M | `DOCS-03`, `DOCS-04`, `DOCS-06`, `DOCS-07`, `CONFIG-03`, `CONFIG-04`, `PACKAGING-03`, `AUTH-02` | ARCHITECTURE.md: remove code-contradicting claims |
 | `W6-4` | W6 | M4 | medium | M | `DOCS-01`, `AUTH-02`, `AUTH-03`, `AUTH-04`, `CONFIG-02`, `ERRTAX-04`, `OPTDEPS-02`, `TELEMETRY-02` | MIGRATION.md: refresh for 3.0 and correct claims |
 | `W6-5` | W6 | M4 | medium | M | `PACKAGING-01`, `DOCS-01`, `DOCS-11`, `CICD-02`, `CICD-03`, `ERRTAX-04` | CHANGELOG.md: fix the botched 3.0.0 promotion and populate it |
 | `W6-6` | W6 | M4 | low | M | `DOCS-10`, `AUTH-01`, `CONFIG-02`, `PAGINATION-01` | README.md: 2.0->3.0 refresh + token-in-body + truncation notes |

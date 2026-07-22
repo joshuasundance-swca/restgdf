@@ -375,3 +375,11 @@ Order is milestone-first, then dependency.
 ## Decisions required
 
 (Surfaced for the maintainer; recommended defaults inline. The two W3-inherited decisions on W5-14 are listed because W5-14 cannot resolve them itself.)
+
+| Item | Decision | Recommended default |
+|------|----------|---------------------|
+| `W5-3` | How many shadowed statistics methods become public? | Expose exactly the two audited methods; do not broaden the public API opportunistically. |
+| `W5-9`–`W5-11` | How should the real mypy failures be integrated with `W1-2`? | Repair them in the coordinated typing transition before the strict gate becomes required; keep each fix independently evidenced. |
+| `W5-13` | Should service context change schema-drift dedup identity? | Add context to the emitted message/record only; retain the four-field dedup key and anti-spam behavior. |
+| `W5-14` / `W3-3` | How should `AuthConfig` reach token sessions? | Add an explicit opt-in construction path such as `ArcGISTokenSession.from_config`; never introduce an implicit global default. |
+| `W5-14` / `W3-4` | Should the undocumented explicit-`Config` constructor layer be implemented? | Correct the docs and close W5-14 as an evidenced no-op; scope any future constructor injection as a separate feature. |
