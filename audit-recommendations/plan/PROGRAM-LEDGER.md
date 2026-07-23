@@ -8,7 +8,7 @@
 
 | Phase | State | Exit evidence |
 |------|-------|---------------|
-| P0A Preserve the plan | local-only | audit branch published and audit PR merged |
+| P0A Preserve the plan | published; PR #190 open (sanctioned red-at-open) | audit branch published and audit PR merged |
 | P0B Raise Python floor to 3.11 + repair fresh CI | blocked/red | 3.11+ metadata/docs and 3.11–3.14 offline aggregate green |
 | P0C Reconcile open PRs | 9 open (2026-07-22) | each PR merged, superseded, refreshed, or deliberately deferred |
 | P0D Turn CI into policy | not started | offline aggregate required on `main`; `release` env reviewer set; ruleset exported |
