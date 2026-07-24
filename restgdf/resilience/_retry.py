@@ -17,7 +17,12 @@ from restgdf.errors import (
     TransportError,
 )
 from restgdf.resilience._errors import _parse_retry_after
-from restgdf.resilience._limiter import CooldownRegistry, LimiterRegistry, _service_root
+from restgdf.resilience._limiter import (
+    CooldownRegistry,
+    LimiterRegistry,
+    _host,
+    _service_root,
+)
 
 
 _log = get_logger("retry")
@@ -157,7 +162,12 @@ async def _do_retried_request(
     cooldown: CooldownRegistry | None = None,
 ) -> tuple[Any, Any]:
     """Execute request with stamina retry, token-bucket, and cooldown."""
-    svc_root = _service_root(url)
+    # Select the rate-limit/cooldown key granularity once from config, and use
+    # the SAME key for the token bucket AND the 429 cooldown (politeness
+    # decision D1: a host-level block wants a host-wide cooldown). Default
+    # "service_root" preserves the historical per-service keying exactly.
+    key_fn = _host if config.limiter_key == "host" else _service_root
+    limit_key = key_fn(url)
     # ``ClientConnectionError`` is the common base for every connection-shaped
     # aiohttp failure — ``ClientConnectorError`` (DNS/connect), ``ClientOSError``
     # (incl. ECONNRESET), ``ClientConnectionResetError``, ``ServerDisconnectedError``,
@@ -178,10 +188,10 @@ async def _do_retried_request(
     async def _attempt() -> tuple[Any, Any]:
         # 429 cooldown: wait if a previous 429 set a deadline for this service
         if cooldown is not None:
-            await cooldown.wait_if_cooling(svc_root)
+            await cooldown.wait_if_cooling(limit_key)
         # Token-bucket rate limit
         if limiter is not None:
-            await limiter.get(svc_root).acquire()
+            await limiter.get(limit_key).acquire()
         dispatch = getattr(inner, method)
         try:
             ctx, resp = await _enter_request(dispatch(url, **kwargs))
@@ -199,13 +209,13 @@ async def _do_retried_request(
                     if ra
                     else config.fallback_retry_after_seconds
                 )
-                cooldown.set_cooldown(svc_root, cd)
+                cooldown.set_cooldown(limit_key, cd)
                 _log.debug(
                     "429 cooldown set: key=%s seconds=%.3f",
-                    svc_root,
+                    limit_key,
                     cd,
                     extra=build_log_extra(
-                        service_root=svc_root,
+                        service_root=limit_key,
                         operation="cooldown",
                         limiter_wait_s=cd,
                     ),
@@ -230,16 +240,19 @@ async def _do_retried_request(
     # ``retry_context`` is the equivalent of the ``@stamina.retry`` decorator
     # (same kwargs) but exposes each attempt's number and backoff, so the
     # per-retry DEBUG log can name them (H1-N4). ``prev_wait`` carries the
-    # backoff that was applied *before* the current attempt.
+    # backoff that was applied *before* the current attempt. The retry policy
+    # is read from ``config`` (R2); the defaults on ``ResilienceConfig``
+    # (5 / 60.0 / 0.5 / 10.0 / 1.0) preserve the historical hardcoded values
+    # byte-for-byte, and ``config.enabled`` remains the sole retry gate.
     prev_wait = 0.0
     try:
         async for attempt in stamina.retry_context(
             on=retry_on,
-            attempts=5,
-            timeout=60.0,
-            wait_initial=0.5,
-            wait_max=10.0,
-            wait_jitter=1.0,
+            attempts=config.max_attempts,
+            timeout=config.retry_budget_s,
+            wait_initial=config.wait_initial_s,
+            wait_max=config.wait_max_s,
+            wait_jitter=config.wait_jitter_s,
         ):
             if attempt.num > 1:
                 _log.debug(
@@ -248,7 +261,7 @@ async def _do_retried_request(
                     prev_wait,
                     last_cause.get("cause", "unknown"),
                     extra=build_log_extra(
-                        service_root=svc_root,
+                        service_root=limit_key,
                         retry_attempt=attempt.num,
                         retry_delay_s=prev_wait,
                         exception_type=last_cause.get("cause"),
@@ -265,7 +278,7 @@ async def _do_retried_request(
             _log.debug(
                 "retry exhausted: status=429 mapped to RateLimitError",
                 extra=build_log_extra(
-                    service_root=svc_root,
+                    service_root=limit_key,
                     exception_type="RateLimitError",
                 ),
             )
@@ -280,7 +293,7 @@ async def _do_retried_request(
             "retry exhausted: status=%d mapped to RestgdfResponseError",
             exc.status,
             extra=build_log_extra(
-                service_root=svc_root,
+                service_root=limit_key,
                 exception_type="RestgdfResponseError",
             ),
         )
@@ -299,7 +312,7 @@ async def _do_retried_request(
             "retry exhausted: %s mapped to RestgdfTimeoutError",
             type(exc).__name__,
             extra=build_log_extra(
-                service_root=svc_root,
+                service_root=limit_key,
                 exception_type="RestgdfTimeoutError",
             ),
         )
@@ -313,7 +326,7 @@ async def _do_retried_request(
             "retry exhausted: %s mapped to TransportError",
             type(exc).__name__,
             extra=build_log_extra(
-                service_root=svc_root,
+                service_root=limit_key,
                 exception_type="TransportError",
             ),
         )
@@ -327,7 +340,7 @@ async def _do_retried_request(
             "retry exhausted: %s mapped to TransportError",
             type(exc).__name__,
             extra=build_log_extra(
-                service_root=svc_root,
+                service_root=limit_key,
                 exception_type="TransportError",
             ),
         )

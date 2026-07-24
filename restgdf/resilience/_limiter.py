@@ -17,18 +17,32 @@ _SERVER_TYPE_RE = re.compile(
 )
 
 
+def _host(url: str) -> str:
+    """Derive a per-host rate-limit key (``scheme://netloc``) from a URL.
+
+    This is the coarser granularity selected by
+    :attr:`restgdf.ResilienceConfig.limiter_key` ``= "host"``: every service
+    on one host shares a single token bucket (and 429 cooldown), the polite
+    default when many independent ArcGIS services sit behind a single
+    government host. It is exactly :func:`_service_root`'s
+    no-server-suffix fallback branch, factored out for reuse.
+    """
+    parsed = urlparse(url)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
 def _service_root(url: str) -> str:
     """Derive a per-service rate-limit key from a request URL.
 
     Truncates at the first ``FeatureServer``, ``MapServer``,
     ``ImageServer``, or ``SceneServer`` path segment. Falls back to
-    ``scheme://host`` when none of those segments are present.
+    ``scheme://host`` (:func:`_host`) when none of those segments are present.
     """
     parsed = urlparse(url)
     m = _SERVER_TYPE_RE.match(parsed.path)
     if m:
         return f"{parsed.scheme}://{parsed.netloc}{m.group(1)}"
-    return f"{parsed.scheme}://{parsed.netloc}"
+    return _host(url)
 
 
 class LimiterRegistry:

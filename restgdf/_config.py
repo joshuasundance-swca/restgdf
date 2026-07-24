@@ -275,17 +275,64 @@ class TelemetryConfig(BaseModel):
 class ResilienceConfig(BaseModel):
     """Resilience adapter configuration (BL-31).
 
-    Controls the optional stamina-based retry wrapper and per-service-root
-    token-bucket rate limiter. Disabled by default; callers opt in via
-    ``RESTGDF_RESILIENCE_ENABLED=1`` or by constructing explicitly.
+    Controls the optional stamina-based retry wrapper and token-bucket rate
+    limiter used by :class:`restgdf.resilience.ResilientSession`. Disabled by
+    default; callers opt in via ``RESTGDF_RESILIENCE_ENABLED=1`` or by
+    constructing explicitly. ``enabled`` is the **sole** gate for the retry
+    executor -- the retry-tuning fields below never re-gate an
+    already-enabled session; they only shape its behaviour.
+
+    Rate-limit granularity (``limiter_key``)
+    ----------------------------------------
+    ``limiter_key`` selects the key the single token bucket (and the shared
+    429 cooldown) is keyed on:
+
+    * ``"service_root"`` (default, behaviour-preserving) -- one bucket per
+      ArcGIS service root (truncated at ``FeatureServer``/``MapServer``/...),
+      so ``rate_per_service_root_per_second`` is enforced *per service*.
+    * ``"host"`` -- one bucket per ``scheme://host``, so the same rate is
+      enforced across every service on that host. This is the polite default
+      when many independent services sit behind one government host; the
+      configured rate then applies **per host** rather than per service root.
+
+    Both granularities share the one ``rate_per_service_root_per_second``
+    value and one registry -- the field name is historical; read it as
+    "the configured rate, enforced at ``limiter_key`` granularity". Sub-1.0
+    rates (e.g. ``0.5`` req/s -- the natural polite setting) are valid.
+
+    Retry attempts / backoff / budget
+    ---------------------------------
+    The stamina executor reads ``max_attempts``, ``retry_budget_s``,
+    ``wait_initial_s``, ``wait_max_s`` and ``wait_jitter_s`` directly from this
+    config (defaults preserve the historical hardcoded policy exactly). These
+    supersede the inert :class:`RetryConfig` knobs (deprecated in 3.3).
+
+    Budget / cooldown coherence (H1-N3)
+    -----------------------------------
+    A 429 ``Retry-After`` cooldown sleep happens *inside* a retried attempt and
+    ``retry_budget_s`` is a **total** wall-clock budget, so in-attempt cooldown
+    sleeps count against it: honouring a ``Retry-After`` at or above
+    ``retry_budget_s`` collapses the whole retry loop to roughly a single
+    cooldown cycle before giving up. ``respect_retry_after_max_s`` caps how
+    long a single honoured ``Retry-After`` may be; setting it at or above
+    ``retry_budget_s`` therefore lets one cooldown consume the entire budget.
+    Keep ``respect_retry_after_max_s`` below ``retry_budget_s`` if you want
+    more than one real retry after a 429 (the defaults are deliberately equal
+    at ``60.0`` -- one honoured max-length cooldown, then give up).
     """
 
     model_config = _FROZEN
 
     enabled: bool = False
     rate_per_service_root_per_second: float | None = Field(default=None, gt=0)
+    limiter_key: Literal["service_root", "host"] = "service_root"
     respect_retry_after_max_s: float = Field(default=60.0, gt=0)
     fallback_retry_after_seconds: float = Field(default=5.0, gt=0)
+    max_attempts: int = Field(default=5, ge=1)
+    retry_budget_s: float = Field(default=60.0, gt=0)
+    wait_initial_s: float = Field(default=0.5, ge=0)
+    wait_max_s: float = Field(default=10.0, gt=0)
+    wait_jitter_s: float = Field(default=1.0, ge=0)
     backend: str = "stamina"
 
 
@@ -328,6 +375,7 @@ _NEW_ENV_SPEC: tuple[tuple[str, str, _Caster], ...] = (
         "resilience.rate_per_service_root_per_second",
         float,
     ),
+    ("RESTGDF_RESILIENCE_LIMITER_KEY", "resilience.limiter_key", str),
     (
         "RESTGDF_RESILIENCE_RESPECT_RETRY_AFTER_MAX_S",
         "resilience.respect_retry_after_max_s",
@@ -338,6 +386,11 @@ _NEW_ENV_SPEC: tuple[tuple[str, str, _Caster], ...] = (
         "resilience.fallback_retry_after_seconds",
         float,
     ),
+    ("RESTGDF_RESILIENCE_MAX_ATTEMPTS", "resilience.max_attempts", int),
+    ("RESTGDF_RESILIENCE_RETRY_BUDGET_S", "resilience.retry_budget_s", float),
+    ("RESTGDF_RESILIENCE_WAIT_INITIAL_S", "resilience.wait_initial_s", float),
+    ("RESTGDF_RESILIENCE_WAIT_MAX_S", "resilience.wait_max_s", float),
+    ("RESTGDF_RESILIENCE_WAIT_JITTER_S", "resilience.wait_jitter_s", float),
     ("RESTGDF_RESILIENCE_BACKEND", "resilience.backend", str),
 )
 

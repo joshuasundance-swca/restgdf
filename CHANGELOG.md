@@ -6,6 +6,28 @@ All notable changes to restgdf are documented here. This project follows
 ## [Unreleased]
 ### Added
 
+- **Rate-limit / cooldown granularity is now selectable.**
+  `ResilienceConfig.limiter_key` (env `RESTGDF_RESILIENCE_LIMITER_KEY`) chooses
+  whether the token bucket and 429 cooldown key on the ArcGIS *service root*
+  (`"service_root"`, the default — behaviour-preserving) or the *host*
+  (`"host"`). Host granularity applies one polite rate across every service
+  behind a single government host — the correct politeness key when many
+  independent services share one box. The 429 cooldown always follows the same
+  selected key, so a host-level throttle produces a host-wide cooldown (R1 /
+  politeness decision D1). Combined with the sub-1.0 rate fix above, a polite
+  `limiter_key="host"` + `rate_per_service_root_per_second=0.5` bulk crawl now
+  works.
+- **Retry attempts, budget and backoff are now tunable on `ResilienceConfig`.**
+  The stamina executor reads `max_attempts`, `retry_budget_s`, `wait_initial_s`,
+  `wait_max_s` and `wait_jitter_s` (env `RESTGDF_RESILIENCE_MAX_ATTEMPTS`,
+  `RESTGDF_RESILIENCE_RETRY_BUDGET_S`, `RESTGDF_RESILIENCE_WAIT_INITIAL_S`,
+  `RESTGDF_RESILIENCE_WAIT_MAX_S`, `RESTGDF_RESILIENCE_WAIT_JITTER_S`) from the
+  config it already receives, instead of hardcoded literals. Defaults
+  (`5` / `60.0` / `0.5` / `10.0` / `1.0`) preserve the historical retry policy
+  byte-for-byte, and `ResilienceConfig.enabled` remains the *sole* gate — the
+  new knobs only tune an already-enabled session, they never turn retries off
+  (R2). These live knobs supersede the inert `RetryConfig` fields (now
+  deprecated).
 - **The resilient retry path now emits DEBUG observability logs.** The
   `restgdf.retry` logger (previously created but never used) now records a
   DEBUG line for each scheduled retry (attempt number, backoff wait, and the
