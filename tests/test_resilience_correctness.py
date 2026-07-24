@@ -196,3 +196,60 @@ class TestTransportErrorRetryAndMapping:
             async with session.get(_SVC_URL) as resp:
                 await resp.read()
         assert stub._call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# H1-N2 — cooldown wait must not erase a concurrently-set fresher deadline
+# ---------------------------------------------------------------------------
+
+
+class TestCooldownRaceSafety:
+    @pytest.mark.xfail(strict=True, reason="H1-N2: fixed in next commit")
+    @pytest.mark.asyncio
+    async def test_wait_preserves_fresher_concurrent_deadline(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from restgdf.resilience._limiter import CooldownRegistry
+
+        reg = CooldownRegistry()
+        key = "https://example.com/arcgis/rest/services/X/FeatureServer"
+        reg.set_cooldown(key, 0.05)  # short initial deadline
+
+        sleeps: list[float] = []
+
+        async def fake_sleep(d: float, *a: Any, **kw: Any) -> None:
+            sleeps.append(d)
+            if len(sleeps) == 1:
+                # Simulate a concurrent 429 installing a *fresher* (longer)
+                # deadline while this waiter is asleep on the original one.
+                reg.set_cooldown(key, 100.0)
+
+        monkeypatch.setattr("asyncio.sleep", fake_sleep)
+        await reg.wait_if_cooling(key)
+
+        # Buggy code slept once on the 0.05s deadline then unconditionally
+        # popped, erasing the fresher 100s cooldown. The fix re-reads the
+        # deadline after sleeping and honours the newer one (a second sleep).
+        assert len(sleeps) >= 2
+        assert max(sleeps) > 1.0
+
+    @pytest.mark.asyncio
+    async def test_wait_clears_own_deadline_when_unchanged(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Behaviour-preservation guard: with no concurrent set, the waiter
+        # still clears its own (expired) deadline exactly once.
+        from restgdf.resilience._limiter import CooldownRegistry
+
+        reg = CooldownRegistry()
+        key = "https://example.com/arcgis/rest/services/Y/FeatureServer"
+        reg.set_cooldown(key, 0.05)
+
+        async def fake_sleep(_d: float, *a: Any, **kw: Any) -> None:
+            return None
+
+        monkeypatch.setattr("asyncio.sleep", fake_sleep)
+        await reg.wait_if_cooling(key)
+        assert key not in reg._deadlines
