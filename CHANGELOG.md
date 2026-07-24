@@ -31,8 +31,9 @@ All notable changes to restgdf are documented here. This project follows
 - **The resilient retry path now emits DEBUG observability logs.** The
   `restgdf.retry` logger (previously created but never used) now records a
   DEBUG line for each scheduled retry (attempt number, backoff wait, and the
-  failure that triggered it), each 429 cooldown set (service-root key and
-  seconds), and each exhaustion mapping (the `restgdf.errors` type the final
+  failure that triggered it), each 429 cooldown set (limiter key — the service
+  root, or the host under `limiter_key="host"` — and seconds), and each
+  exhaustion mapping (the `restgdf.errors` type the final
   underlying failure is mapped to). Set `logging.getLogger("restgdf.retry")`
   to `DEBUG` to trace throttling and retries during a bulk crawl — making the
   `docs/recipes/tracing.md` promise true (H1-N4).
@@ -153,11 +154,16 @@ All notable changes to restgdf are documented here. This project follows
   (`restgdf.utils._http.default_headers`, W2-10 / CONFIG-01 / AUTH-03).
   **Wire-visible behavior change:** some Esri deployments sniff the
   `User-Agent`, so a WAF or usage policy keyed on `"Mozilla/5.0"` may now
-  see `restgdf/<version>`. Override it explicitly per request
-  (`headers={"User-Agent": ...}`, still wins) or globally via
-  `RESTGDF_TRANSPORT_USER_AGENT` / `TransportConfig.user_agent`. The
-  exported `DEFAULT_METADATA_HEADERS` constant keeps its historical value
-  for back-compat but no longer determines the wire `User-Agent`.
+  see `restgdf/<version>`. Override it globally via
+  `RESTGDF_TRANSPORT_USER_AGENT` / `TransportConfig.user_agent` — the
+  sole lever on the metadata/`Directory`/crawl path, which has no
+  `headers=` seam — or per request (`headers={"User-Agent": ...}`, still
+  wins) on the feature/query surfaces (`get_feature_count`,
+  `get_object_ids`, streaming/`get_gdf`/stats) that accept one (3.3
+  correction: this bullet originally implied the per-request override
+  applies everywhere). The exported `DEFAULT_METADATA_HEADERS` constant
+  keeps its historical value for back-compat but no longer determines the
+  wire `User-Agent`.
 - **Setting a currently-inert `RESTGDF_*` knob now warns.** `Config.from_env`
   (hence `get_config()`) emits one `restgdf._config.InertConfigWarning`
   (a `UserWarning`) naming any set-but-unwired `RESTGDF_RETRY_*` /
@@ -1000,7 +1006,8 @@ Earlier releases were not formally tracked here. See the
 [PyPI release notes](https://pypi.org/project/restgdf/#history) for pre-2.0
 changes.
 
-[Unreleased]: https://github.com/joshuasundance-swca/restgdf/compare/v3.1.0...HEAD
-[3.1.0]: https://github.com/joshuasundance-swca/restgdf/compare/v3.0.0...v3.1.0
-[3.0.0]: https://github.com/joshuasundance-swca/restgdf/compare/v2.0.0...v3.0.0
-[2.0.0]: https://github.com/joshuasundance-swca/restgdf/releases/tag/v2.0.0
+[Unreleased]: https://github.com/joshuasundance-swca/restgdf/compare/3.2.0...HEAD
+[3.2.0]: https://github.com/joshuasundance-swca/restgdf/compare/3.1.0...3.2.0
+[3.1.0]: https://github.com/joshuasundance-swca/restgdf/compare/3.0.0...3.1.0
+[3.0.0]: https://github.com/joshuasundance-swca/restgdf/compare/2.0.0...3.0.0
+[2.0.0]: https://github.com/joshuasundance-swca/restgdf/releases/tag/2.0.0
