@@ -191,7 +191,6 @@ class TestResilienceBackendDeprecation:
     precedent) and keeps the field reachable and pinned here until 4.0.
     """
 
-    @pytest.mark.xfail(strict=True, reason="R5: fixed in next commit")
     def test_backend_env_var_emits_deprecation_warning(self) -> None:
         from restgdf._config import Config
 

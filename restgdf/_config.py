@@ -346,6 +346,13 @@ class ResilienceConfig(BaseModel):
     Keep ``respect_retry_after_max_s`` below ``retry_budget_s`` if you want
     more than one real retry after a 429 (the defaults are deliberately equal
     at ``60.0`` -- one honoured max-length cooldown, then give up).
+
+    .. deprecated:: 3.3
+        ``backend`` is dead config -- ``"stamina"`` is the only implementation
+        and the executor never reads the field. Setting
+        ``RESTGDF_RESILIENCE_BACKEND`` emits a :class:`DeprecationWarning`; the
+        field stays reachable (default ``"stamina"``) for back-compat and is
+        removed in 4.0.
     """
 
     model_config = _FROZEN
@@ -572,6 +579,22 @@ class Config(BaseModel):
                 stacklevel=_warn_stacklevel,
             )
             _coerce(old_key, dotted, caster)
+
+        # R5: ``backend`` is dead config -- "stamina" is the only backend and
+        # the resilience executor never reads the field. It shipped as a public
+        # field in 3.2.0, so it cannot be removed in a minor; deprecate the
+        # env-var path here (mirroring the _DEPRECATED_ALIASES precedent above)
+        # and remove the field + this warning in 4.0. Field *construction* is
+        # intentionally NOT deprecated -- Field(deprecated=True) warns on every
+        # attribute read and would trip the restgdf.* DeprecationWarning
+        # escalation (judge-R5 footgun note).
+        if "RESTGDF_RESILIENCE_BACKEND" in source:
+            warnings.warn(
+                "RESTGDF_RESILIENCE_BACKEND is deprecated and has no effect "
+                "('stamina' is the only backend); it is removed in 4.0.",
+                DeprecationWarning,
+                stacklevel=_warn_stacklevel,
+            )
 
         # W2-13 (TRANSPORT-01 / AUTH-04): a validated-but-inert knob is a
         # silent lie -- the caller set it expecting an effect it never has.

@@ -51,6 +51,12 @@ All notable changes to restgdf are documented here. This project follows
   `InertConfigWarning` (whose text now names the live replacements instead of
   claiming the executor hardcodes its policy). The deprecated fields and env
   keys are removed in 4.0.
+- **`ResilienceConfig.backend` is deprecated.** It has always been dead config
+  — `"stamina"` is the only implementation and the executor never reads the
+  field. Setting `RESTGDF_RESILIENCE_BACKEND` now emits a `DeprecationWarning`
+  (previously it was silently accepted, the one inert resilience knob that
+  escaped `InertConfigWarning`). The field stays reachable and defaults to
+  `"stamina"` for back-compat; it is removed in 4.0 (R5).
 
 ### Fixed
 
