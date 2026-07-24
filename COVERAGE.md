@@ -6,10 +6,10 @@
 | restgdf/\_client/query\_options.py     |       56 |        0 |       12 |        0 |    100% |           |
 | restgdf/\_client/request.py            |       10 |        0 |        4 |        0 |    100% |           |
 | restgdf/\_compat.py                    |       22 |        0 |        2 |        0 |    100% |           |
-| restgdf/\_config.py                    |      139 |        1 |       20 |        1 |     99% |       150 |
+| restgdf/\_config.py                    |      139 |        1 |       20 |        1 |     99% |       151 |
 | restgdf/\_logging.py                   |       57 |        0 |       18 |        1 |     99% | 107-\>109 |
 | restgdf/\_models/\_\_init\_\_.py       |        7 |        0 |        0 |        0 |    100% |           |
-| restgdf/\_models/\_drift.py            |      148 |        2 |       66 |        3 |     98% |224, 244, 332-\>331 |
+| restgdf/\_models/\_drift.py            |      145 |        2 |       66 |        3 |     98% |221, 241, 329-\>328 |
 | restgdf/\_models/\_errors.py           |        3 |        0 |        0 |        0 |    100% |           |
 | restgdf/\_models/\_settings.py         |      100 |        4 |       12 |        0 |     96% |284-285, 296-297 |
 | restgdf/\_models/crawl.py              |       20 |        0 |        0 |        0 |    100% |           |
@@ -39,6 +39,7 @@
 | restgdf/utils/\_\_init\_\_.py          |       12 |        0 |        2 |        0 |    100% |           |
 | restgdf/utils/\_concurrency.py         |       10 |        0 |        0 |        0 |    100% |           |
 | restgdf/utils/\_deprecations.py        |       27 |        0 |        2 |        0 |    100% |           |
+| restgdf/utils/\_geometry.py            |      100 |        0 |       64 |        0 |    100% |           |
 | restgdf/utils/\_http.py                |       66 |        0 |       24 |        0 |    100% |           |
 | restgdf/utils/\_metadata.py            |       94 |        0 |       36 |        1 |     99% | 110-\>107 |
 | restgdf/utils/\_optional.py            |       35 |        1 |        0 |        0 |     97% |        77 |
@@ -46,8 +47,8 @@
 | restgdf/utils/\_query.py               |       31 |        0 |        2 |        0 |    100% |           |
 | restgdf/utils/\_stats.py               |       78 |        3 |       16 |        1 |     96% | 45-46, 95 |
 | restgdf/utils/crawl.py                 |       82 |        1 |       16 |        1 |     98% |        25 |
-| restgdf/utils/getgdf.py                |      389 |        7 |      170 |       14 |     96% |64, 151, 158-\>157, 220-221, 438, 448-\>447, 558-\>560, 563-\>552, 807-\>805, 821-\>819, 850, 866-\>865, 883, 886-\>904, 890-\>892, 892-\>886 |
-| restgdf/utils/getinfo.py               |       64 |        0 |       12 |        0 |    100% |           |
-| restgdf/utils/token.py                 |      180 |        2 |       44 |        4 |     97% |200, 322, 391-\>393, 470-\>exit |
+| restgdf/utils/getgdf.py                |      390 |        7 |      170 |       11 |     97% |65, 152, 159-\>158, 221-222, 439, 449-\>448, 563-\>565, 568-\>557, 855, 888, 891-\>909, 895-\>897, 897-\>891 |
+| restgdf/utils/getinfo.py               |       65 |        0 |       12 |        0 |    100% |           |
+| restgdf/utils/token.py                 |      182 |        3 |       46 |        5 |     96% |183, 206, 328, 397-\>399, 476-\>exit |
 | restgdf/utils/utils.py                 |        8 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                              | **2653** |   **28** |  **704** |   **39** | **98%** |           |
+| **TOTAL**                              | **2754** |   **29** |  **770** |   **37** | **98%** |           |
