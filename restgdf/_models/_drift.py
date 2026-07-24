@@ -121,8 +121,7 @@ def _log_drift(
     logger = get_drift_logger()
     logger.log(
         level,
-        "schema drift on %s: field=%r kind=%s observed_type=%s context=%r "
-        "sample=%r",
+        "schema drift on %s: field=%r kind=%s observed_type=%s context=%r sample=%r",
         model_name,
         path,
         kind,
