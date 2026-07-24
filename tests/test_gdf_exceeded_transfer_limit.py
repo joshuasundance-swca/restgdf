@@ -196,6 +196,31 @@ async def test_get_sub_gdf_allows_non_truncated_page(sample_feature_gdf) -> None
 
 
 @pytest.mark.asyncio
+async def test_get_sub_gdf_non_json_body_falls_through_to_read_file(
+    sample_feature_gdf,
+) -> None:
+    """A non-JSON body must NOT misfire a truncation raise: the guard falls
+    through to ``read_file`` (which owns its own parse errors)."""
+    session = _TextSession("this is not json at all")
+
+    with patch(
+        "restgdf.utils.getgdf.supported_drivers",
+        new={"GeoJSON": "rw"},
+    ), patch(
+        "restgdf.utils.getgdf.read_file",
+        return_value=sample_feature_gdf,
+    ) as mock_read_file:
+        result = await get_sub_gdf(
+            "https://example.com/layer/0",
+            session,
+            query_data={"where": "1=1"},
+        )
+
+    assert result.equals(sample_feature_gdf)
+    mock_read_file.assert_called_once()
+
+
+@pytest.mark.asyncio
 async def test_get_gdf_raises_on_truncated_page(sample_feature_gdf) -> None:
     """End-to-end through the public ``get_gdf``: a truncated page propagates
     a PaginationError instead of a silently-short GeoDataFrame.
