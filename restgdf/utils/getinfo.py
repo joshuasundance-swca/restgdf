@@ -143,11 +143,7 @@ async def _feature_count_with_timeout(
     for attempt in range(max_attempts):
         try:
             return await get_feature_count(url, session, **kwargs)
-        except (
-            asyncio.TimeoutError,
-            TimeoutError,
-            ServerTimeoutError,
-        ) as exc:
+        except (TimeoutError, ServerTimeoutError) as exc:
             last_exc = exc
         if attempt < max_attempts - 1:
             await asyncio.sleep(0.1 * (2**attempt))

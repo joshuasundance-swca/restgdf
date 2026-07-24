@@ -11,7 +11,8 @@ from __future__ import annotations
 import inspect
 import warnings
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
+from collections.abc import Callable
 
 F = TypeVar("F", bound=Callable[..., Any])
 

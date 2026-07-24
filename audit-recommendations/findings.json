@@ -1,0 +1,798 @@
+[
+ {
+  "id": "PAGINATION-01",
+  "axis": "PAGINATION",
+  "title": "GeoDataFrame path (get_gdf / stream_gdf_chunks) silently drops rows on exceededTransferLimit",
+  "severity": "high",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/utils/getgdf.py:309-335, 374-449, 489-525",
+  "files": [
+   "restgdf/utils/getgdf.py",
+   "restgdf/featurelayer/featurelayer.py",
+   "docs/recipes/streaming.md",
+   "README.md"
+  ]
+ },
+ {
+  "id": "PAGINATION-02",
+  "axis": "PAGINATION",
+  "title": "Offset/count pagination issued without orderByFields — unstable ordering can silently duplicate or drop rows across pages",
+  "severity": "high",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/utils/getgdf.py:264-293, restgdf/utils/_pagination.py:118-122",
+  "files": [
+   "restgdf/utils/getgdf.py",
+   "restgdf/utils/_pagination.py"
+  ]
+ },
+ {
+  "id": "PAGINATION-03",
+  "axis": "PAGINATION",
+  "title": "on_truncation='split' builds unbounded nested OID IN-lists, making it unusable on large layers (the exact truncation case)",
+  "severity": "low",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/utils/getgdf.py:694-714, restgdf/utils/utils.py:15-20",
+  "files": [
+   "restgdf/utils/getgdf.py",
+   "restgdf/utils/utils.py"
+  ]
+ },
+ {
+  "id": "AUTH-01",
+  "axis": "AUTH",
+  "title": "Caller-supplied token leaks into URL query string on the documented FeatureLayer(token=...) / data={'token':...} path",
+  "severity": "high",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/utils/_http.py:117-123, restgdf/utils/_http.py:126-146, restgdf/_client/request.py:43-49, restgdf/utils/_query.py:69-78, restgdf/featurelayer/featurelayer.py:143-150",
+  "files": [
+   "restgdf/utils/_http.py",
+   "restgdf/utils/_query.py",
+   "tests/test_gate3_fixes.py",
+   "README.md"
+  ]
+ },
+ {
+  "id": "AUTH-02",
+  "axis": "AUTH",
+  "title": "InvalidCredentialsError and TokenRequiredError are documented HTTP-401/499 contracts but have no raise site (dead taxonomy)",
+  "severity": "medium",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/errors.py:268-272, restgdf/errors.py:302-307, restgdf/utils/token.py:280-305, restgdf/__init__.py:50,61,89,110",
+  "files": [
+   "restgdf/utils/token.py",
+   "restgdf/errors.py",
+   "ARCHITECTURE.md",
+   "MIGRATION.md"
+  ]
+ },
+ {
+  "id": "AUTH-03",
+  "axis": "AUTH",
+  "title": "verify_ssl is honored only for the token POST, not for data requests — contradicts the MIGRATION.md claim and half-breaks verify_ssl=False sessions",
+  "severity": "medium",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/utils/token.py:278, restgdf/utils/token.py:345-416, MIGRATION.md:465-467",
+  "files": [
+   "restgdf/utils/token.py",
+   "restgdf/utils/getgdf.py",
+   "MIGRATION.md"
+  ]
+ },
+ {
+  "id": "AUTH-04",
+  "axis": "AUTH",
+  "title": "AuthConfig's three refresh-threshold knobs are dead config — never read by the token-refresh path",
+  "severity": "low",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/_config.py:135-137, restgdf/utils/token.py:119,138-140,164-166, restgdf/_models/credentials.py:78-79",
+  "files": [
+   "restgdf/_config.py",
+   "restgdf/utils/token.py",
+   "restgdf/_models/credentials.py",
+   "MIGRATION.md"
+  ]
+ },
+ {
+  "id": "CONFIG-01",
+  "axis": "CONFIG",
+  "title": "TransportConfig.user_agent / verify_ssl are validated and env-settable but never applied to the main request paths (silent no-op)",
+  "severity": "high",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/utils/_http.py:18-34, restgdf/_config.py:73-79,220-221, restgdf/utils/getgdf.py:90,327,510,612",
+  "files": [
+   "restgdf/utils/_http.py",
+   "restgdf/utils/getgdf.py",
+   "restgdf/_config.py",
+   "restgdf/_models/_settings.py"
+  ]
+ },
+ {
+  "id": "CONFIG-02",
+  "axis": "CONFIG",
+  "title": "AuthConfig is never wired into token sessions — its env vars and the whole sub-config are dead for the documented auth path",
+  "severity": "medium",
+  "effort": "L",
+  "governance": false,
+  "location": "restgdf/_config.py:119-166,235-236,267-273, restgdf/utils/token.py:104-166, restgdf/featurelayer/featurelayer.py:91-98,212",
+  "files": [
+   "restgdf/_config.py",
+   "restgdf/utils/token.py",
+   "restgdf/featurelayer/featurelayer.py",
+   "README.md",
+   "MIGRATION.md"
+  ]
+ },
+ {
+  "id": "CONFIG-03",
+  "axis": "CONFIG",
+  "title": "Documented Config precedence layer 'Config(...) instance passed explicitly' has no implementation",
+  "severity": "low",
+  "effort": "M",
+  "governance": false,
+  "location": "ARCHITECTURE.md:113-119, restgdf/_config.py:415-423, restgdf/featurelayer/featurelayer.py:91-98,212",
+  "files": [
+   "ARCHITECTURE.md",
+   "restgdf/_config.py",
+   "restgdf/featurelayer/featurelayer.py"
+  ]
+ },
+ {
+  "id": "CONFIG-04",
+  "axis": "CONFIG",
+  "title": "Documented Config precedence layer '.env file in the working directory' is never loaded",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "ARCHITECTURE.md:118, restgdf/_config.py:344, restgdf/_models/_settings.py:197",
+  "files": [
+   "ARCHITECTURE.md",
+   "restgdf/_config.py"
+  ]
+ },
+ {
+  "id": "CICD-01",
+  "axis": "CICD",
+  "title": "No CI test gate between tag push / workflow_dispatch and PyPI publish",
+  "severity": "high",
+  "effort": "M",
+  "governance": false,
+  "location": ".github/workflows/publish_on_pypi.yml:16-18,124-147, .github/workflows/pytest.yml:3-9",
+  "files": [
+   ".github/workflows/publish_on_pypi.yml",
+   ".github/workflows/pytest.yml"
+  ]
+ },
+ {
+  "id": "CICD-02",
+  "axis": "CICD",
+  "title": "CHANGELOG release gate passes on an empty section — 3.0.0 shipped with zero documented changes",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": ".github/workflows/publish_on_pypi.yml:85-102, CHANGELOG.md:6-8",
+  "files": [
+   ".github/workflows/publish_on_pypi.yml",
+   "CHANGELOG.md"
+  ]
+ },
+ {
+  "id": "CICD-03",
+  "axis": "CICD",
+  "title": "bumpver release path is workflow_dispatch-only and CHANGELOG-blind, so the BL-41 publish gate is the last line",
+  "severity": "low",
+  "effort": "M",
+  "governance": false,
+  "location": ".github/workflows/bumpver.yml:3-4,39-55, .github/workflows/publish_on_pypi.yml:85-102",
+  "files": [
+   ".github/workflows/bumpver.yml",
+   "scripts/bumpver_stamp_date.py",
+   "CHANGELOG.md"
+  ]
+ },
+ {
+  "id": "CICD-04",
+  "axis": "CICD",
+  "title": "97% coverage floor is enforced only post-merge; PR gate measures no coverage, contradicting CONTRIBUTING",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": ".github/workflows/pytest.yml:61-62, .github/workflows/coverage.yml:34-44, CONTRIBUTING.md:91,98, pyproject.toml:147",
+  "files": [
+   ".github/workflows/pytest.yml",
+   "CONTRIBUTING.md"
+  ]
+ },
+ {
+  "id": "CICD-05",
+  "axis": "CICD",
+  "title": "Release-adjacent write-token workflows use unpinned mutable action tags while PR workflows are SHA-pinned",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": ".github/workflows/bumpver.yml:23,28, .github/workflows/coverage.yml:22,27,48, .github/workflows/readthedocs.yml:23,28,43",
+  "files": [
+   ".github/workflows/bumpver.yml",
+   ".github/workflows/coverage.yml",
+   ".github/workflows/readthedocs.yml"
+  ]
+ },
+ {
+  "id": "CICD-06",
+  "axis": "CICD",
+  "title": "verify_attestation.yml setup-python pin comment drift (# v6.0.0 on a v6.2.0 SHA)",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": ".github/workflows/verify_attestation.yml:46, .github/workflows/pytest.yml:33",
+  "files": [
+   ".github/workflows/verify_attestation.yml"
+  ]
+ },
+ {
+  "id": "ERRTAX-01",
+  "axis": "ERRTAX",
+  "title": "A 400/401 from /generateToken escapes the RestgdfError umbrella as a raw aiohttp.ClientResponseError; InvalidCredentialsError is never raised",
+  "severity": "medium",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/utils/token.py:280,287-305; restgdf/errors.py:268-272",
+  "files": [
+   "restgdf/utils/token.py"
+  ]
+ },
+ {
+  "id": "ERRTAX-02",
+  "axis": "ERRTAX",
+  "title": "AuthenticationError (and RestgdfTimeoutError) co-inherit OSError, so token retry's except (OSError,...) swallows a deterministic auth error and mislabels it as a transient refresh failure",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/utils/token.py:43,272-312,172-177; restgdf/errors.py:201,352",
+  "files": [
+   "restgdf/utils/token.py"
+  ]
+ },
+ {
+  "id": "ERRTAX-03",
+  "axis": "ERRTAX",
+  "title": "498/499 auth conditions are detected only by HTTP status code, not by the in-body ArcGIS error envelope ArcGIS commonly returns",
+  "severity": "low",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/utils/token.py:381-414; restgdf/errors.py:275-276,302-303,320-326",
+  "files": [
+   "restgdf/utils/token.py"
+  ]
+ },
+ {
+  "id": "ERRTAX-04",
+  "axis": "ERRTAX",
+  "title": "Documented 'will be dropped in 3.1+' ValueError co-inheritance is a semver-breaking change with no tracked deprecation path",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/errors.py:62-64; restgdf/errors.py:11-21; MIGRATION.md:489-494",
+  "files": [
+   "restgdf/errors.py",
+   "MIGRATION.md",
+   "CHANGELOG.md"
+  ]
+ },
+ {
+  "id": "ASYNC-01",
+  "axis": "ASYNC",
+  "title": "Reactive 498 refresh fires a redundant /generateToken per concurrent requester, breaking the documented single-flight contract",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/utils/token.py:389-394",
+  "files": [
+   "restgdf/utils/token.py",
+   "tests/test_token_498_499.py"
+  ]
+ },
+ {
+  "id": "ASYNC-02",
+  "axis": "ASYNC",
+  "title": "Cached DataFrame/GeoDataFrame returned by reference to every (possibly concurrent) caller — shared mutable state",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/featurelayer/featurelayer.py:301,597,632,668",
+  "files": [
+   "restgdf/featurelayer/featurelayer.py"
+  ]
+ },
+ {
+  "id": "ASYNC-03",
+  "axis": "ASYNC",
+  "title": "on_truncation='split' sub-fetches bypass the max_concurrent_pages accounting, so peak in-flight exceeds the advertised bound",
+  "severity": "low",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/utils/getgdf.py:879-902,694,715-720",
+  "files": [
+   "restgdf/utils/getgdf.py"
+  ]
+ },
+ {
+  "id": "TRANSPORT-01",
+  "axis": "TRANSPORT",
+  "title": "Public RetryConfig / LimiterConfig knobs are never wired into the resilience executor; ResilientSession hardcodes attempts/timeout/backoff",
+  "severity": "medium",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/resilience/_retry.py:167-174; restgdf/_config.py:92-109, 225-229",
+  "files": [
+   "restgdf/resilience/_retry.py",
+   "restgdf/_config.py"
+  ]
+ },
+ {
+  "id": "TRANSPORT-02",
+  "axis": "TRANSPORT",
+  "title": "_parse_retry_after accepts NaN/Inf, leaking non-finite values into RateLimitError.retry_after and the 429 cooldown",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/resilience/_errors.py:22-27; restgdf/resilience/_retry.py:194-200, 220-227",
+  "files": [
+   "restgdf/resilience/_errors.py",
+   "tests/test_resilience_retry.py"
+  ]
+ },
+ {
+  "id": "ADAPTERS-01",
+  "axis": "ADAPTERS",
+  "title": "get_fields(types=True), _field_rows and get_fields_frame raise KeyError on permissive-tier fields missing 'name'/'type'",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/utils/_metadata.py:144-157",
+  "files": [
+   "restgdf/utils/_metadata.py"
+  ]
+ },
+ {
+  "id": "ADAPTERS-02",
+  "axis": "ADAPTERS",
+  "title": "geopandas adapter docstrings name stream_rows and iter_rows as input but those rows raise TypeError",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/adapters/geopandas.py:47-52,106-109,126-128",
+  "files": [
+   "restgdf/adapters/geopandas.py"
+  ]
+ },
+ {
+  "id": "ADAPTERS-03",
+  "axis": "ADAPTERS",
+  "title": "resolve_domains crashes on malformed-but-real domain metadata",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/adapters/pandas.py:98-105",
+  "files": [
+   "restgdf/adapters/pandas.py",
+   "tests/test_resolve_domains.py"
+  ]
+ },
+ {
+  "id": "API-01",
+  "axis": "API",
+  "title": "FeatureLayer.get_value_counts / get_nested_count send returnGeometry=True and outFields=* because the instance datadict clobbers the stats-only flags",
+  "severity": "medium",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/utils/_stats.py:117-126 and 165-174; restgdf/featurelayer/featurelayer.py:141-150,626-631,662-667",
+  "files": [
+   "restgdf/utils/_stats.py",
+   "restgdf/_client/request.py"
+  ]
+ },
+ {
+  "id": "API-02",
+  "axis": "API",
+  "title": "FieldDoesNotExistError exported at runtime but absent from the TYPE_CHECKING block — `from restgdf import FieldDoesNotExistError` is unresolved for static type checkers on a py.typed package",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/__init__.py:45-63, restgdf/__init__.py:87, restgdf/__init__.py:174",
+  "files": [
+   "restgdf/__init__.py"
+  ]
+ },
+ {
+  "id": "API-03",
+  "axis": "API",
+  "title": "No test asserts the three public-surface sources of truth stay set-equal, so the TYPE_CHECKING block can silently drift from __all__/_LAZY_EXPORTS",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "tests/test_public_api.py:80-107, restgdf/__init__.py:8-63, restgdf/__init__.py:126-196",
+  "files": [
+   "tests/test_public_api.py",
+   "restgdf/__init__.py"
+  ]
+ },
+ {
+  "id": "API-04",
+  "axis": "API",
+  "title": "get_nested_count documents 'two or more fields' but nested_count hardcodes fields[0]/fields[1]: silently wrong for 3+ fields, IndexError for 1",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/utils/_stats.py:192-199; restgdf/featurelayer/featurelayer.py:634-667",
+  "files": [
+   "restgdf/utils/_stats.py",
+   "restgdf/featurelayer/featurelayer.py"
+  ]
+ },
+ {
+  "id": "TYPING-01",
+  "axis": "TYPING",
+  "title": "CI/pre-commit mypy gate is defanged: --ignore-missing-imports + no runtime deps + no pydantic plugin masks all real type errors",
+  "severity": "medium",
+  "effort": "M",
+  "governance": false,
+  "location": ".pre-commit-config.yaml:26-31, pyproject.toml:197-207",
+  "files": [
+   ".pre-commit-config.yaml",
+   "pyproject.toml",
+   ".github/workflows/pytest.yml"
+  ]
+ },
+ {
+  "id": "TYPING-02",
+  "axis": "TYPING",
+  "title": "AsyncHTTPSession Protocol does not structurally match aiohttp.ClientSession; constructing FeatureLayer with a ClientSession is a mypy error",
+  "severity": "medium",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/_client/_protocols.py:22-74, restgdf/featurelayer/featurelayer.py:91-98",
+  "files": [
+   "restgdf/_client/_protocols.py",
+   "restgdf/featurelayer/featurelayer.py"
+  ]
+ },
+ {
+  "id": "TYPING-03",
+  "axis": "TYPING",
+  "title": "Genuine union-attr bug in strict-scoped _models/_drift.py masked by the gate",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/_models/_drift.py:82-89",
+  "files": [
+   "restgdf/_models/_drift.py"
+  ]
+ },
+ {
+  "id": "TYPING-04",
+  "axis": "TYPING",
+  "title": "get_gdf's `session: ClientSession | None` annotation contradicts the R-71 AsyncHTTPSession widening it sits beneath",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/utils/getgdf.py:501-525, 489-498",
+  "files": [
+   "restgdf/utils/getgdf.py"
+  ]
+ },
+ {
+  "id": "TYPING-05",
+  "axis": "TYPING",
+  "title": "Misleading `list[FieldSpec]` annotation in _metadata._field_rows — value is actually list[dict]",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/utils/_metadata.py:153-157, 55",
+  "files": [
+   "restgdf/utils/_metadata.py"
+  ]
+ },
+ {
+  "id": "TELEMETRY-01",
+  "axis": "TELEMETRY",
+  "title": "Documented log-correlation recipe raises logging errors on every record emitted outside an active span",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "docs/recipes/observability.md:68-72, restgdf/_logging.py:171-182",
+  "files": [
+   "restgdf/_logging.py",
+   "docs/recipes/observability.md",
+   "tests/test_telemetry_log_span_correlation.py"
+  ]
+ },
+ {
+  "id": "TELEMETRY-02",
+  "axis": "TELEMETRY",
+  "title": "Schema-drift dedup key excludes service context, silently masking per-service drift in multi-service crawls",
+  "severity": "low",
+  "effort": "M",
+  "governance": false,
+  "location": "restgdf/_models/_drift.py:93-122, restgdf/directory/directory.py:75, MIGRATION.md:790-792",
+  "files": [
+   "restgdf/_models/_drift.py",
+   "MIGRATION.md",
+   "tests/test_models_primitives.py"
+  ]
+ },
+ {
+  "id": "TELEMETRY-03",
+  "axis": "TELEMETRY",
+  "title": "Auth module bypasses the get_logger factory, so restgdf.auth never receives a NullHandler",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/utils/token.py:37, restgdf/_logging.py:24-33,56-79",
+  "files": [
+   "restgdf/utils/token.py"
+  ]
+ },
+ {
+  "id": "OPTDEPS-01",
+  "axis": "OPTDEPS",
+  "title": "`require_*` catches only `ModuleNotFoundError`, so a broken (present-but-unimportable) geo dependency escapes the documented OptionalDependencyError contract",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/utils/_optional.py:29-35",
+  "files": [
+   "restgdf/utils/_optional.py",
+   "tests/test_base_install.py"
+  ]
+ },
+ {
+  "id": "OPTDEPS-02",
+  "axis": "OPTDEPS",
+  "title": "MIGRATION.md documents a non-existent `extra=\"pandas\"` on OptionalDependencyError and the wrong extra for get_df",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "MIGRATION.md:211-215, restgdf/errors.py:68-74, restgdf/utils/_optional.py:18-26",
+  "files": [
+   "MIGRATION.md",
+   "restgdf/errors.py",
+   "restgdf/utils/_optional.py"
+  ]
+ },
+ {
+  "id": "TESTS-01",
+  "axis": "TESTS",
+  "title": "Coverage floor (fail_under=97) is never a PR gate — only a post-merge job on main enforces it",
+  "severity": "low",
+  "effort": "M",
+  "governance": false,
+  "location": ".github/workflows/pytest.yml:62, .github/workflows/coverage.yml:3-5,34-44, pyproject.toml:147,173",
+  "files": [
+   ".github/workflows/pytest.yml",
+   ".github/workflows/coverage.yml",
+   "pyproject.toml"
+  ]
+ },
+ {
+  "id": "TESTS-02",
+  "axis": "TESTS",
+  "title": "Unified FakeSession turns verb-pinning characterization tests into verb-agnostic mirrors",
+  "severity": "low",
+  "effort": "M",
+  "governance": false,
+  "location": "tests/conftest.py:142-163, tests/test_characterization.py:35-59,107-128, restgdf/utils/_query.py:44, restgdf/utils/_http.py:117-123",
+  "files": [
+   "tests/conftest.py",
+   "tests/test_characterization.py"
+  ]
+ },
+ {
+  "id": "TESTS-03",
+  "axis": "TESTS",
+  "title": "coverage omit references a nonexistent file restgdf/app.py",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "pyproject.toml:138",
+  "files": [
+   "pyproject.toml"
+  ]
+ },
+ {
+  "id": "PACKAGING-01",
+  "axis": "PACKAGING",
+  "title": "CHANGELOG 3.0.0 release was mis-promoted: empty 3.0.0 section, duplicate 2.0.0 headers, missing link ref - and the CI gate passes anyway",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "CHANGELOG.md:6-8, CHANGELOG.md:536, CHANGELOG.md:592-593, .github/workflows/publish_on_pypi.yml:85-102",
+  "files": [
+   "CHANGELOG.md",
+   ".github/workflows/publish_on_pypi.yml"
+  ]
+ },
+ {
+  "id": "PACKAGING-02",
+  "axis": "PACKAGING",
+  "title": "SECURITY.md Supported Versions table omits 3.x while the package is at 3.0.0",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "SECURITY.md:5-12, pyproject.toml:14",
+  "files": [
+   "SECURITY.md"
+  ]
+ },
+ {
+  "id": "PACKAGING-03",
+  "axis": "PACKAGING",
+  "title": "ARCHITECTURE.md and CONTRIBUTING.md describe `restgdf[dev]` as including twine/build, but the dev extra ships neither",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "ARCHITECTURE.md:177, CONTRIBUTING.md:52-53, pyproject.toml:87-98",
+  "files": [
+   "pyproject.toml",
+   "ARCHITECTURE.md",
+   "CONTRIBUTING.md"
+  ]
+ },
+ {
+  "id": "DOCS-01",
+  "axis": "DOCS",
+  "title": "Published CHANGELOG has an empty `## [3.0.0]` header and MIGRATION.md is framed entirely as 2.0 — both included verbatim into readthedocs/llms.txt",
+  "severity": "medium",
+  "effort": "M",
+  "governance": false,
+  "location": "CHANGELOG.md:6-8; MIGRATION.md:1-5,518; docs/changelog.md:5-6; docs/migration.md:5-6",
+  "files": [
+   "CHANGELOG.md",
+   "MIGRATION.md"
+  ]
+ },
+ {
+  "id": "DOCS-02",
+  "axis": "DOCS",
+  "title": "configuration.rst documents four RESTGDF_* env vars that are not wired into Config.from_env (silently ignored)",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "docs/configuration.rst:44,53,56,59; restgdf/_config.py:219-257",
+  "files": [
+   "docs/configuration.rst",
+   "restgdf/_config.py"
+  ]
+ },
+ {
+  "id": "DOCS-03",
+  "axis": "DOCS",
+  "title": "ARCHITECTURE.md claims FeatureLayer/Directory own a session and expose close(); they do not",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "ARCHITECTURE.md:129-143; CLAUDE.md:87-91",
+  "files": [
+   "ARCHITECTURE.md"
+  ]
+ },
+ {
+  "id": "DOCS-04",
+  "axis": "DOCS",
+  "title": "configuration.rst and authentication.rst claim `.env`-file / pydantic-settings support that does not exist",
+  "severity": "medium",
+  "effort": "S",
+  "governance": false,
+  "location": "docs/configuration.rst:4-12; docs/authentication.rst:101-107; restgdf/_config.py:295-302; CLAUDE.md:87",
+  "files": [
+   "docs/configuration.rst",
+   "docs/authentication.rst",
+   "ARCHITECTURE.md"
+  ]
+ },
+ {
+  "id": "DOCS-05",
+  "axis": "DOCS",
+  "title": "configuration.rst Config(...) example uses fields that raise (extra='forbid'/frozen) and wrong nesting",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "docs/configuration.rst:24-28; restgdf/_config.py:58,73-79,304-311",
+  "files": [
+   "docs/configuration.rst"
+  ]
+ },
+ {
+  "id": "DOCS-06",
+  "axis": "DOCS",
+  "title": "ARCHITECTURE.md documents a structured detail type `ErrorPayload` that does not exist",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "ARCHITECTURE.md:88-90; restgdf/errors.py:419-439",
+  "files": [
+   "ARCHITECTURE.md"
+  ]
+ },
+ {
+  "id": "DOCS-07",
+  "axis": "DOCS",
+  "title": "ARCHITECTURE.md logger-hierarchy names contradict the enforced LOGGER_SUFFIXES allowlist",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "ARCHITECTURE.md:97-104; restgdf/_logging.py:24-33,69-73",
+  "files": [
+   "ARCHITECTURE.md"
+  ]
+ },
+ {
+  "id": "DOCS-08",
+  "axis": "DOCS",
+  "title": "CONTRIBUTING.md targets the stale `integration/3.0-rewrite` branch and references unshipped plan.md",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "CONTRIBUTING.md:1-6,86,16-17",
+  "files": [
+   "CONTRIBUTING.md"
+  ]
+ },
+ {
+  "id": "DOCS-09",
+  "axis": "DOCS",
+  "title": "docs/errors.rst documents FieldDoesNotExistError attribute as `field`; the real attribute is `field_name`",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "docs/errors.rst:118; restgdf/errors.py:143-167",
+  "files": [
+   "docs/errors.rst"
+  ]
+ },
+ {
+  "id": "DOCS-10",
+  "axis": "DOCS",
+  "title": "README 2.0 collapsible and SECURITY.md supported-versions are stale for the shipped v3.0.0",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "README.md:51-138,443; SECURITY.md:7-11; CLAUDE.md:26-30",
+  "files": [
+   "README.md",
+   "SECURITY.md"
+  ]
+ },
+ {
+  "id": "DOCS-11",
+  "axis": "DOCS",
+  "title": "_config.py module docstring says \"Seven\" sub-configs; there are eight",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "restgdf/_config.py:3-6,295-311",
+  "files": [
+   "restgdf/_config.py",
+   "CHANGELOG.md"
+  ]
+ },
+ {
+  "id": "DOCS-12",
+  "axis": "DOCS",
+  "title": "docs/quickstart.md light-core example uses the deprecated row_dict_generator",
+  "severity": "low",
+  "effort": "S",
+  "governance": false,
+  "location": "docs/quickstart.md:35; CLAUDE.md:54-57",
+  "files": [
+   "docs/quickstart.md"
+  ]
+ }
+]

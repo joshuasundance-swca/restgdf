@@ -1,11 +1,86 @@
 from __future__ import annotations
 
+import inspect
 import json
 from typing import Any
 
+import aioresponses.core as _aioresponses_core
 import pytest
 import pytest_asyncio
+from aiohttp import ClientResponse as _AiohttpClientResponse
 from aiohttp import ClientSession
+
+# ---------------------------------------------------------------------------
+# aioresponses x aiohttp 3.14 compatibility shim (TEST DOUBLE ONLY).
+#
+# aiohttp 3.14 added a required keyword-only ``stream_writer`` argument to
+# ``ClientResponse.__init__`` (read to seed ``output_size`` when the request
+# was already sent). aioresponses 0.7.9 builds its fake responses without it
+# (``resp = response_class(method, url, **kwargs)`` in aioresponses/core.py),
+# so under aiohttp>=3.14 every mocked request raises, verbatim:
+#     TypeError: ClientResponse.__init__() missing 1 required keyword-only
+#     argument: 'stream_writer'
+#
+# This patches ONLY the aioresponses test double -- never restgdf runtime code
+# and never aiohttp itself -- injecting a no-op stream writer when (and only
+# when) the installed aiohttp actually requires the argument. aioresponses
+# always constructs the double with ``writer=None`` ("request already sent"),
+# so ``ClientResponse.__init__`` reads exactly one attribute off it,
+# ``stream_writer.output_size``; the stub below supplies that and nothing
+# else, leaving every response attribute the tests assert on (status /
+# headers / body / json payload -- reified by aioresponses afterwards)
+# untouched.
+#
+# Inertness: detection is by signature introspection, never a version string.
+# Under aiohttp<3.14 the ``stream_writer`` parameter is absent, the guard is
+# False, and NOTHING below runs -- a complete no-op on the repo's aiohttp
+# 3.13 pin.
+#
+# EXPIRY: remove this shim once aioresponses ships aiohttp-3.14 support
+# upstream -- watch https://github.com/pnuckowski/aioresponses -- at which
+# point the double stops needing the argument and the guard self-disarms.
+# ---------------------------------------------------------------------------
+
+
+def _client_response_requires_stream_writer() -> bool:
+    """Return True iff aiohttp's ``ClientResponse`` requires ``stream_writer``.
+
+    Signature introspection only -- present *and* without a default (i.e.
+    aiohttp 3.14+). Never parses a version string, so it disarms the moment
+    the argument is no longer required.
+    """
+    param = inspect.signature(_AiohttpClientResponse.__init__).parameters.get(
+        "stream_writer",
+    )
+    return param is not None and param.default is inspect.Parameter.empty
+
+
+if _client_response_requires_stream_writer():
+
+    class _NoOpStreamWriter:
+        """Minimal stand-in for aiohttp's stream writer in the aioresponses double.
+
+        aioresponses passes ``writer=None`` ("request already sent"), so
+        ``ClientResponse.__init__`` reads only ``stream_writer.output_size``.
+        Nothing else about a real writer is exercised for a pre-fed fake body.
+        """
+
+        output_size = 0
+
+    class _StreamWriterShimResponse(_aioresponses_core.ClientResponse):  # type: ignore[misc,valid-type]
+        """aioresponses response double that supplies aiohttp 3.14's ``stream_writer``.
+
+        Base class is bound to the *current* ``aioresponses.core.ClientResponse``
+        (the real aiohttp class) at definition time; the module attribute is
+        then repointed at this subclass so aioresponses' default response
+        construction picks it up via ``__getattr__`` on the module global.
+        """
+
+        def __init__(self, *args: object, **kwargs: object) -> None:
+            kwargs.setdefault("stream_writer", _NoOpStreamWriter())
+            super().__init__(*args, **kwargs)  # type: ignore[arg-type]
+
+    _aioresponses_core.ClientResponse = _StreamWriterShimResponse
 
 
 def pytest_addoption(parser):

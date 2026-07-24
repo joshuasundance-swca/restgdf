@@ -43,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Set up Python ${{ matrix.python-version }}
@@ -188,6 +188,20 @@ jobs:
         run: |
           if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ] || [ "${{ needs.stress.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
             echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} network=${{ needs.network.result }} stress=${{ needs.stress.result }} docs=${{ needs.docs.result }}"
+            exit 1
+          fi
+          echo "All required jobs succeeded."
+
+  ci-offline:
+    name: ci-offline
+    if: always()
+    needs: [lint, test, install_combinations, base_install, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate offline job results
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} docs=${{ needs.docs.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."
