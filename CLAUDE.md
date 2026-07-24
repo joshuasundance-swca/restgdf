@@ -3,8 +3,7 @@
 ## What this is
 
 `restgdf` is a **lightweight async Esri/ArcGIS REST client** for Python ≥ 3.11, published to
-PyPI as a Production/Stable library (currently v3.1.0; a 3.2.0 release carrying the
-`## [Unreleased]` CHANGELOG entries is pending). The light core depends only on
+PyPI as a Production/Stable library (currently v3.2.0). The light core depends only on
 `aiohttp` + `pydantic` v2; GeoPandas/pandas, retry/rate-limiting, and OpenTelemetry are
 **optional extras** (`geo`, `resilience`, `telemetry`). The two public entry points are
 `FeatureLayer` (one ArcGIS feature layer) and `Directory` (service discovery / crawl).
@@ -24,11 +23,11 @@ namespace plus `restgdf.{adapters,compat,utils,errors}`.
   bullet under `## [Unreleased]`.
 - **`README.md`** — user-facing usage; **`SECURITY.md`** — vuln reporting + supply-chain.
 
-> Companion docs predate the 3.0 release in places and carry **known drift** (e.g.
-> CONTRIBUTING's `integration/3.0-rewrite` branch target and ARCHITECTURE.md's
-> `ErrorPayload`/`.env`/logger-name claims). **When code and companion prose disagree, the
-> code is the source of truth.** The `audit-recommendations/` directory catalogs the specific
-> drift; the remediation program is closing it item by item.
+> Companion docs were reconciled to the code by the 2026 audit-remediation program
+> (complete 2026-07-24; see `audit-recommendations/plan/PROGRAM-LEDGER.md`). If code and
+> companion prose ever disagree again, **the code is the source of truth** — fix the prose
+> in the same change set. `audit-recommendations/` is the audit's historical record and
+> disposition ledger; `scripts/audit_disposition.py` re-derives finding status on demand.
 
 ## Commands
 

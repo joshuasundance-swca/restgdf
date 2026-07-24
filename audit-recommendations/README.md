@@ -1,5 +1,11 @@
 # restgdf — comprehensive code audit
 
+> **REMEDIATION COMPLETE (2026-07-24).** All 61 findings are terminally dispositioned —
+> 59 landed, 1 decision-closed, 1 deferred with owner+trigger, 0 gaps (re-derive any time
+> with `python scripts/audit_disposition.py`). Delivered across releases **3.1.0** and
+> **3.2.0**; the authoritative phase record is [`plan/PROGRAM-LEDGER.md`](plan/PROGRAM-LEDGER.md).
+> Finding line numbers below remain pinned to the audit commit and are historical.
+>
 > **Read-only audit.** No source file was modified to produce this report set. Pinned to
 > commit `4673b08` (`main`, v3.0.0). Generated 2026-06-13.
 
