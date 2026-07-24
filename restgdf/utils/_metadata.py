@@ -142,23 +142,49 @@ def get_name(metadata: LayerMetadataLike) -> str:
 
 
 def get_fields(layer_metadata: LayerMetadataLike, types: bool = False):
-    """Get the fields of a layer."""
+    """Get the fields of a layer.
+
+    W5-4 (ADAPTERS-01): a permissive-tier ``FieldSpec`` allows ``name``
+    and ``type`` to be missing or ``None`` -- real ArcGIS servers do
+    occasionally emit such entries. A field whose ``name`` cannot be
+    resolved to a ``str`` has no addressable identity and is silently
+    dropped from the result (mirroring ``get_object_id_field``'s
+    ``isinstance(field.get("name"), str)`` guard); this is an
+    intentional, contract-aligned skip, not silent data loss of a
+    resolvable field. ``types=True`` routes through ``_field_rows``
+    so the dict/list/DataFrame views agree on the surviving field set.
+    """
     layer_metadata = _as_dict(layer_metadata)
     fields = layer_metadata.get("fields") or []
     if types:
-        return {f["name"]: f["type"].replace("esriFieldType", "") for f in fields}
-    return [f["name"] for f in fields]
+        return dict(_field_rows(layer_metadata))
+    return [f["name"] for f in fields if isinstance(f.get("name"), str)]
 
 
 def _field_rows(layer_metadata: LayerMetadataLike) -> list[tuple[str, str]]:
-    """Return ``(name, type)`` rows for the layer fields."""
+    """Return ``(name, type)`` rows for the layer fields.
+
+    W5-4 (ADAPTERS-01): entries with a missing/non-``str`` ``name`` are
+    dropped (see :func:`get_fields`); a missing or explicit-``None``
+    ``type`` defaults to ``""`` rather than raising ``AttributeError``
+    on ``None.replace(...)``.
+    """
     layer_metadata = _as_dict(layer_metadata)
     fields: list[dict[str, Any]] = layer_metadata.get("fields") or []
-    return [(f["name"], f["type"].replace("esriFieldType", "")) for f in fields]
+    return [
+        (f["name"], (f.get("type") or "").replace("esriFieldType", ""))
+        for f in fields
+        if isinstance(f.get("name"), str)
+    ]
 
 
 def get_fields_frame(layer_metadata: LayerMetadataLike) -> DataFrame:
-    """Get the fields of a layer as a DataFrame."""
+    """Get the fields of a layer as a DataFrame.
+
+    Routes through ``_field_rows``, so a field with no resolvable
+    ``name`` is dropped (W5-4/ADAPTERS-01) -- see that function's
+    docstring for the full skip-behavior contract.
+    """
     DataFrame = require_pandas_dataframe("get_fields_frame()")
     return DataFrame(
         _field_rows(layer_metadata),

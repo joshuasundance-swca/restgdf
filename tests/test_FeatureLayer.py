@@ -373,6 +373,56 @@ async def test_featurelayer_getgdf_caches_result(sample_feature_gdf):
 
 
 @pytest.mark.asyncio
+async def test_featurelayer_getgdf_cache_hit_returns_copy_not_shared_reference(
+    sample_feature_gdf,
+):
+    """W5-1 (ASYNC-02): mutating a cache-returned GeoDataFrame must not
+
+    corrupt what a later ``get_gdf()`` call returns — the cache holds the
+    canonical frame, callers get an independent copy.
+    """
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_gdf",
+        new=AsyncMock(return_value=sample_feature_gdf),
+    ):
+        first = await layer.get_gdf()
+        first.rename(columns={"CITY": "MUTATED"}, inplace=True)
+        second = await layer.get_gdf()
+
+    assert first is not second
+    assert "CITY" in second.columns
+    assert "MUTATED" not in second.columns
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_getgdf_cache_copy_preserves_spatial_reference_attrs(
+    sample_feature_gdf,
+):
+    """W5-1 / R-65 regression guard: ``.attrs['spatial_reference']`` must
+
+    survive the copy-on-return introduced for the cache-hit path.
+    """
+    sample_feature_gdf.attrs["spatial_reference"] = {"wkid": 4326}
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_gdf",
+        new=AsyncMock(return_value=sample_feature_gdf),
+    ):
+        result = await layer.get_gdf()
+
+    assert result.attrs["spatial_reference"] == {"wkid": 4326}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("method_name", "args"),
     [("sample_gdf", (10,)), ("head_gdf", (2,))],
@@ -510,6 +560,64 @@ async def test_getuniquevalues_cache_includes_sortby():
 
 
 @pytest.mark.asyncio
+async def test_featurelayer_getuniquevalues_multi_field_cache_hit_returns_copy():
+    """W5-1 (ASYNC-02): the multi-field DataFrame branch of get_unique_values
+
+    must not hand back the cached DataFrame by reference.
+    """
+    from pandas import DataFrame as _PandasDataFrame
+
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ("CITY", "STATE")
+    values_df = _PandasDataFrame({"CITY": ["DAYTONA"], "STATE": ["FL"]})
+
+    async def fake_get_unique_values(url, fields, session, sortby=None, **kwargs):
+        return values_df
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_unique_values",
+        side_effect=fake_get_unique_values,
+    ):
+        first = await layer.get_unique_values(("CITY", "STATE"))
+        first.rename(columns={"CITY": "MUTATED"}, inplace=True)
+        second = await layer.get_unique_values(("CITY", "STATE"))
+
+    assert first is not second
+    assert "CITY" in second.columns
+    assert "MUTATED" not in second.columns
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_getuniquevalues_single_field_cache_hit_returns_copy():
+    """W5-1: the single-field list branch of get_unique_values must not
+
+    hand back the cached list by reference either.
+    """
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ("CITY",)
+
+    async def fake_get_unique_values(url, fields, session, sortby=None, **kwargs):
+        return ["DAYTONA", "ORMOND"]
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_unique_values",
+        side_effect=fake_get_unique_values,
+    ):
+        first = await layer.get_unique_values("CITY")
+        first.append("MUTATED")
+        second = await layer.get_unique_values("CITY")
+
+    assert first is not second
+    assert second == ["DAYTONA", "ORMOND"]
+
+
+@pytest.mark.asyncio
 async def test_featurelayer_getuniquevalues_rejects_unknown_fields():
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
@@ -526,20 +634,30 @@ async def test_featurelayer_getuniquevalues_rejects_unknown_fields():
 
 @pytest.mark.asyncio
 async def test_featurelayer_getvaluecounts_caches_and_validates_fields():
+    """The bare helper always returns a DataFrame (see its ``-> DataFrame``
+
+    annotation in ``restgdf/utils/_stats.py``); a real DataFrame mock keeps
+    this fixture aligned with what the real producer returns (see W5-1
+    below for the copy-on-return regression it also now guards).
+    """
+    from pandas import DataFrame as _PandasDataFrame
+
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
         session=MockArcGISSession(),
     )
     layer.fields = ("CITY", "STATE")
+    counts_df = _PandasDataFrame({"CITY": ["DAYTONA"], "Count": [3]})
 
     with patch(
         "restgdf.featurelayer.featurelayer.get_value_counts",
-        new=AsyncMock(return_value="counts"),
+        new=AsyncMock(return_value=counts_df),
     ) as mock_get_value_counts:
         first = await layer.get_value_counts("CITY")
         second = await layer.get_value_counts("CITY")
 
-    assert first == second == "counts"
+    assert first.equals(counts_df)
+    assert second.equals(counts_df)
     mock_get_value_counts.assert_awaited_once()
 
     with pytest.raises(FieldDoesNotExistError):
@@ -547,25 +665,92 @@ async def test_featurelayer_getvaluecounts_caches_and_validates_fields():
 
 
 @pytest.mark.asyncio
+async def test_featurelayer_getvaluecounts_cache_hit_returns_copy():
+    """W5-1 (ASYNC-02): mutating a returned value-counts frame must not
+
+    corrupt the cache a later call reads from.
+    """
+    from pandas import DataFrame as _PandasDataFrame
+
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ("CITY",)
+    counts_df = _PandasDataFrame({"CITY": ["DAYTONA"], "Count": [3]})
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.get_value_counts",
+        new=AsyncMock(return_value=counts_df),
+    ):
+        first = await layer.get_value_counts("CITY")
+        first.loc[0, "Count"] = 999
+        second = await layer.get_value_counts("CITY")
+
+    assert first is not second
+    assert second.loc[0, "Count"] == 3
+
+
+@pytest.mark.asyncio
 async def test_featurelayer_getnestedcount_caches_and_validates_fields():
+    """Real DataFrame mock — see the note on the sibling value-counts
+
+    fixture above; the bare ``nested_count`` helper always returns a
+    DataFrame too.
+    """
+    from pandas import DataFrame as _PandasDataFrame
+
     layer = FeatureLayer(
         "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
         session=MockArcGISSession(),
     )
     layer.fields = ("CITY", "STATE")
+    nested_df = _PandasDataFrame(
+        {"CITY": ["DAYTONA"], "STATE": ["FL"], "Count": [2]},
+    )
 
     with patch(
         "restgdf.featurelayer.featurelayer.nested_count",
-        new=AsyncMock(return_value="nested"),
+        new=AsyncMock(return_value=nested_df),
     ) as mock_nested_count:
         first = await layer.get_nested_count(("CITY", "STATE"))
         second = await layer.get_nested_count(("CITY", "STATE"))
 
-    assert first == second == "nested"
+    assert first.equals(nested_df)
+    assert second.equals(nested_df)
     mock_nested_count.assert_awaited_once()
 
     with pytest.raises(FieldDoesNotExistError):
         await layer.get_nested_count(("CITY", "ZIP"))
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_getnestedcount_cache_hit_returns_copy():
+    """W5-1 (ASYNC-02): mutating a returned nested-count frame must not
+
+    corrupt the cache a later call reads from.
+    """
+    from pandas import DataFrame as _PandasDataFrame
+
+    layer = FeatureLayer(
+        "https://example.com/arcgis/rest/services/Secured/FeatureServer/0",
+        session=MockArcGISSession(),
+    )
+    layer.fields = ("CITY", "STATE")
+    nested_df = _PandasDataFrame(
+        {"CITY": ["DAYTONA"], "STATE": ["FL"], "Count": [2]},
+    )
+
+    with patch(
+        "restgdf.featurelayer.featurelayer.nested_count",
+        new=AsyncMock(return_value=nested_df),
+    ):
+        first = await layer.get_nested_count(("CITY", "STATE"))
+        first.loc[0, "Count"] = 999
+        second = await layer.get_nested_count(("CITY", "STATE"))
+
+    assert first is not second
+    assert second.loc[0, "Count"] == 2
 
 
 @pytest.mark.asyncio

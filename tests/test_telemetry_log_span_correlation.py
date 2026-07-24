@@ -57,14 +57,42 @@ async def test_span_context_fields_still_works_for_user_loggers(
         assert fields.get("trace_id") == active_trace_id
 
 
-def test_restgdf_log_record_outside_span_has_no_trace_id(caplog):
-    """Outside an active span, the filter stamps nothing (no-op)."""
+def test_restgdf_log_record_outside_span_has_empty_trace_id_sentinel(caplog):
+    """W5-12 (TELEMETRY-01): outside an active span, the filter stamps the
+
+    empty-string sentinel rather than leaving the attribute unset --
+    see ``test_formatter_with_trace_id_field_does_not_error_outside_span``
+    below for why an unset attribute is the actual bug this replaces.
+    """
     reset_config_cache()
     with caplog.at_level(logging.INFO, logger="restgdf.transport"):
         logging.getLogger("restgdf.transport").info("no-span record")
     record = next(r for r in caplog.records if r.message == "no-span record")
-    assert not hasattr(record, "trace_id")
-    assert not hasattr(record, "span_id")
+    assert record.trace_id == ""
+    assert record.span_id == ""
+
+
+def test_formatter_with_trace_id_field_does_not_error_outside_span(caplog):
+    """W5-12 (TELEMETRY-01): the documented ``%(trace_id)s`` log-correlation
+
+    recipe must render cleanly for a record emitted OUTSIDE any active
+    span -- the common case (an ``auth.refresh.start`` DEBUG record, the
+    pagination ``exceededTransferLimit`` warning, ...). Before the fix,
+    ``_SpanContextFilter`` left ``trace_id``/``span_id`` unset outside a
+    span, so formatting such a record raised ``KeyError: 'trace_id'``
+    (which stdlib ``logging`` normally swallows into a stderr
+    "--- Logging error ---" dump via ``Handler.handleError``) instead of
+    rendering the empty-string sentinel.
+    """
+    reset_config_cache()
+    with caplog.at_level(logging.INFO, logger="restgdf.transport"):
+        logging.getLogger("restgdf.transport").info("outside-span record")
+    record = next(r for r in caplog.records if r.message == "outside-span record")
+
+    formatter = logging.Formatter("%(trace_id)s|%(span_id)s|%(message)s")
+    formatted = formatter.format(record)  # must not raise KeyError
+
+    assert formatted == "||outside-span record"
 
 
 def test_span_context_fields_empty_outside_span():

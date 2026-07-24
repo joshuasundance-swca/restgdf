@@ -13,6 +13,7 @@ def test_id_schema_fixture_names_are_stable() -> None:
         "unique-id-info-no-oid",
         "new-field-types",
         "malformed-field-entry",
+        "field-missing-name-or-type",
     )
 
 

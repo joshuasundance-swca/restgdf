@@ -6,6 +6,34 @@ All notable changes to restgdf are documented here. This project follows
 ## [Unreleased]
 ### Fixed
 
+- `FeatureLayer.get_gdf`/`get_unique_values`/`get_value_counts`/
+  `get_nested_count` now return an independent copy of the cached
+  frame/list on every call (W5-1, ASYNC-02) instead of the shared cached
+  object by reference. Previously, mutating a returned `GeoDataFrame` or
+  `DataFrame` in place (e.g. `df.rename(..., inplace=True)`) silently
+  corrupted what every later call on the same instance returned. Cache
+  *population* is unaffected and remains non-atomic under concurrent
+  `asyncio.gather` awaiters — this fix protects reads only, not writes.
+- `get_fields(types=True)`, `_field_rows`, and `get_fields_frame` no
+  longer raise `KeyError`/`AttributeError` on a permissive-tier field
+  entry missing `name` and/or `type` (W5-4, ADAPTERS-01) — a real
+  ArcGIS server can emit such entries and `FieldSpec` already declares
+  both as optional. A field with no resolvable `name` is now silently
+  dropped (documented in the affected docstrings); a missing/`None`
+  `type` defaults to `""` instead of crashing on `None.replace(...)`.
+  `get_fields(types=False)` gained the same nameless-field guard.
+- The `_SpanContextFilter` log-correlation filter now always stamps
+  `record.trace_id`/`record.span_id` (defaulting to `""` outside a
+  valid OpenTelemetry span) instead of leaving them unset (W5-12,
+  TELEMETRY-01). Previously, any `restgdf.*` log record emitted
+  outside a `feature_layer.stream` span — e.g. the `auth.refresh.start`
+  DEBUG record or the pagination `exceededTransferLimit` warning — had
+  no `trace_id`/`span_id` attributes at all, so the documented
+  `%(trace_id)s` log-correlation recipe raised
+  `ValueError: Formatting field not found in record: 'trace_id'`
+  (surfaced by stdlib `logging` as a swallowed stderr
+  "--- Logging error ---" dump). `span_context_fields()` is unaffected
+  and still returns `{}` outside a span.
 - `restgdf.utils.token._auth_logger` (the `restgdf.auth` logger backing
   token-refresh debug logging) is now created through the library's
   `get_logger("auth")` factory instead of a raw `logging.getLogger(...)`
@@ -23,9 +51,6 @@ All notable changes to restgdf are documented here. This project follows
   native GDAL/shapely load failure) surfaces as `OptionalDependencyError`
   naming the `restgdf[geo]` hint instead of escaping as a raw, unwrapped
   `ImportError`.
-
-### Fixed
-
 - Removed the false `.env` file-loading claims from `docs/configuration.rst`'s
   precedence list and `docs/authentication.rst`'s credentials recipe. `restgdf`
   has never read `.env` files or depended on `python-dotenv`/`pydantic-settings`
