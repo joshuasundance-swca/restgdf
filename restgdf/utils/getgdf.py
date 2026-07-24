@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import math
 import warnings
 from asyncio import gather
@@ -328,8 +329,29 @@ async def get_sub_gdf(
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )
+    # W4-1 (PAGINATION-01): read the body once, then inspect the parsed JSON
+    # for exceededTransferLimit BEFORE handing the text to read_file. pyogrio /
+    # read_file discards the top-level flag (both ESRIJSON and the Esri-emitted
+    # GeoJSON FeatureCollection carry it at top level), so this path must parse
+    # the dict directly. Raising here mirrors the raw-feature engine
+    # _get_sub_features and closes the silent-data-loss gap on the flagship geo
+    # call. response.text() is a one-shot stream, so read into a local and reuse.
+    text = await response.text()
+    try:
+        raw = json.loads(text)
+    except (ValueError, TypeError):
+        # Non-JSON bodies (unexpected for f=GeoJSON/ESRIJSON) fall through to
+        # read_file, which will surface its own parse error rather than a
+        # misleading truncation raise.
+        raw = None
+    if isinstance(raw, dict) and raw.get("exceededTransferLimit") is True:
+        raise PaginationError(
+            f"{url}/query returned exceededTransferLimit=true; the GeoDataFrame "
+            "page is incomplete and rows are missing.",
+            page_size=query_data.get("resultRecordCount"),
+        )
     sub_gdf = read_file(
-        io.StringIO(await response.text()),
+        io.StringIO(text),
         # driver=gdfdriver,  # this line raises a warning when using pyogrio w/ ESRIJSON
         engine="pyogrio",
     )

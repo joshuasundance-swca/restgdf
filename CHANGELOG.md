@@ -6,6 +6,19 @@ All notable changes to restgdf are documented here. This project follows
 ## [Unreleased]
 ### Changed
 
+- **The GeoDataFrame path now raises on truncated responses instead of
+  silently dropping rows.** `get_gdf` and `stream_gdf_chunks` (via
+  `chunk_generator` → `get_sub_gdf`) now inspect each page's parsed JSON for
+  `exceededTransferLimit=true` and raise `restgdf.errors.PaginationError`
+  (mirroring the raw-feature engine), rather than returning a GeoDataFrame
+  that is silently missing rows when ArcGIS hits its byte/geometry transfer
+  cap (W4-1 / PAGINATION-01, the audit's flagship silent-data-loss fix).
+  The flag is read from the response JSON directly because pyogrio/`read_file`
+  discards the top-level member. **Behavior change:** code that previously
+  received a short-but-successful GeoDataFrame on a capped layer now gets a
+  `PaginationError`; page the layer (smaller `resultRecordCount`, a tighter
+  `where`, or the `iter_pages` engine with `on_truncation='split'`) to read it
+  completely.
 - The default `User-Agent` on ArcGIS REST data requests is now sourced from
   `get_config().transport.user_agent` (default `restgdf/<version>`, e.g.
   `restgdf/3.1.0`) instead of the hardcoded `"Mozilla/5.0"`
