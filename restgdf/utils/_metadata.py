@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Union
 
 from pydantic import BaseModel
 
-from restgdf._models.responses import FieldSpec, LayerMetadata
+from restgdf._models.responses import LayerMetadata
 from restgdf.errors import FieldDoesNotExistError
 from restgdf.utils._deprecations import deprecated_alias
 from restgdf.utils._optional import require_pandas_dataframe
@@ -153,7 +153,7 @@ def get_fields(layer_metadata: LayerMetadataLike, types: bool = False):
 def _field_rows(layer_metadata: LayerMetadataLike) -> list[tuple[str, str]]:
     """Return ``(name, type)`` rows for the layer fields."""
     layer_metadata = _as_dict(layer_metadata)
-    fields: list[FieldSpec] = layer_metadata.get("fields") or []
+    fields: list[dict[str, Any]] = layer_metadata.get("fields") or []
     return [(f["name"], f["type"].replace("esriFieldType", "")) for f in fields]
 
 
