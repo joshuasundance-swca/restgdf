@@ -24,11 +24,11 @@ namespace plus `restgdf.{adapters,compat,utils,errors}`.
   bullet under `## [Unreleased]`.
 - **`README.md`** — user-facing usage; **`SECURITY.md`** — vuln reporting + supply-chain.
 
-> Companion docs predate the 3.0 release in places and carry **known drift** (e.g. SECURITY.md
-> supported-versions table, CONTRIBUTING's `integration/3.0-rewrite` branch target,
-> ARCHITECTURE.md's `ErrorPayload`/`.env`/logger-name claims, an empty `## [3.0.0]` CHANGELOG
-> header). **When code and companion prose disagree, the code is the source of truth.** The
-> `audit-recommendations/` directory catalogs the specific drift.
+> Companion docs predate the 3.0 release in places and carry **known drift** (e.g.
+> CONTRIBUTING's `integration/3.0-rewrite` branch target and ARCHITECTURE.md's
+> `ErrorPayload`/`.env`/logger-name claims). **When code and companion prose disagree, the
+> code is the source of truth.** The `audit-recommendations/` directory catalogs the specific
+> drift; the remediation program is closing it item by item.
 
 ## Commands
 

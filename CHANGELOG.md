@@ -56,7 +56,7 @@ rate-limiting via `stamina`/`aiolimiter`), and `restgdf[telemetry]`
 (`RestgdfInstrumentor` OpenTelemetry instrumentation) — so a base
 install stays dependency-light. A typed streaming surface
 (`iter_pages`, `stream_features`, `stream_feature_batches`,
-`stream_rows`, `stream_gdf_chunks`) replaces the legacy synchronous
+`stream_rows`, `stream_gdf_chunks`) replaces the legacy row/feature
 helpers, with query-verb selection centralized in `_choose_verb`/
 `_arcgis_request` (`restgdf/utils/_http.py`). `restgdf.Config` adds
 layered, frozen pydantic sub-configs resolved from
