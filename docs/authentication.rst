@@ -98,13 +98,27 @@ Load credentials from environment variables:
        password=os.environ["ARCGIS_PASSWORD"],
    )
 
-Or use a ``.env`` file (supported by pydantic-settings):
+``restgdf`` does not load ``.env`` files itself (``python-dotenv``/``pydantic-settings``
+are not dependencies). If you keep credentials in a ``.env`` file, load it explicitly
+with a package such as `python-dotenv <https://pypi.org/project/python-dotenv/>`_
+before reading ``os.environ``:
 
 .. code-block:: bash
 
    # .env (add to .gitignore!)
    ARCGIS_USER=my-username
    ARCGIS_PASSWORD=my-password
+
+.. code-block:: python
+
+   from dotenv import load_dotenv
+
+   load_dotenv()  # populates os.environ from .env
+
+   credentials = AGOLUserPass(
+       username=os.environ["ARCGIS_USER"],
+       password=os.environ["ARCGIS_PASSWORD"],
+   )
 
 ``AGOLUserPass.password`` is stored as a :class:`pydantic.SecretStr` — it
 is never shown in ``repr()`` output or log messages.
