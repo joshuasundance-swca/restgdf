@@ -122,7 +122,7 @@ __all__ = [
     "utils",
 ]
 
-__version__ = "3.0.0"
+__version__ = "3.1.0"
 
 _LAZY_EXPORTS: dict[str, tuple[str, str | None]] = {
     **{
