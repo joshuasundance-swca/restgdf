@@ -4,10 +4,39 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Added
+
+- `restgdf.utils.getinfo.build_spatial_filter_payload(geometry, *,
+  in_sr=None, spatial_rel="esriSpatialRelIntersects")` — pure helper that
+  converts an ArcGIS-JSON geometry, a GeoJSON-style mapping, or any object
+  exposing `__geo_interface__` (e.g. shapely geometries) into the ArcGIS
+  REST `geometry` / `geometryType` / `spatialRel` (+ optional `inSR`)
+  query-payload fragment. Handles points, multipoints, polylines,
+  polygons, envelopes, curve paths / curve rings, and 3D/ZM coordinates,
+  and stamps `hasZ` / `hasM` on array-based geometries when the
+  coordinates carry Z/M ordinates. Re-exported through `getinfo.__all__`
+  following the `build_pagination_plan` pattern (not a top-level
+  `restgdf` export).
+
 ### Changed
 
 - Raised the supported Python floor to 3.11 (3.9 is EOL 2025-10-31; 3.10
   reaches EOL 2026-10-31); CI now tests 3.11–3.14.
+- `AGOLUserPass(referer=...)` is now honoured at token-mint time.
+  `ArcGISTokenSession.__post_init__` threads the credential's `referer`
+  into the auto-built `TokenSessionConfig`, so `token_request_payload`
+  switches the ArcGIS `client` field from `"requestip"` to `"referer"`
+  and adds `"referer": <url>` to the `/generateToken` POST body.
+  **Previously this was silently ignored** — the credentials-only
+  constructor built its config without a referer, so
+  `AGOLUserPass(..., referer=...)` had no effect on the minted token. See
+  `MIGRATION.md` for the request-time `Referer`-header limitation this
+  interacts with.
+- Token-mint requests now send an explicit `expiration` field.
+  `token_request_payload` emits `AGOLUserPass.expiration` (default 60
+  minutes) and the deprecated synchronous `get_token` helper sends
+  `expiration=60`. Behaviourally equivalent to the ArcGIS server-side
+  default of 60 minutes; the value is now explicit on the wire.
 
 ## [3.0.0] - 2026-05-02
 

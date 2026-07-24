@@ -3,11 +3,38 @@
 ## 3.0.x → 3.1 migration notes
 
 restgdf 3.1 raises the supported Python floor to **3.11** (3.9 reached
-EOL 2025-10-31; 3.10 reaches EOL 2026-10-31). No runtime API changes
-accompany this bump. If you install with `pip install restgdf` on an
-older interpreter (3.9/3.10), pip resolves the last compatible 3.0.x
-release instead of 3.1; upgrade your interpreter to pick up 3.1 and
-later releases.
+EOL 2025-10-31; 3.10 reaches EOL 2026-10-31). If you install with
+`pip install restgdf` on an older interpreter (3.9/3.10), pip resolves
+the last compatible 3.0.x release instead of 3.1; upgrade your
+interpreter to pick up 3.1 and later releases.
+
+### Referer is now honoured at token-mint time
+
+Before 3.1, `AGOLUserPass(referer=...)` was silently ignored: the
+credentials-only `ArcGISTokenSession` constructor built its
+`TokenSessionConfig` without the referer, so every minted token used
+`client="requestip"` regardless of the referer you passed. In 3.1 the
+credential's `referer` flows through to the `/generateToken` request —
+the ArcGIS `client` field switches to `"referer"` and `referer=<url>`
+is added to the mint payload. Tokens are now minted as **referer-bound**
+instead of **IP-bound** for these callers.
+
+**Known limitation (planned follow-up).** restgdf does not yet send a
+matching `Referer` HTTP header on subsequent data requests — the referer
+is used only at mint time. ArcGIS binds a `client="referer"` token to
+that referer and can reject queries whose `Referer` header does not match
+(HTTP 498/499). So a caller who previously relied on
+`AGOLUserPass(referer=...)` and received a working IP-bound token may,
+after this change, receive a referer-bound token that services enforcing
+referer will reject. Request-time `Referer`-header propagation is planned
+follow-up work. If a referer-bound token is rejected and you cannot yet
+supply the header out-of-band, drop the `referer` argument to fall back to
+the previous IP-bound (`client="requestip"`) behaviour.
+
+The token-mint payload also now carries an explicit `expiration` field
+(`AGOLUserPass.expiration`, default 60 minutes; the deprecated
+synchronous `get_token` helper sends `expiration=60`). This matches the
+ArcGIS server-side default and is not a behaviour change in practice.
 
 ## 2.0.0 migration notes
 
