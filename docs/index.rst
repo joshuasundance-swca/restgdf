@@ -185,6 +185,7 @@ Explore the docs
    recipes/observability
    recipes/streaming
    recipes/tracing
+   recipes/bulk_crawl
 
 .. toctree::
    :hidden:

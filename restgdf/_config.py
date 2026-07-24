@@ -61,26 +61,30 @@ _FROZEN = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
 
 class InertConfigWarning(UserWarning):
-    """A ``RESTGDF_*`` env var is set but does not (yet) affect runtime.
+    """A ``RESTGDF_*`` env var is set but does not affect runtime.
 
     Emitted once (per :func:`Config.from_env` resolution) when a caller sets
-    a validated-but-currently-inert knob -- the ``RESTGDF_RETRY_*`` /
-    ``RESTGDF_LIMITER_*`` values (the resilience executor hardcodes its retry
-    and rate-limit policy) or ``RESTGDF_AUTH_REFRESH_THRESHOLD_S`` (token
-    sessions do not read ``AuthConfig``; see :class:`AuthConfig`). The value
-    still validates into :class:`Config`, but nothing consumes it yet
-    (warn-now, wire-later per the AUTH-04 / TRANSPORT-01 decision). Silence it
-    with
+    a validated-but-inert knob -- the **deprecated** ``RESTGDF_RETRY_*`` /
+    ``RESTGDF_LIMITER_*`` values (superseded in 3.3 by the live
+    ``RESTGDF_RESILIENCE_*`` knobs on :class:`ResilienceConfig`; see the
+    deprecation notes on :class:`RetryConfig` / :class:`LimiterConfig`) or
+    ``RESTGDF_AUTH_REFRESH_THRESHOLD_S`` (token sessions do not read
+    ``AuthConfig``; see :class:`AuthConfig`). The value still validates into
+    :class:`Config`, but nothing consumes it (the RETRY/LIMITER knobs are
+    removed in 4.0). Silence it with
     ``warnings.filterwarnings("ignore", category=restgdf._config.InertConfigWarning)``.
     """
 
 
 # ``RESTGDF_*`` env keys that validate into :class:`Config` but that no live
-# code path reads yet (verified 2026-07-24: the ``@stamina.retry`` executor
-# hardcodes its policy and never reads ``config.retry``/``config.limiter``;
-# ``AuthConfig.refresh_threshold_s`` is surfaced only through the deprecated
-# ``Settings`` shim, never applied to a token session). Kept intact as a
-# back-compat seam (tests pin them); real wiring is deferred (W2-13/AUTH-04).
+# code path reads (verified 2026-07-24: the resilience executor reads its
+# retry/limiter policy from ``config.resilience`` (:class:`ResilienceConfig`)
+# and never reads ``config.retry``/``config.limiter``; the ``RESTGDF_RETRY_*``
+# / ``RESTGDF_LIMITER_*`` knobs are deprecated in 3.3 and superseded by the
+# ``RESTGDF_RESILIENCE_*`` replacements. ``AuthConfig.refresh_threshold_s`` is
+# surfaced only through the deprecated ``Settings`` shim, never applied to a
+# token session). Kept intact as a back-compat seam (tests pin them); the
+# deprecated RETRY/LIMITER knobs are removed in 4.0 (W2-13/AUTH-04).
 _INERT_ENV_KEYS: tuple[str, ...] = (
     "RESTGDF_RETRY_ENABLED",
     "RESTGDF_RETRY_MAX_ATTEMPTS",
@@ -148,7 +152,19 @@ class TimeoutConfig(BaseModel):
 
 
 class RetryConfig(BaseModel):
-    """Retry policy (disabled by default; phase-3a wires the executor)."""
+    """Retry policy holder (validated but inert; see the deprecation note).
+
+    .. deprecated:: 3.3
+        ``max_attempts`` and ``max_delay_s`` are inert and superseded by the
+        live :class:`ResilienceConfig` retry knobs -- ``max_attempts`` maps to
+        ``ResilienceConfig.max_attempts`` and ``max_delay_s`` to
+        ``ResilienceConfig.retry_budget_s`` (the total wall-clock budget). The
+        resilience executor reads only :class:`ResilienceConfig`; these two
+        fields (and their ``RESTGDF_RETRY_MAX_ATTEMPTS`` /
+        ``RESTGDF_RETRY_MAX_DELAY_S`` env keys) validate but change nothing.
+        They stay wired as a back-compat seam and emit
+        :class:`InertConfigWarning` when set; both are removed in 4.0.
+    """
 
     model_config = _FROZEN
 
@@ -158,7 +174,18 @@ class RetryConfig(BaseModel):
 
 
 class LimiterConfig(BaseModel):
-    """Rate-limiter configuration (disabled by default)."""
+    """Rate-limiter configuration holder (validated but inert).
+
+    .. deprecated:: 3.3
+        ``rate_per_host`` is inert and superseded by the live
+        :class:`ResilienceConfig` rate limiter: set
+        ``ResilienceConfig.rate_per_service_root_per_second`` together with
+        ``ResilienceConfig.limiter_key = "host"`` for per-host rate limiting.
+        The resilience executor reads only :class:`ResilienceConfig`; this
+        field (and its ``RESTGDF_LIMITER_RATE_PER_HOST`` env key) validates but
+        changes nothing. It stays wired as a back-compat seam and emits
+        :class:`InertConfigWarning` when set; it is removed in 4.0.
+    """
 
     model_config = _FROZEN
 
@@ -275,17 +302,74 @@ class TelemetryConfig(BaseModel):
 class ResilienceConfig(BaseModel):
     """Resilience adapter configuration (BL-31).
 
-    Controls the optional stamina-based retry wrapper and per-service-root
-    token-bucket rate limiter. Disabled by default; callers opt in via
-    ``RESTGDF_RESILIENCE_ENABLED=1`` or by constructing explicitly.
+    Controls the optional stamina-based retry wrapper and token-bucket rate
+    limiter used by :class:`restgdf.resilience.ResilientSession`. Disabled by
+    default; callers opt in via ``RESTGDF_RESILIENCE_ENABLED=1`` or by
+    constructing explicitly. ``enabled`` is the **sole** gate for the retry
+    executor -- the retry-tuning fields below never re-gate an
+    already-enabled session; they only shape its behaviour.
+
+    Rate-limit granularity (``limiter_key``)
+    ----------------------------------------
+    ``limiter_key`` selects the key the single token bucket (and the shared
+    429 cooldown) is keyed on:
+
+    * ``"service_root"`` (default, behaviour-preserving) -- one bucket per
+      ArcGIS service root (truncated at ``FeatureServer``/``MapServer``/...),
+      so ``rate_per_service_root_per_second`` is enforced *per service*.
+    * ``"host"`` -- one bucket per ``scheme://host``, so the same rate is
+      enforced across every service on that host. This is the polite default
+      when many independent services sit behind one government host; the
+      configured rate then applies **per host** rather than per service root.
+
+    Both granularities share the one ``rate_per_service_root_per_second``
+    value and one registry -- the field name is historical; read it as
+    "the configured rate, enforced at ``limiter_key`` granularity". Sub-1.0
+    rates (e.g. ``0.5`` req/s -- the natural polite setting) are valid.
+
+    Retry attempts / backoff / budget
+    ---------------------------------
+    The stamina executor reads ``max_attempts``, ``retry_budget_s``,
+    ``wait_initial_s``, ``wait_max_s`` and ``wait_jitter_s`` directly from this
+    config (defaults preserve the historical hardcoded policy exactly). These
+    supersede the inert :class:`RetryConfig` knobs (deprecated in 3.3).
+
+    Budget / cooldown coherence (H1-N3)
+    -----------------------------------
+    A 429 ``Retry-After`` cooldown sleep happens *inside* a retried attempt and
+    ``retry_budget_s`` is a **total** wall-clock budget, so in-attempt cooldown
+    sleeps count against it: honouring a ``Retry-After`` at or above
+    ``retry_budget_s`` collapses the whole retry loop to roughly a single
+    cooldown cycle before giving up. ``respect_retry_after_max_s`` caps how
+    long a single honoured ``Retry-After`` may be -- one in-attempt cooldown
+    wait is bounded by the deadline in force when the attempt reaches it and
+    never chains a second wait, so the cap holds regardless of how many
+    requests are in flight on the same key; setting it at or above
+    ``retry_budget_s`` therefore lets one cooldown consume the entire budget.
+    Keep ``respect_retry_after_max_s`` below ``retry_budget_s`` if you want
+    more than one real retry after a 429 (the defaults are deliberately equal
+    at ``60.0`` -- one honoured max-length cooldown, then give up).
+
+    .. deprecated:: 3.3
+        ``backend`` is dead config -- ``"stamina"`` is the only implementation
+        and the executor never reads the field. Setting
+        ``RESTGDF_RESILIENCE_BACKEND`` emits a :class:`DeprecationWarning`; the
+        field stays reachable (default ``"stamina"``) for back-compat and is
+        removed in 4.0.
     """
 
     model_config = _FROZEN
 
     enabled: bool = False
     rate_per_service_root_per_second: float | None = Field(default=None, gt=0)
+    limiter_key: Literal["service_root", "host"] = "service_root"
     respect_retry_after_max_s: float = Field(default=60.0, gt=0)
     fallback_retry_after_seconds: float = Field(default=5.0, gt=0)
+    max_attempts: int = Field(default=5, ge=1)
+    retry_budget_s: float = Field(default=60.0, gt=0)
+    wait_initial_s: float = Field(default=0.5, ge=0)
+    wait_max_s: float = Field(default=10.0, gt=0)
+    wait_jitter_s: float = Field(default=1.0, ge=0)
     backend: str = "stamina"
 
 
@@ -328,6 +412,7 @@ _NEW_ENV_SPEC: tuple[tuple[str, str, _Caster], ...] = (
         "resilience.rate_per_service_root_per_second",
         float,
     ),
+    ("RESTGDF_RESILIENCE_LIMITER_KEY", "resilience.limiter_key", str),
     (
         "RESTGDF_RESILIENCE_RESPECT_RETRY_AFTER_MAX_S",
         "resilience.respect_retry_after_max_s",
@@ -338,6 +423,11 @@ _NEW_ENV_SPEC: tuple[tuple[str, str, _Caster], ...] = (
         "resilience.fallback_retry_after_seconds",
         float,
     ),
+    ("RESTGDF_RESILIENCE_MAX_ATTEMPTS", "resilience.max_attempts", int),
+    ("RESTGDF_RESILIENCE_RETRY_BUDGET_S", "resilience.retry_budget_s", float),
+    ("RESTGDF_RESILIENCE_WAIT_INITIAL_S", "resilience.wait_initial_s", float),
+    ("RESTGDF_RESILIENCE_WAIT_MAX_S", "resilience.wait_max_s", float),
+    ("RESTGDF_RESILIENCE_WAIT_JITTER_S", "resilience.wait_jitter_s", float),
     ("RESTGDF_RESILIENCE_BACKEND", "resilience.backend", str),
 )
 
@@ -493,6 +583,22 @@ class Config(BaseModel):
             )
             _coerce(old_key, dotted, caster)
 
+        # R5: ``backend`` is dead config -- "stamina" is the only backend and
+        # the resilience executor never reads the field. It shipped as a public
+        # field in 3.2.0, so it cannot be removed in a minor; deprecate the
+        # env-var path here (mirroring the _DEPRECATED_ALIASES precedent above)
+        # and remove the field + this warning in 4.0. Field *construction* is
+        # intentionally NOT deprecated -- Field(deprecated=True) warns on every
+        # attribute read and would trip the restgdf.* DeprecationWarning
+        # escalation (judge-R5 footgun note).
+        if "RESTGDF_RESILIENCE_BACKEND" in source:
+            warnings.warn(
+                "RESTGDF_RESILIENCE_BACKEND is deprecated and has no effect "
+                "('stamina' is the only backend); it is removed in 4.0.",
+                DeprecationWarning,
+                stacklevel=_warn_stacklevel,
+            )
+
         # W2-13 (TRANSPORT-01 / AUTH-04): a validated-but-inert knob is a
         # silent lie -- the caller set it expecting an effect it never has.
         # Emit ONE consolidated warning naming every inert key that is set.
@@ -502,13 +608,18 @@ class Config(BaseModel):
         inert_present = [key for key in _INERT_ENV_KEYS if key in source]
         if inert_present:
             warnings.warn(
-                "These RESTGDF_* environment variables are set but currently "
-                "inert -- they validate into Config yet do not affect runtime "
-                "behavior (the resilience executor hardcodes retry/limiter "
-                "policy; token sessions do not read "
-                "AuthConfig.refresh_threshold_s): "
-                f"{', '.join(sorted(inert_present))}. Real wiring is deferred "
-                "(warn-now, wire-later; see AUTH-04 / TRANSPORT-01).",
+                "These RESTGDF_* environment variables are set but are inert -- "
+                "they validate into Config yet do not affect runtime behavior: "
+                f"{', '.join(sorted(inert_present))}. The RESTGDF_RETRY_* and "
+                "RESTGDF_LIMITER_* knobs are deprecated (removed in 4.0); use "
+                "their live RESTGDF_RESILIENCE_* replacements instead -- "
+                "RESTGDF_RESILIENCE_MAX_ATTEMPTS, "
+                "RESTGDF_RESILIENCE_RETRY_BUDGET_S, and "
+                "RESTGDF_RESILIENCE_RATE_PER_SERVICE_ROOT_PER_SECOND with "
+                "RESTGDF_RESILIENCE_LIMITER_KEY=host. "
+                "RESTGDF_AUTH_REFRESH_THRESHOLD_S is still not read by token "
+                "sessions (construct TokenSessionConfig explicitly). "
+                "See AUTH-04 / TRANSPORT-01.",
                 InertConfigWarning,
                 stacklevel=_warn_stacklevel,
             )

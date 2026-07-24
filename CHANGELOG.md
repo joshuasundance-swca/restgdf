@@ -5,6 +5,158 @@ All notable changes to restgdf are documented here. This project follows
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-07-24
+### Added
+
+- **Rate-limit / cooldown granularity is now selectable.**
+  `ResilienceConfig.limiter_key` (env `RESTGDF_RESILIENCE_LIMITER_KEY`) chooses
+  whether the token bucket and 429 cooldown key on the ArcGIS *service root*
+  (`"service_root"`, the default — behaviour-preserving) or the *host*
+  (`"host"`). Host granularity applies one polite rate across every service
+  behind a single government host — the correct politeness key when many
+  independent services share one box. The 429 cooldown always follows the same
+  selected key, so a host-level throttle produces a host-wide cooldown (R1 /
+  politeness decision D1). Combined with the sub-1.0 rate fix above, a polite
+  `limiter_key="host"` + `rate_per_service_root_per_second=0.5` bulk crawl now
+  works.
+- **Retry attempts, budget and backoff are now tunable on `ResilienceConfig`.**
+  The stamina executor reads `max_attempts`, `retry_budget_s`, `wait_initial_s`,
+  `wait_max_s` and `wait_jitter_s` (env `RESTGDF_RESILIENCE_MAX_ATTEMPTS`,
+  `RESTGDF_RESILIENCE_RETRY_BUDGET_S`, `RESTGDF_RESILIENCE_WAIT_INITIAL_S`,
+  `RESTGDF_RESILIENCE_WAIT_MAX_S`, `RESTGDF_RESILIENCE_WAIT_JITTER_S`) from the
+  config it already receives, instead of hardcoded literals. Defaults
+  (`5` / `60.0` / `0.5` / `10.0` / `1.0`) preserve the historical retry policy
+  byte-for-byte, and `ResilienceConfig.enabled` remains the *sole* gate — the
+  new knobs only tune an already-enabled session, they never turn retries off
+  (R2). These live knobs supersede the inert `RetryConfig` fields (now
+  deprecated).
+- **The resilient retry path now emits DEBUG observability logs.** The
+  `restgdf.retry` logger (previously created but never used) now records a
+  DEBUG line for each scheduled retry (attempt number, backoff wait, and the
+  failure that triggered it), each 429 cooldown set (limiter key — the service
+  root, or the host under `limiter_key="host"` — and seconds), and each
+  exhaustion mapping (the `restgdf.errors` type the final
+  underlying failure is mapped to). Set `logging.getLogger("restgdf.retry")`
+  to `DEBUG` to trace throttling and retries during a bulk crawl — making the
+  `docs/recipes/tracing.md` promise true (H1-N4). The logged `wait=` is the
+  *scheduled* pre-jitter backoff; the actual sleep adds up to `wait_jitter_s`
+  on top. These records carry a new structured-`extra` key, `limit_key`
+  (added to `restgdf._logging.LOG_EXTRA_KEYS`), holding the rate-limit /
+  cooldown key — deliberately not `service_root`, which would mislabel the
+  value under `limiter_key="host"`.
+
+### Changed
+
+- **Resilient retries now run through `stamina.retry_context` instead of the
+  `@stamina.retry` decorator.** The retry policy, backoff schedule and kwargs
+  are identical (a fresh iterator per call, exactly as the decorator builds);
+  the context form is what makes each attempt's number and scheduled backoff
+  available to the new DEBUG logging. One consumer-visible seam: subscribers to
+  `stamina.instrumentation` now see `RetryDetails.name` reported as
+  `"<context block>"` (stamina hardcodes it for `retry_context`) instead of the
+  decorator-derived function name, so any metric keyed on that label — e.g.
+  stamina's Prometheus integration, which labels its retry counter with it —
+  changes label value on upgrade.
+
+### Deprecated
+
+- **`RetryConfig.max_attempts` / `RetryConfig.max_delay_s` and
+  `LimiterConfig.rate_per_host` are deprecated.** They validate but have never
+  been read by the resilience executor, and are now superseded by the live
+  `ResilienceConfig` knobs added above: `max_attempts` →
+  `ResilienceConfig.max_attempts`, `max_delay_s` →
+  `ResilienceConfig.retry_budget_s`, and `rate_per_host` →
+  `ResilienceConfig.rate_per_service_root_per_second` with
+  `ResilienceConfig.limiter_key="host"`. Their `RESTGDF_RETRY_*` /
+  `RESTGDF_LIMITER_*` env keys stay wired as a back-compat seam and still emit
+  `InertConfigWarning` (whose text now names the live replacements instead of
+  claiming the executor hardcodes its policy). The deprecated fields and env
+  keys are removed in 4.0.
+- **`ResilienceConfig.backend` is deprecated.** It has always been dead config
+  — `"stamina"` is the only implementation and the executor never reads the
+  field. Setting `RESTGDF_RESILIENCE_BACKEND` now emits a `DeprecationWarning`
+  (previously it was silently accepted, the one inert resilience knob that
+  escaped `InertConfigWarning`). The field stays reachable and defaults to
+  `"stamina"` for back-compat; it is removed in 4.0 (R5).
+
+### Fixed
+
+- **Sub-1.0 rate limits no longer crash.** A
+  `ResilienceConfig.rate_per_service_root_per_second` below `1.0` (e.g. `0.5`
+  req/s — the natural setting for a polite bulk crawl) previously raised a raw,
+  unmapped `ValueError` ("Can't acquire more than the maximum capacity") on the
+  very first request, because the limiter built `AsyncLimiter(rate, 1)` and
+  `acquire(1)` refuses any amount above a fractional `max_rate`. Sub-1 rates are
+  now spelled as one token per `1 / rate` seconds
+  (`restgdf.resilience._limiter.LimiterRegistry.get`), so the limiter paces at
+  the requested rate. Rates `>= 1` keep their existing burst semantics exactly
+  (H1-M1).
+- **Dispatch-time transport errors are now retried and mapped.** The resilient
+  retry path (`restgdf.resilience._retry`) previously retried and typed only
+  connect-time (`ClientConnectorError` → `TransportError`) and read-timeout
+  (`ServerTimeoutError` → `RestgdfTimeoutError`) failures. Server disconnects
+  and connection resets (`ServerDisconnectedError`, `ClientOSError`/ECONNRESET,
+  `ClientConnectionResetError`) raised while the request is dispatched — common
+  transient failures when crawling thousands of flaky ArcGIS hosts — leaked out
+  raw and unretried on the first occurrence. They are now retried to exhaustion
+  and surfaced as `restgdf.errors.TransportError`, so a caller catching
+  `TransportError` no longer misses them. Deterministic 4xx responses still
+  never retry (H1-M2).
+  **Known limitation (scope):** the retry wrapper covers the request only up to
+  *headers received*; callers read the response body afterwards. A failure
+  raised while the **body** is read — the truncated/incomplete-body
+  `aiohttp.ClientPayloadError`, or a mid-body disconnect — is therefore still
+  neither retried nor mapped, and surfaces raw from `response.json(...)`.
+  Callers who need to survive truncated bodies should catch
+  `aiohttp.ClientPayloadError` alongside `restgdf.errors.TransportError`.
+  Extending retry across body consumption is a design item for a later release.
+- **429 cooldowns are no longer erased by a racing waiter.**
+  `CooldownRegistry.wait_if_cooling` (`restgdf.resilience._limiter`) popped the
+  stored deadline unconditionally after sleeping, so if a fresh 429 installed a
+  *longer* cooldown while an older waiter was still asleep, the waking waiter
+  erased the newer deadline — occasionally not honouring a cooldown at high
+  crawl concurrency. It now re-reads the deadline after sleeping and leaves a
+  concurrently-set fresher one in place for the next attempt/request to honour
+  instead of clearing it (H1-N2). A single `wait_if_cooling` call sleeps at
+  most until the deadline it observed on entry and never chains a second wait,
+  so one attempt's cooldown stays bounded by `respect_retry_after_max_s`
+  however many requests are in flight on the key — stamina evaluates the retry
+  budget only *between* attempts, so an unbounded in-attempt sleep would be
+  uninterruptible. Trade-off: the waking waiter itself proceeds, so one
+  request per waker may dispatch while a concurrently-set fresher cooldown is
+  still in force; the next attempt on the key waits it out.
+- **A single failing layer no longer discards a whole service's metadata.**
+  `service_metadata` (`restgdf.utils.getinfo`) fanned its per-layer
+  `get_metadata` calls out through `bounded_gather` with the default
+  `return_exceptions=False`, so one layer that raised — a secured / deleted /
+  admin-disabled layer returning an ArcGIS `{"error": ...}` envelope
+  (`RestgdfError`), a dropped connection (`aiohttp.ClientError`), or a timeout
+  (`TimeoutError`) — cancelled its siblings and discarded the entire service's
+  layer inventory behind a single generic error (the exact failure mode at
+  public multi-server crawl scale). Such a layer is now contained: its siblings
+  are returned as before, and the failed layer stays present in the layer list
+  annotated with a `layer_error` marker (`"<ExcType>: <message>"`) so the
+  failure is visible rather than silently dropped. A service-*root* metadata
+  failure is unchanged — `safe_crawl` still records it as a whole-service
+  `CrawlError` (H2-1).
+  **Monitoring note (behaviour change):** a contained per-layer failure is
+  *not* a `CrawlError`, so it no longer appears in `CrawlReport.errors` at all
+  — a service whose every layer failed now looks healthy if you only count
+  `len(report.errors)`. Count `layer_error` markers in the returned layer lists
+  instead. Each contained failure also emits one `WARNING` on the new
+  `restgdf.crawl` logger (`"layer metadata failed, contained: url=… error=…"`,
+  with `service_root` / `layer_id` / `exception_type` in the structured extra),
+  so a crawl has an aggregate failure signal without inspecting the data. URLs
+  in both the message and the extras are scrubbed of `token=` query values
+  before logging.
+  Containment is scoped to transport and response failures
+  (`RestgdfResponseError`, `TransportError`, `RestgdfTimeoutError`,
+  `aiohttp.ClientConnectionError`, `aiohttp.ClientPayloadError`, `TimeoutError`)
+  — deliberately *not* the `RestgdfError` / `aiohttp.ClientError` roots, so
+  `ConfigurationError`, `OptionalDependencyError` and `aiohttp.InvalidURL`
+  keep failing loudly on the first service instead of degrading into thousands
+  of identical markers.
+
 ## [3.2.0] - 2026-07-24
 ### Added
 
@@ -53,11 +205,16 @@ All notable changes to restgdf are documented here. This project follows
   (`restgdf.utils._http.default_headers`, W2-10 / CONFIG-01 / AUTH-03).
   **Wire-visible behavior change:** some Esri deployments sniff the
   `User-Agent`, so a WAF or usage policy keyed on `"Mozilla/5.0"` may now
-  see `restgdf/<version>`. Override it explicitly per request
-  (`headers={"User-Agent": ...}`, still wins) or globally via
-  `RESTGDF_TRANSPORT_USER_AGENT` / `TransportConfig.user_agent`. The
-  exported `DEFAULT_METADATA_HEADERS` constant keeps its historical value
-  for back-compat but no longer determines the wire `User-Agent`.
+  see `restgdf/<version>`. Override it globally via
+  `RESTGDF_TRANSPORT_USER_AGENT` / `TransportConfig.user_agent` — the
+  sole lever on the metadata/`Directory`/crawl path, which has no
+  `headers=` seam — or per request (`headers={"User-Agent": ...}`, still
+  wins) on the feature/query surfaces (`get_feature_count`,
+  `get_object_ids`, streaming/`get_gdf`/stats) that accept one (3.3
+  correction: this bullet originally implied the per-request override
+  applies everywhere). The exported `DEFAULT_METADATA_HEADERS` constant
+  keeps its historical value for back-compat but no longer determines the
+  wire `User-Agent`.
 - **Setting a currently-inert `RESTGDF_*` knob now warns.** `Config.from_env`
   (hence `get_config()`) emits one `restgdf._config.InertConfigWarning`
   (a `UserWarning`) naming any set-but-unwired `RESTGDF_RETRY_*` /
@@ -900,7 +1057,9 @@ Earlier releases were not formally tracked here. See the
 [PyPI release notes](https://pypi.org/project/restgdf/#history) for pre-2.0
 changes.
 
-[Unreleased]: https://github.com/joshuasundance-swca/restgdf/compare/v3.1.0...HEAD
-[3.1.0]: https://github.com/joshuasundance-swca/restgdf/compare/v3.0.0...v3.1.0
-[3.0.0]: https://github.com/joshuasundance-swca/restgdf/compare/v2.0.0...v3.0.0
-[2.0.0]: https://github.com/joshuasundance-swca/restgdf/releases/tag/v2.0.0
+[Unreleased]: https://github.com/joshuasundance-swca/restgdf/compare/3.3.0...HEAD
+[3.3.0]: https://github.com/joshuasundance-swca/restgdf/compare/3.2.0...3.3.0
+[3.2.0]: https://github.com/joshuasundance-swca/restgdf/compare/3.1.0...3.2.0
+[3.1.0]: https://github.com/joshuasundance-swca/restgdf/compare/3.0.0...3.1.0
+[3.0.0]: https://github.com/joshuasundance-swca/restgdf/compare/2.0.0...3.0.0
+[2.0.0]: https://github.com/joshuasundance-swca/restgdf/releases/tag/2.0.0

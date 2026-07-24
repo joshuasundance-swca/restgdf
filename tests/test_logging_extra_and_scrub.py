@@ -86,6 +86,7 @@ def test_build_log_extra_drops_none_keys() -> None:
 def test_build_log_extra_full_envelope_keys_match_contract() -> None:
     extra = build_log_extra(
         service_root="https://host/rest",
+        limit_key="https://host",
         layer_id=0,
         operation="query",
         page_index=1,
@@ -104,6 +105,21 @@ def test_build_log_extra_scrubs_service_root() -> None:
     extra = build_log_extra(service_root="https://host/x?token=X")
     assert "token=***" in extra["service_root"]
     assert "token=X" not in extra["service_root"]
+
+
+def test_build_log_extra_scrubs_limit_key() -> None:
+    # limit_key carries a URL-shaped rate-limit key (service root or bare host),
+    # so it gets the same token scrubbing as service_root.
+    extra = build_log_extra(limit_key="https://host/x?token=X")
+    assert "token=***" in extra["limit_key"]
+    assert "token=X" not in extra["limit_key"]
+
+
+def test_build_log_extra_limit_key_is_distinct_from_service_root() -> None:
+    # Under limiter_key="host" the emitted key is a bare host, which would be a
+    # mislabel under service_root (V1-M6).
+    extra = build_log_extra(limit_key="https://host")
+    assert set(extra.keys()) == {"limit_key"}
 
 
 def test_build_log_extra_caplog_roundtrip(

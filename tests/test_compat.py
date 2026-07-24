@@ -176,3 +176,33 @@ def test_defaultdict_contents():
     assert DEFAULTDICT["returnGeometry"] is True
     assert DEFAULTDICT["returnCountOnly"] is False
     assert DEFAULTDICT["f"] == "json"
+
+
+# ---------------------------------------------------------------------------
+# ResilienceConfig.backend deprecation seam (R5) — deprecated 3.3, removed 4.0
+# ---------------------------------------------------------------------------
+
+
+class TestResilienceBackendDeprecation:
+    """``backend`` is a dead public field (only 'stamina' is implemented).
+
+    Per the repo's removal policy it cannot be deleted in a minor, so 3.3
+    deprecates the env-var path (mirroring the ``_DEPRECATED_ALIASES``
+    precedent) and keeps the field reachable and pinned here until 4.0.
+    """
+
+    def test_backend_env_var_emits_deprecation_warning(self) -> None:
+        from restgdf._config import Config
+
+        with pytest.warns(DeprecationWarning, match="RESTGDF_RESILIENCE_BACKEND"):
+            Config.from_env(env={"RESTGDF_RESILIENCE_BACKEND": "tenacity"})
+
+    def test_backend_field_stays_reachable_defaulting_to_stamina(self) -> None:
+        # Reachability is preserved in 3.3 (removal is 4.0) — green now and after
+        # the fix. Field construction must NOT warn (only the env path does), so
+        # this also guards against a Field(deprecated=True) regression that would
+        # trip the restgdf.* DeprecationWarning escalation.
+        from restgdf._config import ResilienceConfig
+
+        assert ResilienceConfig().backend == "stamina"
+        assert ResilienceConfig(backend="tenacity").backend == "tenacity"

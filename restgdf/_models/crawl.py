@@ -42,6 +42,12 @@ class CrawlError(PermissiveModel):
     * ``"service_metadata"`` — a per-service ``service_metadata`` call
       failed.
 
+    A failed *layer* has no stage: since 3.3 a per-layer metadata failure
+    is contained inside ``service_metadata`` (H2-1) and surfaces as a
+    ``layer_error`` marker on the layer entry plus one ``WARNING`` on the
+    ``restgdf.crawl`` logger — never as a :class:`CrawlError`. A crawl with
+    an empty ``errors`` list can therefore still contain broken layers.
+
     ``exception`` preserves the original :class:`BaseException` so
     callers can re-raise; it is excluded from the default
     :meth:`~pydantic.BaseModel.model_dump` output for JSON safety.

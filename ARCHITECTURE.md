@@ -104,16 +104,19 @@ restgdf                       # root logger (NullHandler; get_logger(""))
 ├── restgdf.auth              # token lifecycle, refresh attempts
 ├── restgdf.pagination        # streaming + split-on-truncation decisions
 ├── restgdf.normalization     # attribute / row normalization
-└── restgdf.schema_drift      # permissive-tier schema-drift warnings
+├── restgdf.schema_drift      # permissive-tier schema-drift warnings
+└── restgdf.crawl             # directory-crawl containment warnings (3.3)
 ```
 
-These eight suffixes are the *only* names `get_logger()` accepts (see
+These nine suffixes are the *only* names `get_logger()` accepts (see
 `LOGGER_SUFFIXES` in `restgdf/_logging.py`); any other suffix raises
 `ValueError`, so there are no `restgdf.featurelayer` / `restgdf.streaming`
 / `restgdf.directory` / `restgdf.telemetry` loggers. Subsystem → logger:
 HTTP transport → `restgdf.transport` (retries → `restgdf.retry`),
 streaming/pagination → `restgdf.pagination`, schema drift →
-`restgdf.schema_drift`, normalization → `restgdf.normalization`.
+`restgdf.schema_drift`, normalization → `restgdf.normalization`,
+per-layer crawl failures contained inside `service_metadata` →
+`restgdf.crawl` (WARNING).
 
 Loggers never emit at `DEBUG` with secrets; tokens and password-bearing
 request bodies are redacted at the transport layer.
@@ -204,10 +207,16 @@ restgdf[dev]               # + pytest, pre-commit, sphinx, twine, build
 Extras are additive and composable:
 
 ```bash
-pip install "restgdf[resilience,telemetry]"      # production resiliency
+pip install "restgdf[resilience,telemetry]"      # retry/rate-limit + tracing building blocks
 pip install "restgdf[geo]"                        # notebooks / analytics
 pip install -e ".[dev,resilience,telemetry,geo]" # full contributor install
 ```
+
+Installing `[resilience]` only makes `restgdf.resilience.ResilientSession`
+importable — it does not itself wire retry/rate-limiting into any request.
+A caller must construct `ResilientSession(inner, ResilienceConfig(enabled=
+True, ...))` and pass it as `session=` to `FeatureLayer`/`Directory`; see
+the `docs/recipes/bulk_crawl.md` recipe for a full worked example.
 
 Importing a module that depends on an un-installed extra raises
 `OptionalDependencyError` with a message that names the missing extra.

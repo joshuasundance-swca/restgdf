@@ -168,6 +168,47 @@ jobs:
             exit 1
           fi
 
+      - name: Require CHANGELOG footer link for release
+        if: steps.release_meta.outputs.raw != ''
+        env:
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Q1-a/Q1-b (critic.md): the "## [X.Y.Z]" section header alone is
+          # not enough -- the reference-style link definition
+          # "[X.Y.Z]: https://.../compare/...&|releases/tag/..." at the
+          # CHANGELOG footer is what actually makes the header resolve to a
+          # real GitHub URL. bumpver does not touch CHANGELOG.md
+          # (pyproject.toml file_patterns omits it), so this link is a
+          # manual step the maintainer can forget -- exactly what happened
+          # for 3.2.0 (missing "[3.2.0]:" definition, verified). Fail fast
+          # here rather than shipping a release whose CHANGELOG entry is a
+          # dangling reference. Git tags in this repo are unprefixed (e.g.
+          # "3.2.0", not "v3.2.0"), so only the unprefixed form is accepted.
+          #
+          # Matched literally and anchored to the START of a line: the link
+          # prefix contains "[" / "]" regex metacharacters (so no regex), and
+          # a reference-style link definition is only a definition in column
+          # 1 -- an unanchored substring match would be satisfied by a prose
+          # line that merely mentions "[X.Y.Z]:". awk's index($0, p) == 1
+          # gives both properties with no escaping.
+          link_prefix="[${RELEASE_VERSION}]:"
+
+          count="$(awk -v p="$link_prefix" 'index($0, p) == 1 { n++ } END { print n + 0 }' CHANGELOG.md)"
+          if [ "$count" -eq 0 ]; then
+            echo "::error file=CHANGELOG.md::Missing footer link definition '${link_prefix}' in CHANGELOG.md."
+            echo "Add a '${link_prefix} https://github.com/${GITHUB_REPOSITORY}/compare/<prev>...${RELEASE_VERSION}' line before publishing ${RELEASE_VERSION}."
+            exit 1
+          fi
+
+          if [ "$count" -gt 1 ]; then
+            echo "::error file=CHANGELOG.md::Duplicate footer link definition '${link_prefix}' appears ${count} times in CHANGELOG.md."
+            echo "Consolidate the duplicate '${link_prefix}' lines before publishing ${RELEASE_VERSION}."
+            exit 1
+          fi
+
       - name: Install build dependencies
         run: |
           python -m pip install --upgrade pip

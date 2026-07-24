@@ -30,10 +30,14 @@ LOGGER_SUFFIXES: Final[tuple[str, ...]] = (
     "pagination",
     "normalization",
     "schema_drift",
+    # 3.3: directory-crawl visibility -- per-layer metadata failures contained
+    # inside ``service_metadata`` are reported here at WARNING (H2-1 / V2-M1).
+    "crawl",
 )
 
 LOG_EXTRA_KEYS: Final[tuple[str, ...]] = (
     "service_root",
+    "limit_key",
     "layer_id",
     "operation",
     "page_index",
@@ -112,6 +116,7 @@ def _scrub_url(url: str | None) -> str | None:
 def build_log_extra(
     *,
     service_root: str | None = None,
+    limit_key: str | None = None,
     layer_id: int | None = None,
     operation: str | None = None,
     page_index: int | None = None,
@@ -125,13 +130,21 @@ def build_log_extra(
 ) -> dict[str, Any]:
     """Build a normalized ``extra=`` envelope for library log records.
 
-    Only keys with non-``None`` values are included. ``service_root`` is scrubbed
-    via :func:`_scrub_url` so ``?token=`` values never reach log handlers. Keys
-    are drawn from :data:`LOG_EXTRA_KEYS`; the keyword list is the contract —
-    unknown keys raise :class:`TypeError` from the signature.
+    Only keys with non-``None`` values are included. ``service_root`` and
+    ``limit_key`` are scrubbed via :func:`_scrub_url` so ``?token=`` values never
+    reach log handlers. Keys are drawn from :data:`LOG_EXTRA_KEYS`; the keyword
+    list is the contract — unknown keys raise :class:`TypeError` from the
+    signature.
+
+    ``limit_key`` is the *rate-limit/cooldown* key emitted by the resilience
+    retry path. It is deliberately distinct from ``service_root``: under
+    :attr:`restgdf.ResilienceConfig.limiter_key` ``= "host"`` the value is a
+    bare ``scheme://host``, not a service root, so reusing ``service_root``
+    would mislabel it (3.3).
     """
     raw: dict[str, Any] = {
         "service_root": _scrub_url(service_root),
+        "limit_key": _scrub_url(limit_key),
         "layer_id": layer_id,
         "operation": operation,
         "page_index": page_index,

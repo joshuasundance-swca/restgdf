@@ -16,7 +16,12 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from aiohttp import ClientSession, ServerTimeoutError
+from aiohttp import (
+    ClientConnectionError,
+    ClientPayloadError,
+    ClientSession,
+    ServerTimeoutError,
+)
 from pydantic import BaseModel
 
 from restgdf._client._protocols import AsyncHTTPSession
@@ -52,12 +57,35 @@ from restgdf.utils._stats import (
     nested_count,
     nestedcount,
 )
-from restgdf.errors import RestgdfTimeoutError
+from restgdf._logging import _scrub_url, build_log_extra, get_logger
+from restgdf.errors import (
+    RestgdfResponseError,
+    RestgdfTimeoutError,
+    TransportError,
+)
 
 try:
     from restgdf.resilience import bounded_retry_timeout as _resilience_bounded_retry
 except ImportError:  # pragma: no cover - resilience extra not installed
     _resilience_bounded_retry = None  # type: ignore[assignment]
+
+_crawl_log = get_logger("crawl")
+
+# H2-1 / V2-M3: the transport + response failures a per-layer ``get_metadata``
+# may hit on a healthy crawl, contained so one bad layer cannot discard its
+# siblings. Deliberately NOT the ``RestgdfError`` / ``aiohttp.ClientError``
+# roots: those also cover ``ConfigurationError`` / ``OptionalDependencyError``
+# and ``InvalidURL`` / ``TooManyRedirects`` -- programming and misconfiguration
+# bugs, which must keep failing loudly on the first service instead of
+# degrading into thousands of identical ``layer_error`` strings.
+_CONTAINED_LAYER_ERRORS = (
+    RestgdfResponseError,
+    TransportError,
+    RestgdfTimeoutError,
+    ClientConnectionError,
+    ClientPayloadError,
+    TimeoutError,
+)
 
 __all__ = [
     "ClientSession",
@@ -209,10 +237,52 @@ async def service_metadata(
         _raw.model_dump(by_alias=True) if isinstance(_raw, BaseModel) else dict(_raw)
     )
 
-    async def _comprehensive_metadata(layer_url: str) -> dict[str, Any]:
+    async def _comprehensive_metadata(
+        layer_id: Any,
+        layer_url: str,
+    ) -> dict[str, Any]:
         # ``bounded_gather`` below acquires ``sem`` once per task, so do NOT
         # re-acquire here — ``asyncio.Semaphore`` is not re-entrant.
-        layer_raw = await get_metadata(layer_url, session, token=token)
+        #
+        # H2-1: contain a per-layer metadata failure so one bad/secured/slow
+        # layer (an ArcGIS ``{"error": ...}`` envelope -> ``RestgdfResponseError``,
+        # a dropped/truncated connection -> ``aiohttp.ClientConnectionError`` /
+        # ``ClientPayloadError`` / ``TransportError``, or a timeout) does not
+        # propagate out of the ``bounded_gather`` fan-out below (default
+        # ``return_exceptions=False``) and discard every sibling layer of the
+        # service. The failed layer stays VISIBLE in the returned layer list,
+        # annotated with a ``layer_error`` marker, instead of the whole service
+        # vanishing behind a single generic error. A service-ROOT metadata
+        # failure is deliberately NOT contained here (see the un-guarded
+        # ``get_metadata`` above): ``safe_crawl`` records that as a whole-service
+        # ``CrawlError``.
+        try:
+            layer_raw = await get_metadata(layer_url, session, token=token)
+        except _CONTAINED_LAYER_ERRORS as exc:
+            # V2-M1: the marker lives in returned DATA only, and a contained
+            # failure produces no ``CrawlError``, so an operator counting
+            # ``CrawlReport.errors`` would see a 100%-failed service as healthy.
+            # One WARNING per contained layer gives the crawl an aggregate
+            # failure signal.
+            # R2: scrub the URL in the *message* too — ``build_log_extra``
+            # scrubs the extras, but a ``?token=`` in the message text would
+            # still reach handlers/aggregators verbatim.
+            _crawl_log.warning(
+                "layer metadata failed, contained: url=%s error=%s",
+                _scrub_url(layer_url),
+                type(exc).__name__,
+                extra=build_log_extra(
+                    service_root=service_url,
+                    layer_id=layer_id if isinstance(layer_id, int) else None,
+                    operation="service_metadata",
+                    exception_type=type(exc).__name__,
+                ),
+            )
+            return {
+                "id": layer_id,
+                "url": layer_url,
+                "layer_error": f"{type(exc).__name__}: {exc}",
+            }
         metadata: dict[str, Any] = (
             layer_raw.model_dump(by_alias=True)
             if isinstance(layer_raw, BaseModel)
@@ -232,7 +302,7 @@ async def service_metadata(
         return metadata
 
     tasks = [
-        _comprehensive_metadata(f"{service_url}/{layer['id']}")
+        _comprehensive_metadata(layer["id"], f"{service_url}/{layer['id']}")
         for layer in _service_metadata.get("layers") or []
     ]
     # BL-01: enumerated fan-out site. ``bounded_gather`` holds ``sem`` for
