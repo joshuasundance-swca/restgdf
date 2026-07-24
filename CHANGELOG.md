@@ -17,6 +17,12 @@ All notable changes to restgdf are documented here. This project follows
   `NaN`/`+Inf` value passed the existing negative-value guard unmolested
   and could reach the 429 cooldown deadline computation and the public
   `RateLimitError.retry_after` attribute.
+- The optional-dependency gate (`require_pandas`/`require_geopandas`/
+  `require_pyogrio` and friends) now catches `ImportError` instead of only
+  `ModuleNotFoundError`, so a present-but-broken geo dependency (e.g. a
+  native GDAL/shapely load failure) surfaces as `OptionalDependencyError`
+  naming the `restgdf[geo]` hint instead of escaping as a raw, unwrapped
+  `ImportError`.
 
 ## [3.1.0] - 2026-07-24
 ### Added
