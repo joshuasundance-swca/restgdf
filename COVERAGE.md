@@ -7,7 +7,7 @@
 | restgdf/\_client/request.py            |       10 |        0 |        4 |        0 |    100% |           |
 | restgdf/\_compat.py                    |       22 |        0 |        2 |        0 |    100% |           |
 | restgdf/\_config.py                    |      139 |        1 |       20 |        1 |     99% |       176 |
-| restgdf/\_logging.py                   |       57 |        0 |       18 |        1 |     99% | 107-\>109 |
+| restgdf/\_logging.py                   |       59 |        0 |       18 |        1 |     99% | 107-\>109 |
 | restgdf/\_models/\_\_init\_\_.py       |        7 |        0 |        0 |        0 |    100% |           |
 | restgdf/\_models/\_drift.py            |      145 |        2 |       66 |        3 |     98% |221, 241, 329-\>328 |
 | restgdf/\_models/\_errors.py           |        3 |        0 |        0 |        0 |    100% |           |
@@ -26,7 +26,7 @@
 | restgdf/directory/directory.py         |       51 |        0 |       16 |        1 |     99% | 133-\>142 |
 | restgdf/errors.py                      |       78 |        0 |       16 |        1 |     99% | 255-\>257 |
 | restgdf/featurelayer/\_\_init\_\_.py   |        2 |        0 |        0 |        0 |    100% |           |
-| restgdf/featurelayer/featurelayer.py   |      190 |        1 |       50 |        4 |     98% |206, 352-\>358, 473-\>478, 541-\>546 |
+| restgdf/featurelayer/featurelayer.py   |      193 |        1 |       52 |        4 |     98% |206, 364-\>370, 485-\>490, 553-\>558 |
 | restgdf/resilience/\_\_init\_\_.py     |       10 |        0 |        0 |        0 |    100% |           |
 | restgdf/resilience/\_bounded\_retry.py |       19 |        0 |        0 |        0 |    100% |           |
 | restgdf/resilience/\_errors.py         |       21 |        0 |        4 |        0 |    100% |           |
@@ -51,4 +51,4 @@
 | restgdf/utils/getinfo.py               |       65 |        0 |       12 |        0 |    100% |           |
 | restgdf/utils/token.py                 |      182 |        3 |       46 |        5 |     96% |183, 206, 328, 397-\>399, 476-\>exit |
 | restgdf/utils/utils.py                 |        8 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                              | **2755** |   **29** |  **770** |   **37** | **98%** |           |
+| **TOTAL**                              | **2760** |   **29** |  **772** |   **37** | **98%** |           |
