@@ -127,6 +127,14 @@ All notable changes to restgdf are documented here. This project follows
   — `Config.from_env()` resolves only from the process environment (`os.environ`).
   The docs now show how to opt in explicitly with `python-dotenv` yourself
   (W3-5, CONFIG-04).
+- `iter_pages`/`stream_*`'s `on_truncation='split'` path no longer re-fetches
+  the OID list at every recursion node (each bisected half now reuses the
+  parent's already-materialized slice) and no longer emits an unbounded
+  `IN (...)` literal for a single oversized half — a half exceeding a new
+  1000-element cap (the common ArcGIS backing-store IN-predicate limit) is
+  bisected further before being fetched, instead of being sent as one
+  arbitrarily large literal list (W4-3, PAGINATION-03). No caller-visible
+  contract change (same pages yielded, same `on_truncation` semantics).
 
 ## [3.1.0] - 2026-07-24
 ### Added
