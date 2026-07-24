@@ -38,6 +38,22 @@ All notable changes to restgdf are documented here. This project follows
   `expiration=60`. Behaviourally equivalent to the ArcGIS server-side
   default of 60 minutes; the value is now explicit on the wire.
 
+### Security
+
+- **AUTH-01: a caller-supplied token in the request body is no longer
+  serialized into the URL query string.** On the documented
+  `FeatureLayer(token=...)` / `data={"token": ...}` path, a short
+  token-bearing request was routed via `GET`, leaking the ArcGIS token
+  into the URL — where it lands in server / proxy / WAF access logs and
+  `Referer` headers — on a plain `aiohttp.ClientSession` or a default
+  header-mode `ArcGISTokenSession`. `_arcgis_request` now forces `POST`
+  (token in the request body) whenever the outgoing body carries a
+  `token` key, regardless of session transport. This complements the
+  existing session-transport guard; ArcGIS `/query` and metadata roots
+  already accept form-encoded `POST` bodies, so the wire contract is
+  unchanged for servers. Tokenless requests keep the length-based
+  `GET`/`POST` routing.
+
 ## [3.0.0] - 2026-05-02
 
 ## [2.0.0] - 2026-05-02

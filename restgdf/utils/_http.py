@@ -113,8 +113,18 @@ async def _arcgis_request(
     and forces ``POST`` whenever any layer reports a non-``"header"``
     transport (``ResilientSession(ArcGISTokenSession(transport="body"))``
     and similar wrappers included).
+
+    **Credential safety (AUTH-01).** The session-transport guard above
+    only sees the *session's* transport mode, so a caller-supplied token
+    in the outgoing ``body`` — the documented ``FeatureLayer(token=...)``
+    / ``data={"token": ...}`` path — would still ride on ``GET`` (and
+    leak into the URL) on a plain :class:`aiohttp.ClientSession` or a
+    default header-mode session. To close that leak, this helper also
+    forces ``POST`` whenever the outgoing ``body`` carries a ``token``
+    key, regardless of session transport. This complements (does not
+    replace) the session-transport guard.
     """
-    if _session_requires_body_transport(session):
+    if _session_requires_body_transport(session) or (body and "token" in body):
         return await session.post(url, data=body, **kwargs)
     verb = _choose_verb(url, body=body)
     if verb == "GET":

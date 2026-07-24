@@ -77,9 +77,12 @@ async def test_get_feature_count_propagates_where_and_token_from_data(fake_sessi
     )
 
     _, kwargs = fake_session.post_calls[0]
+    # AUTH-01 (W2-1): token-bearing bodies are now forced onto POST, which
+    # forwards the body untouched -- the raw bool rides through instead of
+    # the GET path's coerced "true" string. Pinned post-fix behavior.
     assert kwargs["data"] == {
         "where": "STATUS = 'OPEN'",
-        "returnCountOnly": "true",
+        "returnCountOnly": True,
         "f": "json",
         "token": "abc",
     }
@@ -120,9 +123,11 @@ async def test_get_object_ids_preserves_where_and_returns_tuple(fake_session):
 
     assert (field, ids) == ("OBJECTID", [1, 2, 3])
     _, kwargs = fake_session.post_calls[0]
+    # AUTH-01 (W2-1): token-bearing bodies are now forced onto POST, which
+    # forwards the body untouched (raw bool, not the GET-coerced "true").
     assert kwargs["data"] == {
         "where": "A=1",
-        "returnIdsOnly": "true",
+        "returnIdsOnly": True,
         "f": "json",
         "token": "t",
     }

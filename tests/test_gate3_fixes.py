@@ -87,8 +87,14 @@ async def test_arcgis_request_forces_post_when_transport_is_query():
 
 @pytest.mark.asyncio
 async def test_arcgis_request_still_uses_get_for_header_transport():
-    """transport='header' is the safe default (token in HTTP header);
-    short requests can use GET without leaking credentials."""
+    """transport='header' is the safe default (token in HTTP header).
+
+    A short request may use GET here ONLY because this body carries no
+    ``token`` key — the request itself has no credential to leak into the
+    URL. A token-bearing body forces POST regardless of transport; that is
+    covered by ``test_arcgis_request_forces_post_when_body_carries_token_*``
+    (AUTH-01).
+    """
     from restgdf.utils._http import _arcgis_request
 
     session = _FakeAuthSession(transport="header")
