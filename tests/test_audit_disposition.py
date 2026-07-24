@@ -155,449 +155,32 @@ def test_declaration_lines_empty_message_returns_empty(ad: ModuleType) -> None:
 
 
 # ---------------------------------------------------------------------------
-# build_prose_signals — deferred / decision-closed mining, paragraph-scoped
+# parse_deliberate_deferrals_section — the SOLE deferred/decision-closed
+# evidence source (commit-body narration was removed entirely -- see the
+# module docstring for the three-recurrence history that led here)
 # ---------------------------------------------------------------------------
 
 
-def test_build_prose_signals_deferred_needs_owner_and_trigger(ad: ModuleType) -> None:
-    commits = [
-        ad.CommitRecord(
-            sha="deadbeef",
-            message=(
-                "fix: token 4xx taxonomy (W2-2, W2-3) (#209)\n\n"
-                "W2-5 (ERRTAX-03): NO-GO / deferred (matches plan rec).\n"
-                "Docstring note records scope + owner + trigger to revisit.\n\n"
-                "W2-11: unrelated paragraph, no signal here.\n"
-            ),
-        ),
-    ]
-    deferred, decision_closed = ad.build_prose_signals(commits)
+def test_parse_deliberate_deferrals_section_finds_deferred_bullet(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    plan_dir = tmp_path / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    traceability = (
+        "## Deliberate deferrals\n\n"
+        "- **`ERRTAX-03` / `W2-5` — DEFERRED (NO-GO), M3 2026-07-24.** Closed as "
+        "NO-GO per plan/02's own recommendation. Owner: a future pass. Trigger: "
+        "maintainer GO.\n"
+    )
+    (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
+    deferred, decision_closed = ad.parse_deliberate_deferrals_section(tmp_path)
     assert "W2-5" in deferred
+    assert deferred["W2-5"].kind == "traceability"
     assert "W2-5" not in decision_closed
-    assert "W2-11" not in deferred
-    assert "W2-11" not in decision_closed
 
 
-def test_build_prose_signals_owner_trigger_labelled_form(ad: ModuleType) -> None:
-    commits = [
-        ad.CommitRecord(
-            sha="cafef00d",
-            message=(
-                "feat: drift attribution (W5-13) (#210)\n\n"
-                "Also records the W2-5 (ERRTAX-03) deferral inline: in-body 498/499\n"
-                "envelopes still surface as generic RestgdfResponseError. Owner: W2\n"
-                "(L2 token.py refresh-lift). Trigger: maintainer GO + the coordinated\n"
-                "token.py lift landing. No GO recorded this milestone.\n"
-            ),
-        ),
-    ]
-    deferred, _decision_closed = ad.build_prose_signals(commits)
-    assert "W2-5" in deferred
-    assert deferred["W2-5"].kind == "commit"
-    assert deferred["W2-5"].source == "cafef00d"
-
-
-def test_build_prose_signals_decision_closed_without_owner_trigger(
-    ad: ModuleType,
-) -> None:
-    commits = [
-        ad.CommitRecord(
-            sha="1234567",
-            message="fix: something (W2-99)\n\nW2-99: NO-GO, revisit later without a recorded trigger.\n",
-        ),
-    ]
-    deferred, decision_closed = ad.build_prose_signals(commits)
-    assert "W2-99" not in deferred
-    assert "W2-99" in decision_closed
-
-
-def test_build_prose_signals_does_not_cross_contaminate_dense_rows(
-    ad: ModuleType,
-) -> None:
-    """Regression: a first draft scanned PROGRAM-LEDGER.md too, and its dense
-    per-milestone summary row mentioned ~16 items alongside "owner+trigger"
-    and "NO-GO" (which really only describe W2-5/W5-13), so EVERY co-mentioned
-    item (including landed ones like W4-3) false-flagged as DEFERRED. The
-    ledger is still never fed in (belt and braces), but this test now pins
-    the GENERAL fix that also applies to any commit body shaped this way:
-    ``build_prose_signals`` is clause-scoped (``_item_clauses``, split on
-    ``;``), so an item sharing a dense multi-topic PARAGRAPH with the
-    owner+trigger/NO-GO language no longer inherits it unless the item's own
-    clause -- or the commit's own subject line -- actually carries it.
-    """
-    ad_mod = ad
-    dense_row_as_commit_body = (
-        "docs: ledger update (not a real commit in practice)\n\n"
-        "M3 Medium correctness COMPLETE (W2-2/3/11, W3-2/3/4, W4-3/4, W5-2/3/6/13/14; "
-        "decision-closes with recorded owner+trigger: W2-5 NO-GO per plan recommendation)\n"
-    )
-    commits = [ad_mod.CommitRecord(sha="abc123", message=dense_row_as_commit_body)]
-    deferred, decision_closed = ad_mod.build_prose_signals(commits)
-    # W4-3 shares the PARAGRAPH with "owner+trigger"/"NO-GO" but not the
-    # CLAUSE (it's on the "M3 Medium correctness COMPLETE (...)" side of the
-    # semicolon, the marker language is on the other side) and is not on the
-    # commit's subject line either -- no longer eligible.
-    assert "W4-3" not in deferred
-    assert "W4-3" not in decision_closed
-    assert "W2-5" in deferred  # the item the language was actually about, unaffected
-
-
-def test_build_prose_signals_ignores_unrelated_co_mention(ad: ModuleType) -> None:
-    """Regression for the real self-contamination bug this fix closes: a
-    fixture commit body co-mentioning ANOTHER item's ID in the same blank-
-    line paragraph as owner+trigger language -- but in an unrelated clause,
-    about an unrelated topic, with neither item on the commit's subject line
-    -- must not mark that other item DEFERRED. This is the exact shape of
-    this program's own genesis commit (``e65bf75``), which mentions "W2-1"
-    and "owner+trigger"/"NO-GO" in one paragraph while narrating three
-    unrelated bugfixes, only one of which is a real deferral (about a
-    completely different item). ``is_dev_tooling_commit`` now excludes that
-    specific commit outright, but this test proves the general-purpose
-    clause-scoping fix in ``build_prose_signals`` holds even for a
-    hypothetical commit that ISN'T dev-tooling-scoped.
-    """
-    commits = [
-        ad.CommitRecord(
-            sha="fixture01",
-            message=(
-                "fix: three unrelated bugs in one release (#999)\n\n"
-                "Three self-caught bugs fixed before shipping: a parser bug fixed "
-                "column-position-robustly; scanning the ledger's dense rows "
-                "cross-contaminated co-mentioned items with an owner+trigger/ "
-                "NO-GO signal meant for one item only (fixed by dropping the "
-                "ledger from that scan); and W9-1 citations undercounted landed "
-                "items (fixed by also matching finding IDs).\n"
-            ),
-        ),
-    ]
-    deferred, decision_closed = ad.build_prose_signals(commits)
-    assert "W9-1" not in deferred
-    assert "W9-1" not in decision_closed
-
-
-# ---------------------------------------------------------------------------
-# is_dev_tooling_commit / build_report's dev-tooling exclusion
-# ---------------------------------------------------------------------------
-
-
-def test_is_dev_tooling_commit_matches_the_real_genesis_commit_shape(
-    ad: ModuleType,
-) -> None:
-    assert ad.is_dev_tooling_commit(
-        "feat(dev-tooling): add M4 exit oracle audit_disposition.py + tests\n\nBody.\n",
-    )
-
-
-def test_is_dev_tooling_commit_false_for_ordinary_commits(ad: ModuleType) -> None:
-    assert not ad.is_dev_tooling_commit(
-        "fix: token 4xx taxonomy (W2-2, W2-3) (#209)\n\nBody.\n",
-    )
-
-
-def test_is_dev_tooling_commit_false_for_empty_message(ad: ModuleType) -> None:
-    assert not ad.is_dev_tooling_commit("")
-    assert not ad.is_dev_tooling_commit("   \n  \n")
-
-
-def test_build_report_excludes_dev_tooling_commit_from_deferral_evidence(
-    ad: ModuleType,
-    tmp_path: Path,
-) -> None:
-    """End-to-end: a dev-tooling commit's body quotes an item ID inside an
-    ILLUSTRATIVE example of this program's own deferral-notice convention
-    (marker word directly adjacent to the item ID -- exactly the shape
-    ``_item_clauses``' clause-scoping alone would treat as a legitimate
-    per-item deferral) -- while a SEPARATE, real commit lands that same item
-    cleanly against the finding's own file. Clause-scoping by itself is NOT
-    sufficient here (the illustrative example is deliberately shaped to pass
-    it); only excluding the dev-tooling commit outright (``is_dev_tooling_
-    commit``) keeps this from resolving DEFERRED instead of LANDED --
-    exercising the exclusion as a genuinely necessary second layer, not a
-    redundant one.
-    """
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git("init", "-q", cwd=repo)
-    _git("config", "user.email", "test@example.com", cwd=repo)
-    _git("config", "user.name", "Test", cwd=repo)
-
-    plan_dir = repo / "audit-recommendations" / "plan"
-    plan_dir.mkdir(parents=True)
-    findings = [
-        {
-            "id": "AUTH-01",
-            "axis": "AUTH",
-            "title": "token leak",
-            "severity": "high",
-            "files": ["restgdf/utils/_http.py"],
-        },
-    ]
-    (repo / "audit-recommendations" / "findings.json").write_text(
-        json.dumps(findings),
-        encoding="utf-8",
-    )
-    (plan_dir / "99-traceability.md").write_text(
-        "## Forward map\n\n| `AUTH-01` | high | t | `W2-1` | — |\n",
-        encoding="utf-8",
-    )
-    (repo / "restgdf" / "utils").mkdir(parents=True)
-    (repo / "restgdf" / "utils" / "_http.py").write_text("x = 1\n", encoding="utf-8")
-    _git("add", "-A", cwd=repo)
-    _git("commit", "-q", "-m", "chore: seed repo", cwd=repo)
-
-    # The real landing: touches the finding's own file, cites the item.
-    (repo / "restgdf" / "utils" / "_http.py").write_text("x = 2\n", encoding="utf-8")
-    _git("add", "-A", cwd=repo)
-    _git(
-        "commit",
-        "-q",
-        "-m",
-        "fix: force POST when body carries a token (W2-1)",
-        cwd=repo,
-    )
-
-    # A LATER dev-tooling commit quotes "W2-1" as an ILLUSTRATIVE example of
-    # this program's own deferral-notice convention, with the marker word
-    # directly adjacent -- clause-scoping alone would treat this as a real
-    # per-item deferral signal; only the dev-tooling exclusion prevents it.
-    (repo / "scripts").mkdir()
-    (repo / "scripts" / "audit_disposition.py").write_text(
-        "# oracle\n",
-        encoding="utf-8",
-    )
-    _git("add", "-A", cwd=repo)
-    _git(
-        "commit",
-        "-q",
-        "-m",
-        "feat(dev-tooling): add M4 exit oracle\n\n"
-        'Docstring example of the convention: "W2-1 (EXAMPLE-01): NO-GO / '
-        'deferred. Owner: X. Trigger: Y (illustrative only)."\n',
-        cwd=repo,
-    )
-
-    report = ad.build_report(repo)
-    by_id = {row["id"]: row for row in report["findings"]}
-    assert by_id["AUTH-01"]["disposition"] == "LANDED"
-
-
-# ---------------------------------------------------------------------------
-# is_self_referential_commit — the squash-merge-proof file-diff check
-# ---------------------------------------------------------------------------
-
-
-def test_is_self_referential_commit_true_for_dev_tooling_subject(
-    ad: ModuleType,
-    tmp_path: Path,
-) -> None:
-    """The message-based check alone is enough when the subject scope
-    survives — no git access needed since ``is_dev_tooling_commit`` short-
-    circuits first.
-    """
-    commit = ad.CommitRecord(
-        sha="deadbeef",
-        message="feat(dev-tooling): add M4 exit oracle audit_disposition.py + tests\n",
-    )
-    assert ad.is_self_referential_commit(tmp_path, commit)
-
-
-def test_is_self_referential_commit_true_for_squash_merge_confined_to_oracle_files(
-    ad: ModuleType,
-    tmp_path: Path,
-) -> None:
-    """The real PR #213 shape: a squash-merge commit whose SUBJECT carries
-    the PR title (no "(dev-tooling)" scope survives the rename) but whose
-    ENTIRE diff is confined to the oracle's own two files, and whose body
-    mentions a work item (this program's own construction narrative). Must
-    still resolve self-referential via the file-diff check.
-    """
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git("init", "-q", cwd=repo)
-    _git("config", "user.email", "test@example.com", cwd=repo)
-    _git("config", "user.name", "Test", cwd=repo)
-    # A root commit unrelated to the oracle -- `git diff-tree` on a true
-    # root commit (no parent) reports an empty diff regardless of content,
-    # so the oracle-files commit below must NOT be the repo's very first.
-    (repo / "README.md").write_text("seed\n", encoding="utf-8")
-    _git("add", "-A", cwd=repo)
-    _git("commit", "-q", "-m", "chore: seed repo", cwd=repo)
-
-    (repo / "scripts").mkdir()
-    (repo / "scripts" / "audit_disposition.py").write_text(
-        "# oracle\n",
-        encoding="utf-8",
-    )
-    (repo / "tests").mkdir()
-    (repo / "tests" / "test_audit_disposition.py").write_text(
-        "# oracle tests\n",
-        encoding="utf-8",
-    )
-    _git("add", "-A", cwd=repo)
-    _git(
-        "commit",
-        "-q",
-        "-m",
-        "feat: audit disposition census oracle (M4 exit gate) (#213)\n\n"
-        "Mentions W2-1 as an illustrative example of the convention.\n",
-        cwd=repo,
-    )
-    sha = _git_head_sha(repo)
-    commit = ad.CommitRecord(sha=sha, message=_git_show_message(repo, sha))
-    assert not ad.is_dev_tooling_commit(commit.message)  # the scope did NOT survive
-    assert ad.is_self_referential_commit(repo, commit)
-
-
-def test_is_self_referential_commit_false_when_diff_touches_other_files_too(
-    ad: ModuleType,
-    tmp_path: Path,
-) -> None:
-    """A commit that ALSO does real finding work (touches a file outside
-    ``_ORACLE_OWN_FILES``) must NOT be excluded, even if it mentions an
-    item and also happens to touch the oracle's own script.
-    """
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git("init", "-q", cwd=repo)
-    _git("config", "user.email", "test@example.com", cwd=repo)
-    _git("config", "user.name", "Test", cwd=repo)
-    # A root commit first -- see the squash-merge test's comment: `git
-    # diff-tree` on a true root commit reports an empty diff regardless of
-    # content, which would make this test pass for the wrong reason.
-    (repo / "README.md").write_text("seed\n", encoding="utf-8")
-    _git("add", "-A", cwd=repo)
-    _git("commit", "-q", "-m", "chore: seed repo", cwd=repo)
-
-    (repo / "scripts").mkdir()
-    (repo / "scripts" / "audit_disposition.py").write_text(
-        "# oracle\n",
-        encoding="utf-8",
-    )
-    (repo / "restgdf").mkdir()
-    (repo / "restgdf" / "real.py").write_text("x = 1\n", encoding="utf-8")
-    _git("add", "-A", cwd=repo)
-    _git("commit", "-q", "-m", "feat: also touch real code (W9-9)\n", cwd=repo)
-    sha = _git_head_sha(repo)
-    commit = ad.CommitRecord(sha=sha, message=_git_show_message(repo, sha))
-    assert not ad.is_self_referential_commit(repo, commit)
-
-
-def test_is_self_referential_commit_false_when_no_item_mentioned(
-    ad: ModuleType,
-    tmp_path: Path,
-) -> None:
-    """Short-circuits before ever calling ``git diff-tree`` when the message
-    mentions no item at all -- documented in the docstring as an
-    optimization, pinned here as a behavior contract: even a commit whose
-    diff IS confined to the oracle's own files is reported as NOT self-
-    referential if it names no work item (harmless either way, since such a
-    commit could never produce false evidence regardless).
-    """
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git("init", "-q", cwd=repo)
-    _git("config", "user.email", "test@example.com", cwd=repo)
-    _git("config", "user.name", "Test", cwd=repo)
-    (repo / "scripts").mkdir()
-    (repo / "scripts" / "audit_disposition.py").write_text(
-        "# oracle\n",
-        encoding="utf-8",
-    )
-    _git("add", "-A", cwd=repo)
-    _git(
-        "commit",
-        "-q",
-        "-m",
-        "chore: tidy up the oracle script, no item cited\n",
-        cwd=repo,
-    )
-    sha = _git_head_sha(repo)
-    commit = ad.CommitRecord(sha=sha, message=_git_show_message(repo, sha))
-    assert not ad.is_self_referential_commit(repo, commit)
-
-
-def test_build_report_excludes_squash_merge_shaped_self_reference(
-    ad: ModuleType,
-    tmp_path: Path,
-) -> None:
-    """End-to-end reproduction of the actual bug found on merged ``main``:
-    PR #213's squash-merge commit body mentions an item ID as an
-    illustrative example next to deferral language, with a subject that no
-    longer carries the "(dev-tooling)" scope. A SEPARATE, real commit lands
-    that item cleanly. Before the file-diff-based fix, this resolved
-    DEFERRED; after, it must resolve LANDED.
-    """
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    _git("init", "-q", cwd=repo)
-    _git("config", "user.email", "test@example.com", cwd=repo)
-    _git("config", "user.name", "Test", cwd=repo)
-
-    plan_dir = repo / "audit-recommendations" / "plan"
-    plan_dir.mkdir(parents=True)
-    findings = [
-        {
-            "id": "PAGINATION-03",
-            "axis": "PAGINATION",
-            "title": "unbounded nested IN-lists",
-            "severity": "low",
-            "files": ["restgdf/utils/getgdf.py"],
-        },
-    ]
-    (repo / "audit-recommendations" / "findings.json").write_text(
-        json.dumps(findings),
-        encoding="utf-8",
-    )
-    (plan_dir / "99-traceability.md").write_text(
-        "## Forward map\n\n| `PAGINATION-03` | low | t | `W4-3` | — |\n",
-        encoding="utf-8",
-    )
-    (repo / "restgdf" / "utils").mkdir(parents=True)
-    (repo / "restgdf" / "utils" / "getgdf.py").write_text("x = 1\n", encoding="utf-8")
-    _git("add", "-A", cwd=repo)
-    _git("commit", "-q", "-m", "chore: seed repo", cwd=repo)
-
-    # The real landing.
-    (repo / "restgdf" / "utils" / "getgdf.py").write_text("x = 2\n", encoding="utf-8")
-    _git("add", "-A", cwd=repo)
-    _git("commit", "-q", "-m", "fix: bound split OID lists (W4-3)", cwd=repo)
-
-    # A LATER squash-merge-shaped commit, confined to the oracle's own
-    # files, quotes "W4-3" next to deferral language while its subject
-    # carries a PR title rather than the "(dev-tooling)" scope.
-    (repo / "scripts").mkdir()
-    (repo / "scripts" / "audit_disposition.py").write_text(
-        "# oracle\n",
-        encoding="utf-8",
-    )
-    (repo / "tests").mkdir()
-    (repo / "tests" / "test_audit_disposition.py").write_text(
-        "# oracle tests\n",
-        encoding="utf-8",
-    )
-    _git("add", "-A", cwd=repo)
-    _git(
-        "commit",
-        "-q",
-        "-m",
-        "feat: audit disposition census oracle (M4 exit gate) (#213)\n\n"
-        "Regression example: a ledger-shaped row cross-contaminated "
-        "co-mentioned items with an owner+trigger/ NO-GO signal meant for "
-        "one item only; W4-3 citations undercounted landed items too.\n",
-        cwd=repo,
-    )
-
-    report = ad.build_report(repo)
-    by_id = {row["id"]: row for row in report["findings"]}
-    assert by_id["PAGINATION-03"]["disposition"] == "LANDED"
-
-
-# ---------------------------------------------------------------------------
-# parse_decision_closed_clarifications — traceability-doc-only evidence
-# ---------------------------------------------------------------------------
-
-
-def test_parse_decision_closed_clarifications_finds_confirm_only_bullet(
+def test_parse_deliberate_deferrals_section_finds_confirm_only_bullet(
     ad: ModuleType,
     tmp_path: Path,
 ) -> None:
@@ -610,12 +193,13 @@ def test_parse_decision_closed_clarifications_finds_confirm_only_bullet(
         "in M2/PR #203: the timeout/concurrency env vars were verified wired.\n"
     )
     (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
-    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
+    deferred, decision_closed = ad.parse_deliberate_deferrals_section(tmp_path)
     assert "W3-6" in decision_closed
     assert decision_closed["W3-6"].kind == "traceability"
+    assert "W3-6" not in deferred
 
 
-def test_parse_decision_closed_clarifications_does_not_leak_to_a_co_mentioned_item(
+def test_parse_deliberate_deferrals_section_does_not_leak_to_a_co_mentioned_item(
     ad: ModuleType,
     tmp_path: Path,
 ) -> None:
@@ -625,7 +209,7 @@ def test_parse_decision_closed_clarifications_does_not_leak_to_a_co_mentioned_it
     the docs fix landed. Only W3-6 -- whose OWN clause carries "confirm-
     only" -- may resolve DECISION-CLOSED here; W6-7 must not, or it would
     silently override its real LANDED evidence for every OTHER finding it
-    also owns.
+    also owns (e.g. TELEMETRY-01, which also owns W6-7).
     """
     plan_dir = tmp_path / "audit-recommendations" / "plan"
     plan_dir.mkdir(parents=True)
@@ -637,40 +221,19 @@ def test_parse_decision_closed_clarifications_does_not_leak_to_a_co_mentioned_it
         "resolver; the documentation rows were corrected under W6-7 (M4).\n"
     )
     (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
-    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
+    deferred, decision_closed = ad.parse_deliberate_deferrals_section(tmp_path)
     assert "W3-6" in decision_closed
     assert "W6-7" not in decision_closed
+    assert "W6-7" not in deferred
 
 
-def test_parse_decision_closed_clarifications_ignores_deferred_bullet(
-    ad: ModuleType,
-    tmp_path: Path,
-) -> None:
-    """A DEFERRED (NO-GO) bullet -- e.g. the real ERRTAX-03/W2-5 record --
-    carries no "confirm-only"/"decision-closed" wording and must not be
-    picked up here; that item's DEFERRED disposition comes from
-    ``build_prose_signals`` reading the real commit history instead.
-    """
-    plan_dir = tmp_path / "audit-recommendations" / "plan"
-    plan_dir.mkdir(parents=True)
-    traceability = (
-        "## Deliberate deferrals\n\n"
-        "- **`ERRTAX-03` / `W2-5` — DEFERRED (NO-GO), M3.** Closed as NO-GO "
-        "per plan/02's own recommendation. Owner: a future pass. Trigger: "
-        "maintainer GO.\n"
-    )
-    (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
-    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
-    assert "W2-5" not in decision_closed
-
-
-def test_parse_decision_closed_clarifications_ignores_milestone_label_bullet(
+def test_parse_deliberate_deferrals_section_ignores_milestone_label_bullet(
     ad: ModuleType,
     tmp_path: Path,
 ) -> None:
     """A milestone-label correction (e.g. the real W4-6/W5-9/W5-10/W5-11
-    note) carries no confirm-only/decision-closed marker and must not be
-    treated as decision-closed evidence for any of the items it names.
+    note) carries no DEFERRED/confirm-only/decision-closed marker and must
+    not be treated as evidence for any of the items it names.
     """
     plan_dir = tmp_path / "audit-recommendations" / "plan"
     plan_dir.mkdir(parents=True)
@@ -680,11 +243,12 @@ def test_parse_decision_closed_clarifications_ignores_milestone_label_bullet(
         "landed in the M1 typing-transition stack (PR #196) per the runbook.\n"
     )
     (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
-    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
+    deferred, decision_closed = ad.parse_deliberate_deferrals_section(tmp_path)
+    assert deferred == {}
     assert decision_closed == {}
 
 
-def test_parse_decision_closed_clarifications_stops_at_next_heading(
+def test_parse_deliberate_deferrals_section_stops_at_next_heading(
     ad: ModuleType,
     tmp_path: Path,
 ) -> None:
@@ -697,9 +261,10 @@ def test_parse_decision_closed_clarifications_stops_at_next_heading(
         "- **`W1-2`** resolved as *confirm-only* (should not be parsed).\n"
     )
     (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
-    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
+    deferred, decision_closed = ad.parse_deliberate_deferrals_section(tmp_path)
     assert "W1-1" in decision_closed
     assert "W1-2" not in decision_closed
+    assert deferred == {}
 
 
 def test_build_report_resolves_zero_commit_item_via_traceability_clarification(
@@ -751,6 +316,100 @@ def test_build_report_resolves_zero_commit_item_via_traceability_clarification(
     assert by_id["CONFIRM-01"]["item_statuses"]["W9-2"]["evidence"][0]["kind"] == (
         "traceability"
     )
+
+
+def test_narrating_commit_produces_zero_deferral_signal(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """Regression for the recurring self-contamination family -- THREE
+    separate instances, each surviving the previous fix: the genesis commit
+    (``e65bf75``), the PR #213 squash (``701ddbf``), and the PR #214 squash
+    (``05d3e34``). Every fix so far tried to distinguish a "narrating"
+    commit from an "ordinary" one (by subject scope, then by diff
+    confinement to this script's own two files) and every squash merge
+    broke the distinction again -- because a squash that narrates this
+    exact bug's history necessarily touches whatever REAL files that PR
+    also edited (here: findings.json / 99-traceability.md), and necessarily
+    uses the real trigger vocabulary while explaining why it's dangerous.
+
+    This test fixes a commit shaped EXACTLY like all three recurrences --
+    item IDs next to "owner"+"trigger"/"NO-GO"/"deferred", diff touching the
+    real audit-recommendations files -- and asserts it produces ZERO
+    deferral signal, structurally: there is no longer any code path that
+    reads commit bodies for deferred/decision-closed evidence at all, so no
+    fixture shaped like the bug (however cleverly) can trigger it. The item
+    must resolve on its own real evidence (here: GAP, since none exists),
+    never DEFERRED merely because some commit message talks about
+    deferrals.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git("init", "-q", cwd=repo)
+    _git("config", "user.email", "test@example.com", cwd=repo)
+    _git("config", "user.name", "Test", cwd=repo)
+
+    plan_dir = repo / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    findings = [
+        {
+            "id": "FAKE-01",
+            "axis": "FAKE",
+            "title": "t",
+            "severity": "low",
+            "files": ["restgdf/nowhere.py"],
+        },
+    ]
+    (repo / "audit-recommendations" / "findings.json").write_text(
+        json.dumps(findings),
+        encoding="utf-8",
+    )
+    (plan_dir / "99-traceability.md").write_text(
+        "## Forward map\n\n| `FAKE-01` | low | t | `W9-3` | — |\n",
+        encoding="utf-8",
+    )
+    (repo / "restgdf").mkdir()
+    (repo / "restgdf" / "nowhere.py").write_text("x = 1\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-q", "-m", "chore: seed repo", cwd=repo)
+
+    # A squash-merge-shaped commit whose body narrates the bug class AND
+    # whose diff touches the real audit-recommendations files.
+    (repo / "audit-recommendations" / "findings.json").write_text(
+        json.dumps(
+            [
+                *findings,
+                {
+                    "id": "FAKE-02",
+                    "axis": "FAKE",
+                    "title": "u",
+                    "severity": "low",
+                    "files": [],
+                },
+            ],
+        ),
+        encoding="utf-8",
+    )
+    (plan_dir / "99-traceability.md").write_text(
+        "## Forward map\n\n"
+        "| `FAKE-01` | low | t | `W9-3` | — |\n"
+        "| `FAKE-02` | low | t | `W9-4` | — |\n",
+        encoding="utf-8",
+    )
+    _git("add", "-A", cwd=repo)
+    _git(
+        "commit",
+        "-q",
+        "-m",
+        "fix: close census's residual GAPs (findings.json + traceability) (#214)\n\n"
+        "W9-3 (FAKE-01): NO-GO / deferred. Owner: someone. Trigger: someday.\n",
+        cwd=repo,
+    )
+
+    report = ad.build_report(repo)
+    by_id = {row["id"]: row for row in report["findings"]}
+    assert by_id["FAKE-01"]["disposition"] == "GAP"
+    assert by_id["FAKE-01"]["item_statuses"]["W9-3"]["status"] == "GAP"
 
 
 # ---------------------------------------------------------------------------
@@ -1083,7 +742,10 @@ def test_end_to_end_against_a_throwaway_git_repo(
         "## Forward map\n\n"
         "| `LANDED-01` | high | t | `W1-1` | — |\n"
         "| `GAP-01` | low | t | `W1-2` | — |\n"
-        "| `DEFERRED-01` | low | t | `W1-3` | — |\n",
+        "| `DEFERRED-01` | low | t | `W1-3` | — |\n\n"
+        "## Deliberate deferrals\n\n"
+        "- **`W1-3`** DEFERRED for now. Owner: maintainer. Trigger: next major "
+        "release.\n",
         encoding="utf-8",
     )
     (plan_dir / "PROGRAM-LEDGER.md").write_text("# ledger\n", encoding="utf-8")
@@ -1099,18 +761,9 @@ def test_end_to_end_against_a_throwaway_git_repo(
     _git("add", "-A", cwd=repo)
     _git("commit", "-q", "-m", "fix: close it out (W1-1)", cwd=repo)
 
-    # Defer W1-3 with an owner+trigger record (touches an unrelated file).
-    (repo / "pkg" / "c.py").write_text("x = 3\n", encoding="utf-8")
-    _git("add", "-A", cwd=repo)
-    _git(
-        "commit",
-        "-q",
-        "-m",
-        "docs: note the W1-3 deferral\n\n"
-        "W1-3: NO-GO for now. Owner: maintainer. Trigger: next major release.",
-        cwd=repo,
-    )
-    # GAP-01 / W1-2 gets no commit at all.
+    # GAP-01 / W1-2 and DEFERRED-01 / W1-3 get no commit at all -- W1-3's
+    # DEFERRED disposition comes ONLY from the traceability doc's own
+    # "## Deliberate deferrals" section above, not from any commit body.
 
     report = ad.build_report(repo)
     by_id = {row["id"]: row for row in report["findings"]}

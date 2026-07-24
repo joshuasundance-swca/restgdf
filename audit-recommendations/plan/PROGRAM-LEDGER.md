@@ -51,3 +51,25 @@
   4 deselected. Maintainer review items: #192 Snyk check red (auth-walled detail; pip-audit
   clean); referer query-time `Referer` header gap → W2-10; POST bool-coercion parity +
   FakeSession verb-mirror → W1-9.
+- 2026-07-24 — **Census self-contamination, 3rd recurrence — structural fix, not another
+  patch.** The fresh-env gate's definitive re-run of `scripts/audit_disposition.py` against
+  merged `main` caught AUTH-01/PAGINATION-03 mislabeled DEFERRED again: PR #214's own squash
+  commit (`05d3e34`) narrates the prior fix's bug history in its body using the trigger
+  vocabulary ("owner"+"trigger"/"NO-GO"/"deferred") next to real item IDs, and its diff touches
+  `findings.json`/`99-traceability.md` (files that same PR legitimately edited), so neither the
+  dev-tooling-subject exclusion (recurrence 1, genesis commit `e65bf75`) nor the diff-confinement
+  exclusion (recurrence 2, PR #213 squash `701ddbf`) covered it. Code-level truth independently
+  re-verified: both items are genuinely landed; this was oracle-only. Fix (coordinator decision —
+  no more whack-a-mole): removed free-text commit-body narration as deferral evidence ENTIRELY.
+  Deferred and decision-closed dispositions now come from exactly one source, the curated
+  "## Deliberate deferrals" section of `99-traceability.md` (`parse_deliberate_deferrals_
+  section`) — the same durable record already used for decision-close. Commit scanning remains
+  for LANDED evidence only (subject/bullet citations + file corroboration), unchanged. Dead
+  prose-signal machinery (`build_prose_signals`, `is_dev_tooling_commit`,
+  `is_self_referential_commit`, `paragraphs`) deleted along with its tests rather than stranded;
+  a new regression fixture (a commit narrating the exact bug class, item IDs + trigger phrases +
+  a diff touching the real audit-recommendations files) asserts zero deferral signal, proving no
+  commit body can trigger this again by construction. Re-verified on this tree: **61 findings =
+  59 LANDED / 1 DECISION-CLOSED [DOCS-02 via W3-6 confirm-only] / 1 DEFERRED [ERRTAX-03] / 0 GAP
+  / 0 ORPHAN**, exit 0. Full offline suite green (1348 passed / 4 skipped / 4 deselected),
+  targeted `test_audit_disposition.py` green (35 tests), pre-commit clean at a fixed point.
