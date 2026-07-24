@@ -196,8 +196,27 @@ class FakeSession:
     """Record every get/post call and serve a scripted response per call.
 
     Tests push payloads onto ``post_responses`` / ``get_responses`` queues
-    (falling back to the ``default_*`` payload when empty). All call args
-    are captured on ``post_calls`` / ``get_calls`` for assertions.
+    (falling back to the ``default_*`` payload when empty; the queue is
+    shared, since a scripted response is verb-agnostic). Call args are
+    captured on ``post_calls`` / ``get_calls`` -- each list is populated
+    ONLY by the correspondingly-named session method.
+
+    W1-9 (TESTS-02): earlier this class aliased ``post_calls``/``get_calls``
+    onto one shared list and mirrored the recorded body under BOTH ``data``
+    and ``params`` keys, "so tests written against either verb's contract
+    kept working" after the T8 (R-74) length-based GET/POST router landed.
+    That mirroring is exactly what let a real GET<->POST regression slip
+    past a "verb-correct" assertion: because the mirror copied whichever
+    key WAS populated onto the other key too, a test reading either
+    ``kwargs["data"]`` or ``kwargs["params"]`` got the same value
+    regardless of which physical method restgdf actually called, and
+    ``post_calls``/``get_calls`` were literally the same list, so a call
+    that flipped verbs still showed up under the "wrong" name. There is
+    no mirroring now: a body recorded on ``get_calls`` carries only
+    ``params``; a body recorded on ``post_calls`` carries only ``data``.
+    A verb flip now means the call lands in the OTHER list -- an empty
+    list / index error on the list a test asserts against, not stale
+    mirrored data.
     """
 
     def __init__(
@@ -208,42 +227,28 @@ class FakeSession:
     ):
         self.default_post = default_post if default_post is not None else {"ok": True}
         self.default_get = default_get if default_get is not None else {"ok": True}
-        # T8 (R-74): after the GET/POST length-based routing change, the
-        # same logical ArcGIS request may flip between ``session.post`` and
-        # ``session.get`` depending on the encoded body size. We unify the
-        # recorded-call and scripted-response queues here so pre-existing
-        # tests that assert on ``post_calls`` / ``post_responses`` keep
-        # working without having to rewrite each call site individually.
+        # The scripted-response queue stays shared across verbs (a pushed
+        # payload doesn't know in advance which verb will consume it).
         self._responses: list[Any] = []
         self.post_responses = self._responses
         self.get_responses = self._responses
-        self._calls: list[tuple[str, dict]] = []
-        self.post_calls = self._calls
-        self.get_calls = self._calls
+        self.post_calls: list[tuple[str, dict]] = []
+        self.get_calls: list[tuple[str, dict]] = []
 
-    def _snapshot_kwargs(self, kwargs: dict, *, body_key: str) -> dict:
+    @staticmethod
+    def _snapshot_kwargs(kwargs: dict) -> dict:
         snapshot: dict = {}
         for key, value in kwargs.items():
-            if isinstance(value, dict):
-                snapshot[key] = dict(value)
-            else:
-                snapshot[key] = value
-        # Mirror the body under both ``data`` (POST) and ``params`` (GET)
-        # so tests written against the legacy POST-only contract keep
-        # resolving ``kwargs["data"]`` when a short request now flips to
-        # GET (and vice-versa).
-        mirror_key = "params" if body_key == "data" else "data"
-        if body_key in snapshot and mirror_key not in snapshot:
-            snapshot[mirror_key] = snapshot[body_key]
+            snapshot[key] = dict(value) if isinstance(value, dict) else value
         return snapshot
 
     def post(self, url: str, **kwargs) -> FakeResponse:
-        self._calls.append((url, self._snapshot_kwargs(kwargs, body_key="data")))
+        self.post_calls.append((url, self._snapshot_kwargs(kwargs)))
         payload = self._responses.pop(0) if self._responses else self.default_post
         return FakeResponse(payload)
 
     def get(self, url: str, **kwargs) -> FakeResponse:
-        self._calls.append((url, self._snapshot_kwargs(kwargs, body_key="params")))
+        self.get_calls.append((url, self._snapshot_kwargs(kwargs)))
         payload = self._responses.pop(0) if self._responses else self.default_get
         return FakeResponse(payload)
 

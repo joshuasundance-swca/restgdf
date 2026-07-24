@@ -266,7 +266,15 @@ class _AuthSubtypeBase(AuthenticationError):
 
 
 class InvalidCredentialsError(_AuthSubtypeBase):
-    """Raised on 400 / bad credentials from ``/generateToken``.
+    """Raised on a 4xx credential rejection from ``/generateToken``.
+
+    A true-HTTP ``400``/``401``/``403`` from the token endpoint is mapped
+    here (W2-2) instead of escaping as a raw ``aiohttp.ClientResponseError``;
+    the originating aiohttp error is chained as ``__cause__``. Other non-2xx
+    token responses surface as :class:`RestgdfResponseError`. The HTTP-200
+    ``{"error": {...}}`` bad-credentials envelope is handled separately by the
+    strict :class:`~restgdf._models.responses.TokenResponse` tier (also a
+    :class:`RestgdfResponseError`).
 
     Inherits :class:`AuthenticationError` → :class:`PermissionError`.
     """
@@ -300,10 +308,17 @@ class TokenExpiredError(_AuthSubtypeBase):
 
 
 class TokenRequiredError(_AuthSubtypeBase):
-    """Raised when ArcGIS returns error code **499** (Token Required).
+    """Reserved auth subtype — **not currently raised** (W2-2 demotion).
 
-    Semantically: the service demands a token but the request did not
-    carry one (or the wrong transport was chosen).
+    Semantically this names the "service demands a token but the request
+    carried none (or the wrong transport)" condition, i.e. Esri **499**.
+    In practice a 499 surfaces as :class:`AuthNotAttachedError` — that is
+    the single live 499 raise site (see
+    ``ArcGISTokenSession._call_with_auth_retry``) and is semantically
+    precise. This class is retained as a back-compat / placeholder type in
+    the taxonomy; there is deliberately no second 499 raise site. Catch
+    :class:`AuthNotAttachedError` (or the parent
+    :class:`AuthenticationError`) for the 499 condition.
     """
 
 
