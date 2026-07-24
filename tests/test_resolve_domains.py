@@ -278,3 +278,62 @@ def test_resolve_domains_helper_with_dict_fields() -> None:
     assert out["NAME"].tolist() == ["a", "b", "c"]
     # Helper must not mutate the input frame.
     assert df["STATUS"].tolist() == [1, 2, 99]
+
+
+# --- W5-6 (ADAPTERS-03): robustness to malformed domain metadata -----------
+
+
+def test_resolve_domains_skips_non_dict_domain() -> None:
+    """A malformed (non-dict) ``domain`` is skipped, not fatal (W5-6)."""
+    from restgdf.adapters.pandas import resolve_domains
+
+    df = pd.DataFrame({"STATUS": [1, 2, 99], "KIND": [1, 2, 3]})
+    fields = [
+        # ``domain`` is a bare string -> pre-fix this AttributeError'd on
+        # ``domain.get("type")``; must now be skipped.
+        {"name": "KIND", "type": "esriFieldTypeSmallInteger", "domain": "bogus"},
+        {
+            "name": "STATUS",
+            "type": "esriFieldTypeSmallInteger",
+            "domain": {
+                "type": "codedValue",
+                "codedValues": [
+                    {"name": "Active", "code": 1},
+                    {"name": "Inactive", "code": 2},
+                ],
+            },
+        },
+    ]
+    out = resolve_domains(df, fields)
+    # The well-formed STATUS domain still resolves.
+    assert out["STATUS"].tolist() == ["Active", "Inactive", 99]
+    # The malformed KIND field passes through untouched.
+    assert out["KIND"].tolist() == [1, 2, 3]
+
+
+def test_resolve_domains_skips_nameless_coded_value() -> None:
+    """A coded value with ``code`` but no ``name`` is left unchanged (W5-6).
+
+    CRITICAL anti-rec: it must NOT be mapped to ``None``/NaN (silent data
+    corruption); the unresolvable code passes through verbatim.
+    """
+    from restgdf.adapters.pandas import resolve_domains
+
+    df = pd.DataFrame({"STATUS": [1, 2, 3]})
+    fields = [
+        {
+            "name": "STATUS",
+            "type": "esriFieldTypeSmallInteger",
+            "domain": {
+                "type": "codedValue",
+                "codedValues": [
+                    {"name": "Active", "code": 1},
+                    {"code": 2},  # name-less -> pre-fix KeyError
+                    "garbage",  # non-dict entry -> skipped
+                ],
+            },
+        },
+    ]
+    out = resolve_domains(df, fields)
+    # Code 1 resolves; code 2 (name-less) and 3 (absent) pass through unchanged.
+    assert out["STATUS"].tolist() == ["Active", 2, 3]

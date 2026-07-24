@@ -97,12 +97,26 @@ def resolve_domains(
         domain = field.get("domain")
         if not name or not domain or name not in df.columns:
             continue
+        # W5-6 (ADAPTERS-03): a non-dict ``domain`` (e.g. a bare string from a
+        # malformed-but-real payload) must be skipped, not AttributeError on
+        # ``.get``.
+        if not isinstance(domain, dict):
+            continue
         if domain.get("type") != "codedValue":
             # Range domains (and any unknown variants) are intentionally
             # pass-through; see the docstring.
             continue
         coded_values = domain.get("codedValues") or []
-        mapping = {cv["code"]: cv["name"] for cv in coded_values if "code" in cv}
+        # W5-6: require BOTH ``code`` and ``name`` on a well-formed dict entry.
+        # The ``"name" in cv`` guard is CRITICAL: using ``cv.get("name")`` would
+        # map a name-less code to ``None`` and silently NaN-out the real value
+        # via ``Series.replace`` -- data corruption worse than the loud
+        # KeyError. Unresolvable codes must pass through untouched.
+        mapping = {
+            cv["code"]: cv["name"]
+            for cv in coded_values
+            if isinstance(cv, dict) and "code" in cv and "name" in cv
+        }
         if mapping:
             coded_maps[name] = mapping
 
