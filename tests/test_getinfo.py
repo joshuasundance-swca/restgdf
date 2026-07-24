@@ -6,6 +6,7 @@ import pytest
 from aiohttp import ClientSession
 from pandas import DataFrame
 
+from restgdf import get_config
 from restgdf.errors import FieldDoesNotExistError
 from tests.id_schema_fixtures import load_id_schema_fixture
 from restgdf.utils.utils import ends_with_num, where_var_in_list
@@ -231,9 +232,11 @@ def test_default_data():
 
 
 def test_default_headers():
+    # W2-10: the User-Agent default is now sourced from
+    # get_config().transport.user_agent (was the hardcoded "Mozilla/5.0").
     assert default_headers({"X-Test": "yes"}) == {
         "Accept": "application/json,text/plain,*/*",
-        "User-Agent": "Mozilla/5.0",
+        "User-Agent": get_config().transport.user_agent,
         "X-Test": "yes",
     }
 

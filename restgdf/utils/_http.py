@@ -30,8 +30,25 @@ DEFAULTDICT: dict = {
 
 
 def default_headers(headers: dict | None = None) -> dict:
-    """Return request headers merged with ArcGIS-compatible defaults."""
-    return {**DEFAULT_METADATA_HEADERS, **(headers or {})}
+    """Return request headers merged with ArcGIS-compatible defaults.
+
+    The ``User-Agent`` default is sourced from
+    ``get_config().transport.user_agent`` (see
+    :func:`restgdf.get_config`) -- the single source of truth for the
+    data-path UA (CONFIG-01 / AUTH-03, W2-10). Callers change it there (or
+    via ``RESTGDF_TRANSPORT_USER_AGENT``) rather than editing a hardcoded
+    leaf value. It is read on every call, so ``reset_config_cache`` takes
+    effect immediately. The exported ``DEFAULT_METADATA_HEADERS`` constant
+    keeps its historical ``"Mozilla/5.0"`` value for back-compat, but that
+    value no longer reaches the wire -- the config default overrides it
+    here. An explicit caller ``User-Agent`` header still wins (merge order
+    preserved).
+    """
+    defaults = {
+        **DEFAULT_METADATA_HEADERS,
+        "User-Agent": get_config().transport.user_agent,
+    }
+    return {**defaults, **(headers or {})}
 
 
 def default_data(

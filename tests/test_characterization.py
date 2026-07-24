@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from pandas import DataFrame
 
+from restgdf import get_config
 from restgdf.featurelayer.featurelayer import FeatureLayer
 from restgdf.utils import crawl as crawl_mod
 from restgdf.utils import getgdf as getgdf_mod
@@ -56,7 +57,9 @@ async def test_get_feature_count_sends_minimal_count_payload(fake_session):
     }
     # default_headers are merged in
     assert kwargs["headers"]["Accept"] == "application/json,text/plain,*/*"
-    assert kwargs["headers"]["User-Agent"] == "Mozilla/5.0"
+    # W2-10: default UA now sourced from get_config().transport.user_agent
+    # (was the hardcoded "Mozilla/5.0"); this characterizes the new default.
+    assert kwargs["headers"]["User-Agent"] == get_config().transport.user_agent
 
 
 @pytest.mark.asyncio

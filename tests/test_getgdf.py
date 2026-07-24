@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, call, patch
 import pytest
 from geopandas import GeoDataFrame
 
+from restgdf import get_config
 from restgdf._models import RestgdfResponseError
 from restgdf.errors import PaginationError
 from tests.pagination_fixtures import load_pagination_fixture
@@ -300,7 +301,8 @@ async def test_get_sub_gdf_uses_geojson_driver_when_esrijson_missing(
                 "data": {"where": "1=1", "f": "GeoJSON"},
                 "headers": {
                     "Accept": "application/json,text/plain,*/*",
-                    "User-Agent": "Mozilla/5.0",
+                    # W2-10: default UA sourced from transport config.
+                    "User-Agent": get_config().transport.user_agent,
                     "X-Test": "yes",
                 },
                 "timeout": 12,

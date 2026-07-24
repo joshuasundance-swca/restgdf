@@ -4,8 +4,42 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Changed
+
+- The default `User-Agent` on ArcGIS REST data requests is now sourced from
+  `get_config().transport.user_agent` (default `restgdf/<version>`, e.g.
+  `restgdf/3.1.0`) instead of the hardcoded `"Mozilla/5.0"`
+  (`restgdf.utils._http.default_headers`, W2-10 / CONFIG-01 / AUTH-03).
+  **Wire-visible behavior change:** some Esri deployments sniff the
+  `User-Agent`, so a WAF or usage policy keyed on `"Mozilla/5.0"` may now
+  see `restgdf/<version>`. Override it explicitly per request
+  (`headers={"User-Agent": ...}`, still wins) or globally via
+  `RESTGDF_TRANSPORT_USER_AGENT` / `TransportConfig.user_agent`. The
+  exported `DEFAULT_METADATA_HEADERS` constant keeps its historical value
+  for back-compat but no longer determines the wire `User-Agent`.
+
 ### Fixed
 
+- `ArcGISTokenSession` reactive token refresh is now single-flight under
+  concurrent `498 Invalid Token` responses: it snapshots the token before
+  the request and, inside the refresh lock, only re-mints when the token is
+  still unchanged. Previously N concurrent 498s issued N `/generateToken`
+  calls; now they collapse onto one, and the later requests retry with the
+  freshly minted token (W2-4 / ASYNC-01).
+- A **referer-bound** `ArcGISTokenSession` (built from
+  `AGOLUserPass(referer=...)` / `TokenSessionConfig.referer`) now attaches a
+  matching `Referer` HTTP header to its data requests, not only to the
+  `/generateToken` mint — so a `client="referer"` token is honoured
+  end-to-end instead of being rejected (498/499) on the query. A
+  `client="requestip"` (non-referer) session attaches no `Referer` header
+  (no referer leak). Closes the "planned follow-up" limitation noted in
+  MIGRATION.md for the 3.1 referer feature (#175 review NOTE-1).
+- `ArcGISTokenSession` now forwards its own `verify_ssl` flag to
+  token-attached **data** requests (not just the `/generateToken` POST), via
+  `setdefault("ssl", self.verify_ssl)` in `_call_with_auth_retry` — so a
+  session built with `verify_ssl=False` (self-signed ArcGIS Enterprise)
+  no longer fails TLS verification on the actual query/metadata requests.
+  A caller-supplied `ssl=` still wins (W2-10 / CONFIG-01 / AUTH-03).
 - `FeatureLayer.get_gdf`/`get_unique_values`/`get_value_counts`/
   `get_nested_count` now return an independent copy of the cached
   frame/list on every call (W5-1, ASYNC-02) instead of the shared cached

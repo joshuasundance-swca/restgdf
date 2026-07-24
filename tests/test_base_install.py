@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from restgdf import get_config
 from restgdf.errors import OptionalDependencyError
 from restgdf.featurelayer.featurelayer import FeatureLayer
 from restgdf.utils._optional import require_geopandas
@@ -298,7 +299,8 @@ async def test_row_dict_generator_uses_query_batch_data_without_duplicate_kwargs
         "outFields": "CITY",
     }
     assert post_kwargs["headers"]["Accept"] == "application/json,text/plain,*/*"
-    assert post_kwargs["headers"]["User-Agent"] == "Mozilla/5.0"
+    # W2-10: default UA now sourced from get_config().transport.user_agent.
+    assert post_kwargs["headers"]["User-Agent"] == get_config().transport.user_agent
 
 
 @pytest.mark.asyncio

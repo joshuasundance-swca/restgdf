@@ -222,11 +222,35 @@ class ArcGISTokenSession:
         return "X-Esri-Authorization"
 
     @property
+    def _referer(self) -> str | None:
+        """Return the referer this session's token is bound to, if any.
+
+        Resolved with the same precedence as
+        :attr:`token_request_payload` (config referer wins over the
+        credential's referer) so a request-time ``Referer`` header matches
+        the referer sent at mint time. ``None`` for a ``client="requestip"``
+        (non-referer) token or a credential-less session.
+        """
+        if self.config is not None:
+            return self.config.referer
+        return getattr(self.credentials, "referer", None)
+
+    @property
     def auth_headers(self) -> dict[str, str]:
-        """Return authentication headers with the token if available."""
+        """Return authentication headers with the token if available.
+
+        For a **referer-bound** session (``AGOLUserPass(referer=...)`` /
+        ``TokenSessionConfig.referer``) a matching ``Referer`` header is
+        attached so the ``client="referer"`` token is honoured on data
+        requests, not only at mint time (#175 NOTE-1). No ``Referer`` is
+        attached for a ``client="requestip"`` token (no referer leak).
+        """
         headers: dict[str, str] = {}
         if self.token and self._transport == "header":
             headers[self._header_name] = f"Bearer {self.token}"
+        referer = self._referer
+        if referer:
+            headers["Referer"] = referer
         return headers
 
     def update_headers(self, headers: dict | None = None) -> dict:
@@ -375,8 +399,16 @@ class ArcGISTokenSession:
         )
         request_payload = self.update_dict(payload)
         kwargs.setdefault("timeout", default_timeout())
+        # W2-10 (CONFIG-01/AUTH-03): forward the token session's own
+        # verify_ssl to token-attached data requests, mirroring the
+        # /generateToken POST. setdefault so a caller-supplied ssl= wins;
+        # it also carries into the 498-retry call below (shared **kwargs).
+        kwargs.setdefault("ssl", self.verify_ssl)
 
         session_method = getattr(self.session, method)
+        # W2-4 (ASYNC-01): snapshot the token BEFORE issuing the request so
+        # concurrent 498s collapse onto a single refresh (see the 498 branch).
+        tok_before = self.token
         resp = await session_method(
             url,
             **{payload_key: request_payload},
@@ -393,11 +425,19 @@ class ArcGISTokenSession:
             )
 
         if status == 498:
-            # Single-flight refresh, then retry exactly once.
+            # Single-flight refresh, then retry exactly once. Under N
+            # concurrent 498s every task serializes on the lock; only the
+            # first (whose snapshot still matches self.token) mints. Later
+            # winners observe self.token != tok_before and skip the redundant
+            # /generateToken, then retry with the freshly minted token. This
+            # mirrors the proactive update_token_if_needed double-check; do
+            # NOT gate on token_needs_update() -- after a server-side
+            # invalidation the local token still looks valid.
             if self._refresh_lock is None:
                 self._refresh_lock = asyncio.Lock()
             async with self._refresh_lock:
-                await self.update_token()
+                if self.token == tok_before:
+                    await self.update_token()
 
             # Rebuild auth for the retry.
             request_headers = (
