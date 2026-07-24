@@ -1,5 +1,9 @@
 # 07 — Remediation execution runbook
 
+> **EXECUTED TO COMPLETION 2026-07-23/24** — every phase below exited with recorded
+> evidence; see [`PROGRAM-LEDGER.md`](PROGRAM-LEDGER.md) for the authoritative per-phase
+> record. This document is retained as the program's operating history.
+>
 > **Operational source of truth for executing the audit remediation.** Snapshot reconciled
 > 2026-07-22 against local Git, GitHub PRs/checks, the 61-finding audit, all six workstream
 > specifications, `CONTRIBUTING.md`, `pyproject.toml`, pre-commit, and every workflow. The

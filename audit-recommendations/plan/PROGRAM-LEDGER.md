@@ -17,7 +17,7 @@
 | M2 High correctness | **COMPLETE** 2026-07-24 (PRs #203–#207 + this PR; all five high findings closed with regression evidence — verifier-run census: AUTH-01 ×3, PAGINATION-01 ×7, PAGINATION-02 ×4, CONFIG-01/AUTH-03 ×8 test nodes green; CICD-01 = the structural release gate. verify_ssl proven end-to-end via real-connector introspection) | all five high findings closed with regression evidence |
 | M3 Medium correctness | **COMPLETE** 2026-07-24 (3 batched PRs; W2-2/3/11, W3-2/3/4, W2-13 warn-now, W4-3/4, W1-9, W5-2/3/6/13/14; decision-closes with recorded owner+trigger: W2-5 NO-GO per plan recommendation, W5-13 dedup-key kept context-free per anti-spam decision; wave verifier CONFIRMED, deferral ratified by coordinator) | M3 item/decision gates green |
 | M4 Docs/polish | **COMPLETE** 2026-07-24 (PRs #212 docs reconciliation [V-M4 CONFIRMED, 21 claims sampled clean] + #213/#214 census oracle; definitive census on main: **61 findings = 59 LANDED / 1 DECISION-CLOSED [DOCS-02 via W3-6 confirm-only] / 1 DEFERRED [ERRTAX-03, owner+trigger] / 0 GAP / 0 ORPHAN**, `scripts/audit_disposition.py` exit 0) | 61/61 findings closed or explicitly dispositioned |
-| R32 Release 3.2.0 | dispatched 2026-07-24 after this PR merges (evidence: tag 3.2.0, PyPI 3.2.0 wheel+sdist, attestation-verify run green, clean-env install — verified post-publish, recorded in session close-out) | clean tag-to-PyPI-to-install verification |
+| R32 Release 3.2.0 | **COMPLETE** 2026-07-24: tag `3.2.0` (bump `93625fe`), PyPI wheel+sdist confirmed via the JSON API, PEP 740 attestation-verify run 30102287027 SUCCESS (green on rerun after the known ~1-3 min index-propagation race), GitHub release published, clean-env `pip install restgdf==3.2.0` imports 3.2.0 | clean tag-to-PyPI-to-install verification |
 
 ## Log
 
@@ -73,3 +73,10 @@
   59 LANDED / 1 DECISION-CLOSED [DOCS-02 via W3-6 confirm-only] / 1 DEFERRED [ERRTAX-03] / 0 GAP
   / 0 ORPHAN**, exit 0. Full offline suite green (1348 passed / 4 skipped / 4 deselected),
   targeted `test_audit_disposition.py` green (35 tests), pre-commit clean at a fixed point.
+- 2026-07-24 — **PROGRAM COMPLETE.** All phases exited: P0A–P0D, V0, M1–M4, releases 3.1.0
+  and 3.2.0 both live and verified. Definitive census on final `main`: 61 findings =
+  59 LANDED / 1 DECISION-CLOSED / 1 DEFERRED (ERRTAX-03, owner+trigger) / 0 GAP / 0 ORPHAN.
+  Remaining watch items (maintainer): #192 Snyk check detail (auth-walled; pip-audit clean);
+  one unreproduced 45-min hosted `pytest (py3.13)` hang (add a `faulthandler_timeout` probe
+  if it recurs); the warn-now inert retry/limiter knobs (TRANSPORT-01/W2-13) await their
+  separately-scoped wiring design; ERRTAX-03 re-opens on its recorded trigger.
