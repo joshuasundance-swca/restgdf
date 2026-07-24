@@ -67,6 +67,9 @@ nitpick_ignore = [
     ("py:class", "yarl._url.URL"),
     ("py:class", "multidict._multidict.CIMultiDictProxy"),
     ("py:class", "aiohttp.client.ClientSession"),
+    # aiohttp 3.14 exposes this private WS-options class in ws_connect
+    # signatures autodoc picks up; it has no public docs target.
+    ("py:class", "_WSConnectOptions"),
     # Self-referential pydantic generics can confuse the resolver.
     ("py:class", "restgdf._models.responses.LayerMetadata"),
     # Private auth-subtype mixin – deliberately not public.
