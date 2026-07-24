@@ -28,6 +28,18 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Changed
 
+- The `mypy` type gate now runs against real dependency types. A dedicated
+  CI job installs every extra plus `mypy` and enables the `pydantic.mypy`
+  plugin (via `[tool.mypy] plugins`), so it type-checks against actual
+  `aiohttp`/`pydantic` types instead of reporting green over unresolved
+  imports; `pandas`/`geopandas` are scope-silenced with
+  `ignore_missing_imports` (their integration boundary is intentionally
+  untyped). The internal type errors the un-defanged gate surfaced were
+  fixed — drift alias-choice narrowing, the metadata field-row annotation,
+  bounded-retry exception typing, and widening `get_gdf`'s `session`
+  parameter to the `AsyncHTTPSession` transport protocol (a runtime
+  contract that `aiohttp.ClientSession` satisfies at runtime but, under
+  current aiohttp stubs, not as a static subtype).
 - Raised the supported Python floor to 3.11 (3.9 is EOL 2025-10-31; 3.10
   reaches EOL 2026-10-31); CI now tests 3.11–3.14.
 - `AGOLUserPass(referer=...)` is now honoured at token-mint time.
