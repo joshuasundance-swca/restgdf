@@ -14,6 +14,14 @@ All notable changes to restgdf are documented here. This project follows
   corrupted what every later call on the same instance returned. Cache
   *population* is unaffected and remains non-atomic under concurrent
   `asyncio.gather` awaiters — this fix protects reads only, not writes.
+- `get_fields(types=True)`, `_field_rows`, and `get_fields_frame` no
+  longer raise `KeyError`/`AttributeError` on a permissive-tier field
+  entry missing `name` and/or `type` (W5-4, ADAPTERS-01) — a real
+  ArcGIS server can emit such entries and `FieldSpec` already declares
+  both as optional. A field with no resolvable `name` is now silently
+  dropped (documented in the affected docstrings); a missing/`None`
+  `type` defaults to `""` instead of crashing on `None.replace(...)`.
+  `get_fields(types=False)` gained the same nameless-field guard.
 
 ## [3.1.0] - 2026-07-24
 ### Added

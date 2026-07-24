@@ -99,6 +99,22 @@ _ID_SCHEMA_FIXTURES: dict[str, dict[str, Any]] = {
             {"name": "UPDATED_AT", "type": "esriFieldTypeDate"},
         ],
     },
+    # W5-4 (ADAPTERS-01): a permissive-tier ``FieldSpec`` declares both
+    # ``name`` and ``type`` as ``str | None = None`` -- unlike
+    # "malformed-field-entry" above (a *wrong-typed* value that fails
+    # validation and gets dropped with a drift log), these entries are
+    # each individually VALID FieldSpec instances that simply omit one
+    # of the two keys, exactly as a real permissive-tier ArcGIS service
+    # can emit (vendor variance the model is explicitly designed to
+    # tolerate). No drift is logged for either entry.
+    "field-missing-name-or-type": {
+        "name": "Partially Described Fields",
+        "fields": [
+            {"name": "OBJECTID", "type": "esriFieldTypeOID"},
+            {"type": "esriFieldTypeString"},  # server omitted `name`
+            {"name": "UPDATED_AT"},  # server omitted `type`
+        ],
+    },
 }
 
 
