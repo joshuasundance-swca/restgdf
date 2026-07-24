@@ -27,6 +27,7 @@ Covers three follow-up-on-follow-up fixes on top of T6–T11:
 from __future__ import annotations
 
 import math
+import re
 from urllib.parse import urlencode
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -86,8 +87,14 @@ async def test_arcgis_request_forces_post_when_transport_is_query():
 
 @pytest.mark.asyncio
 async def test_arcgis_request_still_uses_get_for_header_transport():
-    """transport='header' is the safe default (token in HTTP header);
-    short requests can use GET without leaking credentials."""
+    """transport='header' is the safe default (token in HTTP header).
+
+    A short request may use GET here ONLY because this body carries no
+    ``token`` key — the request itself has no credential to leak into the
+    URL. A token-bearing body forces POST regardless of transport; that is
+    covered by ``test_arcgis_request_forces_post_when_body_carries_token_*``
+    (AUTH-01).
+    """
     from restgdf.utils._http import _arcgis_request
 
     session = _FakeAuthSession(transport="header")
@@ -342,6 +349,119 @@ async def test_arcgis_request_get_path_uses_normalized_params():
         "outFields": "",
         "f": "json",
     }
+
+
+# ---------------------------------------------------------------------------
+# AUTH-01: a caller-supplied token in the request body must never be
+# serialized into the URL query string (token-in-URL leak to proxy/server
+# access logs). The pre-fix Gate-3 guard keyed only on session transport
+# mode, so a plain ``aiohttp.ClientSession`` or a default header-mode
+# ``ArcGISTokenSession`` still GET-serialized a short token-bearing body.
+# ---------------------------------------------------------------------------
+
+_AUTH01_TOKEN = "SUPERSECRETTOKEN-AUTH01-DEADBEEF"
+_AUTH01_LAYER_URL = "https://svc.example/arcgis/rest/services/Secured/FeatureServer/0"
+_AUTH01_METADATA_URL_RE = re.compile(
+    r"^https://svc\.example/arcgis/rest/services/Secured/FeatureServer/0(\?.*)?$",
+)
+_AUTH01_QUERY_URL_RE = re.compile(
+    r"^https://svc\.example/arcgis/rest/services/Secured/FeatureServer/0/query(\?.*)?$",
+)
+
+
+def _auth01_metadata_payload() -> dict:
+    return {
+        "name": "Secured Layer",
+        "type": "Feature Layer",
+        "fields": [
+            {"name": "OBJECTID", "type": "esriFieldTypeOID"},
+            {"name": "CITY", "type": "esriFieldTypeString"},
+        ],
+        "maxRecordCount": 2000,
+        "advancedQueryCapabilities": {"supportsPagination": True},
+    }
+
+
+@pytest.mark.asyncio
+async def test_featurelayer_token_never_appears_in_request_url():
+    """AUTH-01 (real consumer path): ``FeatureLayer.from_url(token=...)`` on a
+    plain ``aiohttp.ClientSession`` must never emit the token in a request URL.
+
+    Before the body-aware POST fix, the short metadata (``?f=json``) and count
+    (``returnCountOnly=true``) requests ride on GET, so the token is
+    serialized into the URL query string — a credential leak into every proxy
+    / server access log. This asserts the token appears in NO requested URL.
+    """
+    from aiohttp import ClientSession
+    from aioresponses import aioresponses
+
+    from restgdf.featurelayer.featurelayer import FeatureLayer
+
+    with aioresponses() as m:
+        # Register both verbs for both endpoints so the assertion is about the
+        # URL, not the verb: pre-fix the library GETs (token leaks into URL),
+        # post-fix it POSTs (token rides in the body).
+        m.get(_AUTH01_METADATA_URL_RE, payload=_auth01_metadata_payload(), repeat=True)
+        m.post(_AUTH01_METADATA_URL_RE, payload=_auth01_metadata_payload(), repeat=True)
+        m.get(_AUTH01_QUERY_URL_RE, payload={"count": 1}, repeat=True)
+        m.post(_AUTH01_QUERY_URL_RE, payload={"count": 1}, repeat=True)
+
+        async with ClientSession() as session:
+            await FeatureLayer.from_url(
+                _AUTH01_LAYER_URL,
+                session=session,
+                token=_AUTH01_TOKEN,
+            )
+
+        leaked = [
+            str(url) for (_method, url) in m.requests if _AUTH01_TOKEN in str(url)
+        ]
+
+    assert not leaked, (
+        "AUTH-01: caller-supplied token must not appear in any request URL; "
+        f"leaked into: {leaked}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_arcgis_request_forces_post_when_body_carries_token_plain_session():
+    """AUTH-01 (unit): a token-bearing body must route via POST even on a
+    plain duck-typed session with NO ``_transport`` attribute (the base-install
+    ``aiohttp.ClientSession`` shape). Pre-fix the short body took the GET path
+    and leaked the token into the URL query string."""
+    from restgdf.utils._http import _arcgis_request
+
+    session = SimpleNamespace(
+        get=AsyncMock(return_value=SimpleNamespace(status=200)),
+        post=AsyncMock(return_value=SimpleNamespace(status=200)),
+    )
+    body = {"f": "json", "token": "leak-me"}
+
+    await _arcgis_request(session, "https://example/query", body)
+
+    assert session.post.await_count == 1, "token-in-body must force POST"
+    assert session.get.await_count == 0
+    _, kwargs = session.post.call_args
+    assert kwargs.get("data") == body
+
+
+@pytest.mark.asyncio
+async def test_arcgis_request_forces_post_when_body_carries_token_header_session():
+    """AUTH-01 (unit): even a default header-mode ``ArcGISTokenSession`` leaks
+    when the caller also passes ``data['token']`` — the header-transport guard
+    returns False, so a short token-bearing body took the GET path pre-fix.
+    A token in the body must force POST regardless of session transport."""
+    from restgdf.utils._http import _arcgis_request
+
+    session = _FakeAuthSession(transport="header")
+    body = {"f": "json", "token": "leak-me"}
+
+    await _arcgis_request(session, "https://example/query", body)
+
+    assert session.post.await_count == 1, "token-in-body must force POST"
+    assert session.get.await_count == 0
+    _, kwargs = session.post.call_args
+    assert kwargs.get("data") == body
 
 
 # ---------------------------------------------------------------------------
