@@ -24,7 +24,7 @@ import logging
 from collections.abc import Iterable, Mapping
 from typing import Any, TypeVar
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import AliasChoices, BaseModel, ConfigDict, ValidationError
 
 from restgdf._logging import get_drift_logger
 from restgdf._models._errors import RestgdfResponseError
@@ -80,13 +80,10 @@ def _known_keys(model_cls: type[BaseModel]) -> set[str]:
         if info.alias:
             names.add(info.alias)
         choices = info.validation_alias
-        if choices is not None:
-            try:
-                for choice in choices.choices:
-                    if isinstance(choice, str):
-                        names.add(choice)
-            except AttributeError:
-                pass
+        if isinstance(choices, AliasChoices):
+            for choice in choices.choices:
+                if isinstance(choice, str):
+                    names.add(choice)
     return names
 
 
