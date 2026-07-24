@@ -47,6 +47,7 @@ if TYPE_CHECKING:
         AuthNotAttachedError,
         AuthenticationError,
         ConfigurationError,
+        FieldDoesNotExistError,
         InvalidCredentialsError,
         OptionalDependencyError,
         OutputConversionError,

@@ -18,6 +18,14 @@ All notable changes to restgdf are documented here. This project follows
   following the `build_pagination_plan` pattern (not a top-level
   `restgdf` export).
 
+### Fixed
+
+- Static type-checkers can now resolve `restgdf.FieldDoesNotExistError`.
+  It was already exported at runtime (`__all__` and the lazy-export
+  table), but missing from the `TYPE_CHECKING` import block that backs
+  static analysis, so `mypy`/`pyright` reported an unresolved attribute
+  even though the name worked fine at runtime.
+
 ### Changed
 
 - Raised the supported Python floor to 3.11 (3.9 is EOL 2025-10-31; 3.10
