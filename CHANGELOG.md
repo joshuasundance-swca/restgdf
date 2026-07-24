@@ -4,6 +4,16 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Fixed
+
+- `FeatureLayer.get_gdf`/`get_unique_values`/`get_value_counts`/
+  `get_nested_count` now return an independent copy of the cached
+  frame/list on every call (W5-1, ASYNC-02) instead of the shared cached
+  object by reference. Previously, mutating a returned `GeoDataFrame` or
+  `DataFrame` in place (e.g. `df.rename(..., inplace=True)`) silently
+  corrupted what every later call on the same instance returned. Cache
+  *population* is unaffected and remains non-atomic under concurrent
+  `asyncio.gather` awaiters — this fix protects reads only, not writes.
 
 ## [3.1.0] - 2026-07-24
 ### Added
