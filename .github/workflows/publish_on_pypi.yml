@@ -24,7 +24,43 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  release-tests:
+    # W1-1 (CICD-01): gate the release path on the offline test suite. This
+    # job runs on every trigger the workflow has (tag push, workflow_dispatch,
+    # pull_request), so build-distributions -> needs: release-tests is never
+    # skipped-but-treated-as-success: a failure or non-run of tests always
+    # blocks the build, and publish-pypi (needs: build-distributions) inherits
+    # the gate transitively. Tests run against the SAME ref that gets built.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ inputs.release_tag || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install package with all test extras
+        # Full non-network suite imports from resilience + telemetry modules;
+        # install every extra so the release gate matches the PR gate.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,geo,resilience,telemetry]"
+
+      - name: Run offline test suite
+        run: python -m pytest -q -m "not network"
+
   build-distributions:
+    needs: release-tests
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -90,14 +126,45 @@ jobs:
         run: |
           set -euo pipefail
 
-          # BL-41: block the release if CHANGELOG.md has not been
-          # consolidated to the tagged version. The maintainer renames
-          # the `## [Unreleased]` header to `## [X.Y.Z] - <date>` at
-          # tag time; we fail fast here when that step was skipped.
+          # W1-4 (BL-41 / CICD-02): block the release unless CHANGELOG.md has a
+          # non-empty, non-duplicated section for the tagged version. The
+          # maintainer renames `## [Unreleased]` to `## [X.Y.Z] - <date>` at
+          # tag time; we fail fast here when that section is missing, empty, or
+          # duplicated. This step only runs when release_meta.outputs.raw != ''
+          # (tag push / workflow_dispatch), never on PR runs or against the
+          # `## [Unreleased]` convention.
           header="## [${RELEASE_VERSION}]"
-          if ! grep -F -- "$header" CHANGELOG.md > /dev/null; then
+
+          # Missing header (preserves the prior presence check). `grep -c`
+          # prints 0 and exits 1 on no match, so guard it under `set -e`.
+          count="$(grep -cF -- "$header" CHANGELOG.md || true)"
+          if [ "$count" -eq 0 ]; then
             echo "::error file=CHANGELOG.md::Missing release header '${header}' in CHANGELOG.md."
             echo "Expected '${header}' section before publishing ${RELEASE_VERSION}."
+            exit 1
+          fi
+
+          # Duplicate header: the same version section appears more than once.
+          if [ "$count" -gt 1 ]; then
+            echo "::error file=CHANGELOG.md::Duplicate release header '${header}' appears ${count} times in CHANGELOG.md."
+            echo "Consolidate the duplicate '${header}' sections before publishing ${RELEASE_VERSION}."
+            exit 1
+          fi
+
+          # Extract the section body: lines strictly between this header and the
+          # next top-level `## [` header. Literal (index/substr) matching, NOT
+          # regex, because the header contains `[` and `]` metacharacters.
+          # shellcheck disable=SC2016  # $0/$n are awk fields, not shell vars
+          body="$(awk -v h="$header" '
+            index($0, h) == 1 { f = 1; next }
+            f && substr($0, 1, 4) == "## [" { exit }
+            f { print }
+          ' CHANGELOG.md)"
+
+          # Fail unless the body has at least one non-whitespace character.
+          if ! printf '%s\n' "$body" | grep -q "[^[:space:]]"; then
+            echo "::error file=CHANGELOG.md::Release section '${header}' is empty."
+            echo "Populate the '${header}' section before publishing ${RELEASE_VERSION}."
             exit 1
           fi
 
