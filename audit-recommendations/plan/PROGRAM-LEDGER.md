@@ -8,8 +8,8 @@
 
 | Phase | State | Exit evidence |
 |------|-------|---------------|
-| P0A Preserve the plan | published; PR #190 open (sanctioned red-at-open) | audit branch published and audit PR merged |
-| P0B Raise Python floor to 3.11 + repair fresh CI | blocked/red | 3.11+ metadata/docs and 3.11–3.14 offline aggregate green |
+| P0A Preserve the plan | main merged back; completes when PR #190 merges (this row rides in it) | audit branch published and audit PR merged |
+| P0B Raise Python floor to 3.11 + repair fresh CI | **COMPLETE** (PR #191 → `0fa0332`, squash) | 3.11+ metadata/docs and 3.11–3.14 offline aggregate green |
 | P0C Reconcile open PRs | 9 open (2026-07-22) | each PR merged, superseded, refreshed, or deliberately deferred |
 | P0D Turn CI into policy | not started | offline aggregate required on `main`; `release` env reviewer set; ruleset exported |
 | V0 Establish baseline | not started | fresh main clone passes the complete gate |
@@ -24,3 +24,12 @@
 - 2026-07-22 — Runbook committed (`95f402b`), then amended after a 5-lane adversarial validation
   (95 claims: 50 confirmed / 15 refuted / 25 adjusted / 5 unverified). Floor decision revised to
   Python >=3.11 (3.9 EOL 2025-10-31; 3.10 EOL 2026-10-31). No phase has started; nothing pushed.
+- 2026-07-23 — **P0B complete.** PR #191 squash-merged to `main` as `0fa0332`: floor >=3.11
+  (commit-level gate evidence in the PR body), aioresponses/aiohttp-3.14 `stream_writer` conftest
+  shim + real-consumer-path regression (fresh resolution = aiohttp 3.14.3; matrix 3.11–3.14 each
+  1169 passed/4 skipped/2 deselected in clean envs), `ci-offline` aggregate job added. Full PR CI
+  green including advisory network/stress. 3 default-refute verifiers: CONFIRMED ×3, 0 mustFix.
+  P0A: audit branch published as PR #190 (sanctioned red-at-open), repaired `main` merged back
+  clean (zero conflicts). #175 adversarially reviewed (MERGE_WITH_CHANGES, 0 blocking —
+  scratch/p0b/reports/pr175-review.md): P0C will carry CHANGELOG/MIGRATION bullets in the rebase;
+  query-time Referer propagation noted for W2-10 (M2).
