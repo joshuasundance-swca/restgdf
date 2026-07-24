@@ -11,6 +11,12 @@ All notable changes to restgdf are documented here. This project follows
   `get_logger("auth")` factory instead of a raw `logging.getLogger(...)`
   call, so it carries the documented `NullHandler` like every other
   `restgdf.*` logger (it previously silently lacked one).
+- `restgdf.resilience._errors._parse_retry_after` now rejects non-finite
+  `Retry-After` header values (`"nan"`, `"inf"`, `"-inf"`, `"Infinity"`,
+  etc.) instead of returning them as a poisoned `float`. Previously a
+  `NaN`/`+Inf` value passed the existing negative-value guard unmolested
+  and could reach the 429 cooldown deadline computation and the public
+  `RateLimitError.retry_after` attribute.
 
 ## [3.1.0] - 2026-07-24
 ### Added
