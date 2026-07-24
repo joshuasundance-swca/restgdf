@@ -126,14 +126,45 @@ jobs:
         run: |
           set -euo pipefail
 
-          # BL-41: block the release if CHANGELOG.md has not been
-          # consolidated to the tagged version. The maintainer renames
-          # the `## [Unreleased]` header to `## [X.Y.Z] - <date>` at
-          # tag time; we fail fast here when that step was skipped.
+          # W1-4 (BL-41 / CICD-02): block the release unless CHANGELOG.md has a
+          # non-empty, non-duplicated section for the tagged version. The
+          # maintainer renames `## [Unreleased]` to `## [X.Y.Z] - <date>` at
+          # tag time; we fail fast here when that section is missing, empty, or
+          # duplicated. This step only runs when release_meta.outputs.raw != ''
+          # (tag push / workflow_dispatch), never on PR runs or against the
+          # `## [Unreleased]` convention.
           header="## [${RELEASE_VERSION}]"
-          if ! grep -F -- "$header" CHANGELOG.md > /dev/null; then
+
+          # Missing header (preserves the prior presence check). `grep -c`
+          # prints 0 and exits 1 on no match, so guard it under `set -e`.
+          count="$(grep -cF -- "$header" CHANGELOG.md || true)"
+          if [ "$count" -eq 0 ]; then
             echo "::error file=CHANGELOG.md::Missing release header '${header}' in CHANGELOG.md."
             echo "Expected '${header}' section before publishing ${RELEASE_VERSION}."
+            exit 1
+          fi
+
+          # Duplicate header: the same version section appears more than once.
+          if [ "$count" -gt 1 ]; then
+            echo "::error file=CHANGELOG.md::Duplicate release header '${header}' appears ${count} times in CHANGELOG.md."
+            echo "Consolidate the duplicate '${header}' sections before publishing ${RELEASE_VERSION}."
+            exit 1
+          fi
+
+          # Extract the section body: lines strictly between this header and the
+          # next top-level `## [` header. Literal (index/substr) matching, NOT
+          # regex, because the header contains `[` and `]` metacharacters.
+          # shellcheck disable=SC2016  # $0/$n are awk fields, not shell vars
+          body="$(awk -v h="$header" '
+            index($0, h) == 1 { f = 1; next }
+            f && substr($0, 1, 4) == "## [" { exit }
+            f { print }
+          ' CHANGELOG.md)"
+
+          # Fail unless the body has at least one non-whitespace character.
+          if ! printf '%s\n' "$body" | grep -q "[^[:space:]]"; then
+            echo "::error file=CHANGELOG.md::Release section '${header}' is empty."
+            echo "Populate the '${header}' section before publishing ${RELEASE_VERSION}."
             exit 1
           fi
 
