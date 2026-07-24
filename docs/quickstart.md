@@ -1,6 +1,7 @@
 # Quickstart
 
-**Requires Python ≥ 3.9.**
+**Requires Python ≥ 3.11** (3.9 reached EOL 2025-10-31; 3.10 reaches EOL
+2026-10-31).
 
 Choose the install that matches the workflow you want:
 

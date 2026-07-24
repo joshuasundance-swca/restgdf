@@ -1,5 +1,14 @@
 # restgdf migration guide
 
+## 3.0.x → 3.1 migration notes
+
+restgdf 3.1 raises the supported Python floor to **3.11** (3.9 reached
+EOL 2025-10-31; 3.10 reaches EOL 2026-10-31). No runtime API changes
+accompany this bump. If you install with `pip install restgdf` on an
+older interpreter (3.9/3.10), pip resolves the last compatible 3.0.x
+release instead of 3.1; upgrade your interpreter to pick up 3.1 and
+later releases.
+
 ## 2.0.0 migration notes
 
 restgdf 2.0.0 reshapes install surface, error taxonomy, configuration,

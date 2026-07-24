@@ -34,7 +34,7 @@ class TestUTCWallClockExpiry:
             datetime.datetime,
         ), f"expires_at must be datetime, got {type(ts.expires_at)}"
         assert ts.expires_at.tzinfo is not None, "expires_at must be tz-aware"
-        assert ts.expires_at.tzinfo == datetime.timezone.utc
+        assert ts.expires_at.tzinfo == datetime.UTC
 
     def test_utc_now_shim_exists(self):
         """A _utc_now() shim must exist for test monkeypatching."""
@@ -43,7 +43,7 @@ class TestUTCWallClockExpiry:
         now = _utc_now()
         assert isinstance(now, datetime.datetime)
         assert now.tzinfo is not None
-        assert now.tzinfo == datetime.timezone.utc
+        assert now.tzinfo == datetime.UTC
 
     def test_token_needs_update_uses_expires_at(self):
         """token_needs_update should compare against expires_at, not raw epoch."""

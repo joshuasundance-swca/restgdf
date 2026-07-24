@@ -7,16 +7,20 @@ Asserts:
   * `async_deprecated_wrapper` emits the warning synchronously (before
     the coroutine is awaited) and still returns the correct awaited value.
   * Applying the decorator to a non-async function raises `TypeError`.
+  * `restgdf._compat.aclosing` is the stdlib `contextlib.aclosing` (the
+    floor is now >=3.11, so no py39 backport class is needed) and the
+    supported async-context-manager path still works end to end.
 """
 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import warnings
 
 import pytest
 
-from restgdf._compat import _warn_deprecated, async_deprecated_wrapper
+from restgdf._compat import _warn_deprecated, aclosing, async_deprecated_wrapper
 
 
 def _call_warn(message: str) -> None:
@@ -70,3 +74,59 @@ def test_async_deprecated_wrapper_rejects_sync_function() -> None:
     decorator = async_deprecated_wrapper("nope")
     with pytest.raises(TypeError, match="async def"):
         decorator(not_async)  # type: ignore[type-var]
+
+
+def test_aclosing_is_stdlib_contextlib_aclosing() -> None:
+    """restgdf._compat.aclosing is a plain re-export of contextlib.aclosing.
+
+    The py39 backport class was removed once the floor rose to >=3.11
+    (contextlib.aclosing has shipped since 3.10); this asserts identity
+    rather than duck-typed behavior so a regression (e.g. a shadowing
+    reintroduction of a custom class) is caught immediately.
+    """
+
+    assert aclosing is contextlib.aclosing
+
+
+def test_aclosing_async_smoke_closes_on_exit() -> None:
+    class _Resource:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    async def _use() -> _Resource:
+        resource = _Resource()
+        async with aclosing(resource) as r:
+            assert r is resource
+            assert not r.closed
+        return resource
+
+    resource = asyncio.run(_use())
+    assert resource.closed is True
+
+
+def test_aclosing_async_smoke_closes_on_exception() -> None:
+    class _Resource:
+        def __init__(self) -> None:
+            self.closed = False
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    class _Boom(Exception):
+        pass
+
+    resource = _Resource()
+
+    async def _use() -> None:
+        async with aclosing(resource):
+            # Deterministic aclose() must still fire on an early exit via
+            # exception (the streaming-iterator early-break case this
+            # module's docstring calls out), not just the happy path.
+            raise _Boom("early exit")
+
+    with pytest.raises(_Boom):
+        asyncio.run(_use())
+    assert resource.closed is True

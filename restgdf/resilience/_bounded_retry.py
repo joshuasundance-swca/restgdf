@@ -21,7 +21,8 @@ Retry contract (must match the inline fallback byte-for-byte semantically):
 from __future__ import annotations
 
 import asyncio
-from typing import Callable, TypeVar
+from typing import TypeVar
+from collections.abc import Callable
 from collections.abc import Awaitable
 
 import aiohttp

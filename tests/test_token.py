@@ -110,14 +110,14 @@ def test_token_needs_update_branching():
     )
     assert token_session.token_needs_update() is True
 
-    future = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+    future = datetime.datetime.now(datetime.UTC) + datetime.timedelta(
         minutes=5,
     )
     token_session.token = "abc123"
     token_session.expires = future.timestamp()
     assert token_session.token_needs_update() is False
 
-    soon = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(
+    soon = datetime.datetime.now(datetime.UTC) + datetime.timedelta(
         seconds=30,
     )
     token_session.expires = soon.timestamp() * 1000

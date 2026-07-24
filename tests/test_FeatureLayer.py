@@ -1,6 +1,5 @@
 import json
 import importlib
-from typing import Optional
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -30,7 +29,7 @@ class MockRequestContext:
     async def __aexit__(self, exc_type, exc_value, traceback):
         return None
 
-    async def json(self, content_type: Optional[str] = None):
+    async def json(self, content_type: str | None = None):
         return self.payload
 
     async def text(self):
@@ -66,7 +65,7 @@ class MockFeatureLayerSession:
         self,
         metadata: dict,
         count: int,
-        object_ids: Optional[list[int]] = None,
+        object_ids: list[int] | None = None,
     ):
         self.metadata = metadata
         self.count = count

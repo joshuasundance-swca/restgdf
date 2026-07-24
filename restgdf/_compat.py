@@ -21,31 +21,11 @@ from __future__ import annotations
 import functools
 import inspect
 import warnings
-from typing import Any, Callable, TypeVar
+from typing import Any, TypeVar
+from collections.abc import Callable
 from collections.abc import Awaitable
 
-try:
-    from contextlib import aclosing  # type: ignore[attr-defined]  # py310+
-except ImportError:  # pragma: no cover - exercised on py39 only
-    # Minimal backport of :class:`contextlib.aclosing` for Python 3.9.
-    # Upstream added ``aclosing`` in 3.10 (bpo-41229); restgdf still targets
-    # py39 per ``pyproject.toml`` ``requires-python = ">=3.9"`` and the
-    # streaming iterators need deterministic ``aclose()`` on early break so
-    # the R-61 INTERNAL span's ``finally`` runs without GC delay.
-    from contextlib import AbstractAsyncContextManager
-
-    class aclosing(AbstractAsyncContextManager):  # type: ignore[no-redef]
-        """Async context manager that ``aclose()``s its target on exit."""
-
-        def __init__(self, thing: Any) -> None:
-            self.thing = thing
-
-        async def __aenter__(self) -> Any:
-            return self.thing
-
-        async def __aexit__(self, *exc_info: Any) -> None:
-            await self.thing.aclose()
-
+from contextlib import aclosing
 
 __all__ = ["aclosing", "_warn_deprecated", "async_deprecated_wrapper"]
 

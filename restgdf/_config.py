@@ -37,7 +37,8 @@ import functools
 import os
 import warnings
 from collections.abc import Mapping
-from typing import Any, Callable, Literal
+from typing import Any, Literal
+from collections.abc import Callable
 
 from pydantic import (
     BaseModel,
