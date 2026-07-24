@@ -176,9 +176,22 @@ class _SpanContextFilter(logging.Filter):
 
         span = trace.get_current_span()
         ctx = span.get_span_context()
+        # W5-12 (TELEMETRY-01): ALWAYS stamp trace_id/span_id, defaulting to
+        # "" outside a valid span. Previously these attributes were only
+        # set inside `if ctx is not None and ctx.is_valid:` with no else,
+        # so any record emitted outside a `feature_layer.stream` span (the
+        # common case -- auth.refresh.start DEBUG, the pagination
+        # exceededTransferLimit warning, ...) had no trace_id/span_id at
+        # all, and the documented `%(trace_id)s` formatter recipe raised
+        # KeyError, swallowed by logging into a stderr "--- Logging
+        # error ---" dump. An empty-string default is indistinguishable
+        # from a degenerate all-zero context -- accepted as cosmetic.
         if ctx is not None and ctx.is_valid:
             record.trace_id = format(ctx.trace_id, "032x")  # type: ignore[attr-defined]
             record.span_id = format(ctx.span_id, "016x")  # type: ignore[attr-defined]
+        else:
+            record.trace_id = ""  # type: ignore[attr-defined]
+            record.span_id = ""  # type: ignore[attr-defined]
         return True
 
 

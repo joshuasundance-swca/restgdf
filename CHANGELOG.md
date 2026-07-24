@@ -22,6 +22,18 @@ All notable changes to restgdf are documented here. This project follows
   dropped (documented in the affected docstrings); a missing/`None`
   `type` defaults to `""` instead of crashing on `None.replace(...)`.
   `get_fields(types=False)` gained the same nameless-field guard.
+- The `_SpanContextFilter` log-correlation filter now always stamps
+  `record.trace_id`/`record.span_id` (defaulting to `""` outside a
+  valid OpenTelemetry span) instead of leaving them unset (W5-12,
+  TELEMETRY-01). Previously, any `restgdf.*` log record emitted
+  outside a `feature_layer.stream` span — e.g. the `auth.refresh.start`
+  DEBUG record or the pagination `exceededTransferLimit` warning — had
+  no `trace_id`/`span_id` attributes at all, so the documented
+  `%(trace_id)s` log-correlation recipe raised
+  `ValueError: Formatting field not found in record: 'trace_id'`
+  (surfaced by stdlib `logging` as a swallowed stderr
+  "--- Logging error ---" dump). `span_context_fields()` is unaffected
+  and still returns `{}` outside a span.
 
 ## [3.1.0] - 2026-07-24
 ### Added
