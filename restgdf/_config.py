@@ -182,8 +182,7 @@ class AuthConfig(BaseModel):
         *header_name* is ``"X-Esri-Authorization"``.  Pass
         ``allow_query_transport=True`` to enable ``transport="query"``.
 
-    Not auto-applied to token sessions (AUTH-04 / CONFIG-02)
-    -------------------------------------------------------
+    **Not auto-applied to token sessions (AUTH-04 / CONFIG-02).**
     ``AuthConfig`` is a *validated namespace* for the ``RESTGDF_AUTH_*``
     environment variables; it is **not** auto-applied to any
     :class:`~restgdf.utils.token.ArcGISTokenSession`. In particular the three
@@ -384,8 +383,7 @@ class Config(BaseModel):
     Use :func:`get_config` (process-cached) rather than instantiating directly
     in production code; direct instantiation is useful for tests.
 
-    Not request-path-injectable (CONFIG-03)
-    ---------------------------------------
+    **Not request-path-injectable (CONFIG-03).**
     A freshly built ``Config(...)`` instance is **test-only**: it is *not*
     threaded into the runtime request path. Every library consumer
     (``utils._http``, ``utils.getgdf``, ``utils.getinfo``, ``utils.crawl``,
