@@ -19,17 +19,19 @@ the ArcGIS `client` field switches to `"referer"` and `referer=<url>`
 is added to the mint payload. Tokens are now minted as **referer-bound**
 instead of **IP-bound** for these callers.
 
-**Known limitation (planned follow-up).** restgdf does not yet send a
-matching `Referer` HTTP header on subsequent data requests — the referer
-is used only at mint time. ArcGIS binds a `client="referer"` token to
-that referer and can reject queries whose `Referer` header does not match
-(HTTP 498/499). So a caller who previously relied on
-`AGOLUserPass(referer=...)` and received a working IP-bound token may,
-after this change, receive a referer-bound token that services enforcing
-referer will reject. Request-time `Referer`-header propagation is planned
-follow-up work. If a referer-bound token is rejected and you cannot yet
-supply the header out-of-band, drop the `referer` argument to fall back to
-the previous IP-bound (`client="requestip"`) behaviour.
+**Request-time `Referer` propagation.** A referer-bound session now also
+attaches a matching `Referer` HTTP header to its data requests (query,
+metadata, count), not only to the mint call — so a `client="referer"`
+token is honoured end-to-end. The header is sourced from the same referer
+used at mint time (`TokenSessionConfig.referer` / `AGOLUserPass.referer`),
+with config taking precedence, and is injected through the token session's
+header seam. A `client="requestip"` (non-referer) session attaches **no**
+`Referer` header, so nothing leaks for callers who never set a referer. An
+explicit caller `Referer` on a referer-bound session is overridden by the
+session's referer (a mismatched `Referer` would fail the token); pass a
+non-referer session if you need to control the header yourself. If a
+referer-bound token is still rejected, drop the `referer` argument to fall
+back to the IP-bound (`client="requestip"`) behaviour.
 
 The token-mint payload also now carries an explicit `expiration` field
 (`AGOLUserPass.expiration`, default 60 minutes; the deprecated

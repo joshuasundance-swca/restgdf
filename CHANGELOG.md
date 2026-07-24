@@ -20,6 +20,14 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Fixed
 
+- A **referer-bound** `ArcGISTokenSession` (built from
+  `AGOLUserPass(referer=...)` / `TokenSessionConfig.referer`) now attaches a
+  matching `Referer` HTTP header to its data requests, not only to the
+  `/generateToken` mint — so a `client="referer"` token is honoured
+  end-to-end instead of being rejected (498/499) on the query. A
+  `client="requestip"` (non-referer) session attaches no `Referer` header
+  (no referer leak). Closes the "planned follow-up" limitation noted in
+  MIGRATION.md for the 3.1 referer feature (#175 review NOTE-1).
 - `ArcGISTokenSession` now forwards its own `verify_ssl` flag to
   token-attached **data** requests (not just the `/generateToken` POST), via
   `setdefault("ssl", self.verify_ssl)` in `_call_with_auth_retry` — so a

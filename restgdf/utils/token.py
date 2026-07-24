@@ -222,11 +222,35 @@ class ArcGISTokenSession:
         return "X-Esri-Authorization"
 
     @property
+    def _referer(self) -> str | None:
+        """Return the referer this session's token is bound to, if any.
+
+        Resolved with the same precedence as
+        :attr:`token_request_payload` (config referer wins over the
+        credential's referer) so a request-time ``Referer`` header matches
+        the referer sent at mint time. ``None`` for a ``client="requestip"``
+        (non-referer) token or a credential-less session.
+        """
+        if self.config is not None:
+            return self.config.referer
+        return getattr(self.credentials, "referer", None)
+
+    @property
     def auth_headers(self) -> dict[str, str]:
-        """Return authentication headers with the token if available."""
+        """Return authentication headers with the token if available.
+
+        For a **referer-bound** session (``AGOLUserPass(referer=...)`` /
+        ``TokenSessionConfig.referer``) a matching ``Referer`` header is
+        attached so the ``client="referer"`` token is honoured on data
+        requests, not only at mint time (#175 NOTE-1). No ``Referer`` is
+        attached for a ``client="requestip"`` token (no referer leak).
+        """
         headers: dict[str, str] = {}
         if self.token and self._transport == "header":
             headers[self._header_name] = f"Bearer {self.token}"
+        referer = self._referer
+        if referer:
+            headers["Referer"] = referer
         return headers
 
     def update_headers(self, headers: dict | None = None) -> dict:
