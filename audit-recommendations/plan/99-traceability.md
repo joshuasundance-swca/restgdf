@@ -182,4 +182,23 @@ Findings mapped to more than one item are **split-ownership**: each owning item 
 
 ## Deliberate deferrals
 
-None. All 61 confirmed findings are allocated to at least one work item. (Decision-required items may, at the maintainer's choice, resolve to *doc-only* fixes — e.g. CONFIG-03/04 — but the finding is still addressed, not dropped; see the master plan's decision record.)
+All 61 confirmed findings are allocated to at least one work item, and one item is a recorded
+deferral (updated 2026-07-24 at M4 close; originally this section said "None"):
+
+- **`ERRTAX-03` / `W2-5` — DEFERRED (NO-GO), M3 2026-07-24.** In-body 498/499 envelope
+  detection was closed as NO-GO per plan/02's own recommendation: HTTP-200-wrapped auth
+  envelopes already surface as typed `RestgdfResponseError`, so the added mapping buys little
+  against its cross-layer cost. Owner: a future reactive-auth design pass (jointly with the
+  `_drift.py` owner). Trigger: maintainer GO, or field reports of HTTP-200 498/499 envelopes.
+  Rationale recorded in the W2-5 docstring note and PR #209.
+
+Two disposition clarifications for the record (surfaced by `scripts/audit_disposition.py`):
+- **`W3-6` was not dropped** — it resolved as *confirm-only* (Path a) in M2/PR #203: the
+  timeout/concurrency env vars were verified wired and the three `RESTGDF_AUTH_*` vars
+  verified absent from the resolver; the documentation rows were corrected under W6-7 (M4).
+- **`W4-6`/`W5-9`/`W5-10`/`W5-11`** carry an M2 milestone label below but landed in the M1
+  typing-transition stack (PR #196) per the runbook's recorded milestone override.
+
+(Decision-required items may, at the maintainer's choice, resolve to *doc-only* fixes — e.g.
+CONFIG-03/04, both landed as doc-downs — the finding is addressed, not dropped; see the master
+plan's decision record.)
