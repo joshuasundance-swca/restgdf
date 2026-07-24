@@ -132,7 +132,7 @@ pre_commit_hook = "scripts/bumpver_stamp_date.py"
 
 [tool.coverage.run]
 branch = true
-omit = ["*tests/*.py", "restgdf/app.py"]
+omit = ["*tests/*.py"]
 command_line = "-m pytest"
 source = ["restgdf"]
 
