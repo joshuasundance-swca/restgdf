@@ -63,7 +63,7 @@ async def test_inline_fallback_when_resilience_absent(monkeypatch):
     async def _flaky(*args, **kwargs):
         attempts.append(1)
         if len(attempts) < 3:
-            raise asyncio.TimeoutError
+            raise TimeoutError
         return 11
 
     monkeypatch.setattr(getinfo, "_resilience_bounded_retry", None)
@@ -109,7 +109,7 @@ async def test_inline_fallback_wraps_timeout_after_exhaustion(monkeypatch):
     """Fallback path: exhausted timeouts wrap to RestgdfTimeoutError."""
 
     async def _always_timeout(*args, **kwargs):
-        raise asyncio.TimeoutError
+        raise TimeoutError
 
     monkeypatch.setattr(getinfo, "_resilience_bounded_retry", None)
     monkeypatch.setattr(getinfo, "get_feature_count", _always_timeout)
@@ -162,7 +162,7 @@ async def test_delegation_path_wraps_timeout_after_exhaustion(monkeypatch):
 
     async def _always_timeout(*args, **kwargs):
         attempts.append(1)
-        raise asyncio.TimeoutError
+        raise TimeoutError
 
     monkeypatch.setattr(getinfo, "_resilience_bounded_retry", bounded_retry_timeout)
     monkeypatch.setattr(getinfo, "get_feature_count", _always_timeout)

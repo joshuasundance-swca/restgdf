@@ -68,7 +68,7 @@ def _utc_now() -> datetime.datetime:
     Exposed as a module-level function so tests can monkeypatch it
     to control wall-clock time without freezing the real clock.
     """
-    return datetime.datetime.now(datetime.timezone.utc)
+    return datetime.datetime.now(datetime.UTC)
 
 
 __all__ = [
@@ -199,7 +199,7 @@ class ArcGISTokenSession:
         if self.expires is None:
             return None
         epoch = self.expires / 1000 if self.expires > 1e11 else self.expires
-        return datetime.datetime.fromtimestamp(epoch, tz=datetime.timezone.utc)
+        return datetime.datetime.fromtimestamp(epoch, tz=datetime.UTC)
 
     @property
     def _transport(self) -> str:

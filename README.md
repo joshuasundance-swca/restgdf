@@ -27,7 +27,7 @@ lightweight async Esri REST client with optional GeoPandas extras
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![security: bandit](https://img.shields.io/badge/security-bandit-yellow.svg)](https://github.com/PyCQA/bandit)
 
-> **Python ≥ 3.9** | async-first | zero mandatory geo dependencies | pydantic-validated responses
+> **Python ≥ 3.11** | async-first | zero mandatory geo dependencies | pydantic-validated responses
 
 ```python
 import asyncio
@@ -147,7 +147,8 @@ GeoPandas extra.
 
 # Installation
 
-**Requires Python ≥ 3.9.**
+**Requires Python ≥ 3.11** (3.9 reached EOL 2025-10-31; 3.10 reaches EOL
+2026-10-31).
 
 Install the lightweight core package when you want typed metadata, query
 helpers, crawl/auth utilities, or raw feature rows without pulling in
