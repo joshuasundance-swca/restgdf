@@ -878,6 +878,22 @@ async def _iter_pages_raw(
     attributes for the R-61 INTERNAL parent span so the caller does not
     need to import telemetry helpers from ``restgdf.featurelayer`` (see
     ``tests/test_telemetry_no_dangling_imports_from_featurelayer.py``).
+
+    W4-4 (ASYNC-03): ``max_concurrent_pages`` only bounds the top-level
+    page-plan fetches submitted by the windowing loop below. When
+    ``on_truncation="split"``, each truncated page's ``_resolve_page``
+    call issues its own serial, uncounted sub-fetches (``get_object_ids``
+    plus one ``_fetch_page_dict`` per bisected half/cap-chunk) *in
+    addition to* the ``max_concurrent_pages`` window -- worst-case
+    in-flight is therefore roughly K+1, not a hard K cap. There is no
+    semaphore in this windowing loop (it is a manual
+    ``pending_in_order``/``_submit_next()`` task window), so threading a
+    slot-acquire into ``_resolve_page`` would have the split fetch block
+    on a slot the suspended top-level consumer cannot free -- a
+    re-entrancy deadlock. Do not add one. The public-facing correction
+    (:meth:`FeatureLayer.iter_pages`'s docstring, ``docs/recipes/streaming.md``)
+    is out of this file's ownership -- see the W4-4 report for the
+    handoff.
     """
     if order not in ("request", "completion"):
         raise ValueError(
