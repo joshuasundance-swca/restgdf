@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import math
 import warnings
 from asyncio import gather
@@ -11,7 +12,7 @@ from collections.abc import AsyncGenerator, Mapping
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, TCPConnector
 
 from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._config import get_config
@@ -19,6 +20,7 @@ from restgdf._logging import get_logger
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse, LayerMetadata
 from restgdf.errors import (
+    FieldDoesNotExistError,
     PaginationError,
     PaginationInconsistencyWarning,
     RestgdfResponseError,
@@ -30,6 +32,7 @@ from restgdf.utils.getinfo import (
     get_feature_count,
     get_max_record_count,
     get_metadata,
+    get_object_id_field,
     get_object_ids,
     supports_pagination,
 )
@@ -227,6 +230,33 @@ def _advertised_max_record_count_factor(
     return value
 
 
+def _resolve_order_by_oid(
+    request_data: Mapping[str, Any],
+    metadata: Mapping[str, Any] | LayerMetadata,
+) -> dict[str, str]:
+    """Return ``{"orderByFields": <resolved OID>}`` to merge into explicit
+    pagination batches, or ``{}`` when injection must be skipped (W4-2).
+
+    Skips injection when the caller already supplied an ``orderByFields``
+    (checked **case-insensitively** so a key arriving via ``QueryOptions.extra``
+    is never clobbered), and degrades gracefully -- returning ``{}`` -- when the
+    layer's OID cannot be resolved (``FieldDoesNotExistError`` on
+    ambiguous/missing OID). OID-resolution failure must never break a query that
+    works today.
+    """
+    if any(key.lower() == "orderbyfields" for key in request_data):
+        return {}
+    try:
+        oid_field = get_object_id_field(metadata)
+    except FieldDoesNotExistError:
+        _METADATA_LOG.debug(
+            "pagination.order_by.oid_unresolved; emitting un-sorted "
+            "offset/count batches (PAGINATION-02 graceful degrade)",
+        )
+        return {}
+    return {"orderByFields": oid_field}
+
+
 async def get_query_data_batches(
     url: str,
     session: AsyncHTTPSession,
@@ -263,10 +293,16 @@ async def get_query_data_batches(
         return [request_data]
 
     if supports_pagination(metadata) and supports_pagination_explicitly(metadata):
+        # W4-2 (PAGINATION-02): default orderByFields to the resolved OID so
+        # multi-page offset/count traversal is deterministic (Esri's own
+        # remedy for reliable resultOffset paging). Resolved once; skipped when
+        # the caller sorted or the OID is unresolvable (see helper).
+        order_by = _resolve_order_by_oid(request_data, metadata)
         if isinstance(requested_page_size, int) and requested_page_size > 0:
             return [
                 {
                     **request_data,
+                    **order_by,
                     "resultOffset": offset,
                     "resultRecordCount": min(page_size, feature_count - offset),
                 }
@@ -287,6 +323,7 @@ async def get_query_data_batches(
         return [
             {
                 **request_data,
+                **order_by,
                 "resultOffset": offset,
                 "resultRecordCount": count,
             }
@@ -328,8 +365,29 @@ async def get_sub_gdf(
         headers=default_headers(kwargs.pop("headers", None)),
         **kwargs,
     )
+    # W4-1 (PAGINATION-01): read the body once, then inspect the parsed JSON
+    # for exceededTransferLimit BEFORE handing the text to read_file. pyogrio /
+    # read_file discards the top-level flag (both ESRIJSON and the Esri-emitted
+    # GeoJSON FeatureCollection carry it at top level), so this path must parse
+    # the dict directly. Raising here mirrors the raw-feature engine
+    # _get_sub_features and closes the silent-data-loss gap on the flagship geo
+    # call. response.text() is a one-shot stream, so read into a local and reuse.
+    text = await response.text()
+    try:
+        raw = json.loads(text)
+    except (ValueError, TypeError):
+        # Non-JSON bodies (unexpected for f=GeoJSON/ESRIJSON) fall through to
+        # read_file, which will surface its own parse error rather than a
+        # misleading truncation raise.
+        raw = None
+    if isinstance(raw, dict) and raw.get("exceededTransferLimit") is True:
+        raise PaginationError(
+            f"{url}/query returned exceededTransferLimit=true; the GeoDataFrame "
+            "page is incomplete and rows are missing.",
+            page_size=query_data.get("resultRecordCount"),
+        )
     sub_gdf = read_file(
-        io.StringIO(await response.text()),
+        io.StringIO(text),
         # driver=gdfdriver,  # this line raises a warning when using pyogrio w/ ESRIJSON
         engine="pyogrio",
     )
@@ -508,11 +566,24 @@ async def get_gdf(
 ) -> GeoDataFrame:
     _require_geo_query_support("get_gdf()")
     owns_session = session is None
-    # A bare aiohttp ClientSession satisfies AsyncHTTPSession at runtime
-    # (runtime_checkable presence check) but is not a static structural
-    # subtype under current aiohttp stubs (see _protocols.AsyncHTTPSession);
-    # cast bridges that gap rather than forcing aiohttp to conform (TYPING-04).
-    session = session or cast(AsyncHTTPSession, ClientSession())
+    if session is None:
+        # W4-5 (CONFIG-01/AUTH-03 part C): build the library-owned bare
+        # session with a connector whose TLS policy comes from the
+        # TransportConfig source of truth (W3-1), so
+        # RESTGDF_TRANSPORT_VERIFY_SSL=false is honored on the GeoDataFrame
+        # data path. A caller-supplied session is left untouched -- its own
+        # connector owns its TLS policy (no per-leaf ssl= injection).
+        #
+        # A bare aiohttp ClientSession satisfies AsyncHTTPSession at runtime
+        # (runtime_checkable presence check) but is not a static structural
+        # subtype under current aiohttp stubs (see _protocols.AsyncHTTPSession);
+        # cast bridges that gap rather than forcing aiohttp to conform (TYPING-04).
+        session = cast(
+            AsyncHTTPSession,
+            ClientSession(
+                connector=TCPConnector(ssl=get_config().transport.verify_ssl),
+            ),
+        )
     datadict = default_data(kwargs.pop("data", None) or {})
     if where is not None:
         datadict["where"] = where

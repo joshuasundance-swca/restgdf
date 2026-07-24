@@ -6,6 +6,32 @@ All notable changes to restgdf are documented here. This project follows
 ## [Unreleased]
 ### Changed
 
+- **Multi-page offset/count pagination now sends a deterministic
+  `orderByFields`.** When a layer is traversed with explicit
+  `resultOffset`/`resultRecordCount` pages (the `get_gdf` / `get_df` /
+  `stream_*` common path), each batch now defaults `orderByFields` to the
+  layer's resolved OID field unless the caller already supplied one — Esri's
+  documented remedy for reliable `resultOffset` paging, which otherwise leaves
+  row order server-dependent and can silently duplicate or drop features
+  across page boundaries (W4-2 / PAGINATION-02). A caller-supplied
+  `orderByFields` (any case) is never overridden, and a layer whose OID cannot
+  be resolved degrades gracefully to today's un-sorted batches. **Wire-payload
+  change** (semver-relevant): explicit-pagination request bodies now carry an
+  `orderByFields` member. The OID-chunked WHERE-fallback and
+  `on_truncation='split'` paths are unchanged.
+- **The GeoDataFrame path now raises on truncated responses instead of
+  silently dropping rows.** `get_gdf` and `stream_gdf_chunks` (via
+  `chunk_generator` → `get_sub_gdf`) now inspect each page's parsed JSON for
+  `exceededTransferLimit=true` and raise `restgdf.errors.PaginationError`
+  (mirroring the raw-feature engine), rather than returning a GeoDataFrame
+  that is silently missing rows when ArcGIS hits its byte/geometry transfer
+  cap (W4-1 / PAGINATION-01, the audit's flagship silent-data-loss fix).
+  The flag is read from the response JSON directly because pyogrio/`read_file`
+  discards the top-level member. **Behavior change:** code that previously
+  received a short-but-successful GeoDataFrame on a capped layer now gets a
+  `PaginationError`; page the layer (smaller `resultRecordCount`, a tighter
+  `where`, or the `iter_pages` engine with `on_truncation='split'`) to read it
+  completely.
 - The default `User-Agent` on ArcGIS REST data requests is now sourced from
   `get_config().transport.user_agent` (default `restgdf/<version>`, e.g.
   `restgdf/3.1.0`) instead of the hardcoded `"Mozilla/5.0"`
@@ -40,6 +66,16 @@ All notable changes to restgdf are documented here. This project follows
   session built with `verify_ssl=False` (self-signed ArcGIS Enterprise)
   no longer fails TLS verification on the actual query/metadata requests.
   A caller-supplied `ssl=` still wins (W2-10 / CONFIG-01 / AUTH-03).
+- The library-owned session that `get_gdf` builds when called with
+  `session=None` is now constructed with a `TCPConnector` whose `ssl`
+  policy comes from `get_config().transport.verify_ssl` (default `True`),
+  so `RESTGDF_TRANSPORT_VERIFY_SSL=false` / `TransportConfig(verify_ssl=False)`
+  is finally honored on the flagship GeoDataFrame data path — previously
+  the bare `ClientSession()` used the default connector and silently kept
+  TLS verification on. A **caller-supplied** session is passed through
+  untouched (its own connector owns its TLS policy). This completes the
+  three-seam verify_ssl wiring (config source W3-1, token/`_http` W2-10,
+  getgdf connector W4-5 / CONFIG-01 / AUTH-03).
 - `FeatureLayer.get_gdf`/`get_unique_values`/`get_value_counts`/
   `get_nested_count` now return an independent copy of the cached
   frame/list on every call (W5-1, ASYNC-02) instead of the shared cached
