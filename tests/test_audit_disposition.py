@@ -382,6 +382,378 @@ def test_build_report_excludes_dev_tooling_commit_from_deferral_evidence(
 
 
 # ---------------------------------------------------------------------------
+# is_self_referential_commit — the squash-merge-proof file-diff check
+# ---------------------------------------------------------------------------
+
+
+def test_is_self_referential_commit_true_for_dev_tooling_subject(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """The message-based check alone is enough when the subject scope
+    survives — no git access needed since ``is_dev_tooling_commit`` short-
+    circuits first.
+    """
+    commit = ad.CommitRecord(
+        sha="deadbeef",
+        message="feat(dev-tooling): add M4 exit oracle audit_disposition.py + tests\n",
+    )
+    assert ad.is_self_referential_commit(tmp_path, commit)
+
+
+def test_is_self_referential_commit_true_for_squash_merge_confined_to_oracle_files(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """The real PR #213 shape: a squash-merge commit whose SUBJECT carries
+    the PR title (no "(dev-tooling)" scope survives the rename) but whose
+    ENTIRE diff is confined to the oracle's own two files, and whose body
+    mentions a work item (this program's own construction narrative). Must
+    still resolve self-referential via the file-diff check.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git("init", "-q", cwd=repo)
+    _git("config", "user.email", "test@example.com", cwd=repo)
+    _git("config", "user.name", "Test", cwd=repo)
+    # A root commit unrelated to the oracle -- `git diff-tree` on a true
+    # root commit (no parent) reports an empty diff regardless of content,
+    # so the oracle-files commit below must NOT be the repo's very first.
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-q", "-m", "chore: seed repo", cwd=repo)
+
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "audit_disposition.py").write_text(
+        "# oracle\n",
+        encoding="utf-8",
+    )
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_audit_disposition.py").write_text(
+        "# oracle tests\n",
+        encoding="utf-8",
+    )
+    _git("add", "-A", cwd=repo)
+    _git(
+        "commit",
+        "-q",
+        "-m",
+        "feat: audit disposition census oracle (M4 exit gate) (#213)\n\n"
+        "Mentions W2-1 as an illustrative example of the convention.\n",
+        cwd=repo,
+    )
+    sha = _git_head_sha(repo)
+    commit = ad.CommitRecord(sha=sha, message=_git_show_message(repo, sha))
+    assert not ad.is_dev_tooling_commit(commit.message)  # the scope did NOT survive
+    assert ad.is_self_referential_commit(repo, commit)
+
+
+def test_is_self_referential_commit_false_when_diff_touches_other_files_too(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """A commit that ALSO does real finding work (touches a file outside
+    ``_ORACLE_OWN_FILES``) must NOT be excluded, even if it mentions an
+    item and also happens to touch the oracle's own script.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git("init", "-q", cwd=repo)
+    _git("config", "user.email", "test@example.com", cwd=repo)
+    _git("config", "user.name", "Test", cwd=repo)
+    # A root commit first -- see the squash-merge test's comment: `git
+    # diff-tree` on a true root commit reports an empty diff regardless of
+    # content, which would make this test pass for the wrong reason.
+    (repo / "README.md").write_text("seed\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-q", "-m", "chore: seed repo", cwd=repo)
+
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "audit_disposition.py").write_text(
+        "# oracle\n",
+        encoding="utf-8",
+    )
+    (repo / "restgdf").mkdir()
+    (repo / "restgdf" / "real.py").write_text("x = 1\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-q", "-m", "feat: also touch real code (W9-9)\n", cwd=repo)
+    sha = _git_head_sha(repo)
+    commit = ad.CommitRecord(sha=sha, message=_git_show_message(repo, sha))
+    assert not ad.is_self_referential_commit(repo, commit)
+
+
+def test_is_self_referential_commit_false_when_no_item_mentioned(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """Short-circuits before ever calling ``git diff-tree`` when the message
+    mentions no item at all -- documented in the docstring as an
+    optimization, pinned here as a behavior contract: even a commit whose
+    diff IS confined to the oracle's own files is reported as NOT self-
+    referential if it names no work item (harmless either way, since such a
+    commit could never produce false evidence regardless).
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git("init", "-q", cwd=repo)
+    _git("config", "user.email", "test@example.com", cwd=repo)
+    _git("config", "user.name", "Test", cwd=repo)
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "audit_disposition.py").write_text(
+        "# oracle\n",
+        encoding="utf-8",
+    )
+    _git("add", "-A", cwd=repo)
+    _git(
+        "commit",
+        "-q",
+        "-m",
+        "chore: tidy up the oracle script, no item cited\n",
+        cwd=repo,
+    )
+    sha = _git_head_sha(repo)
+    commit = ad.CommitRecord(sha=sha, message=_git_show_message(repo, sha))
+    assert not ad.is_self_referential_commit(repo, commit)
+
+
+def test_build_report_excludes_squash_merge_shaped_self_reference(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """End-to-end reproduction of the actual bug found on merged ``main``:
+    PR #213's squash-merge commit body mentions an item ID as an
+    illustrative example next to deferral language, with a subject that no
+    longer carries the "(dev-tooling)" scope. A SEPARATE, real commit lands
+    that item cleanly. Before the file-diff-based fix, this resolved
+    DEFERRED; after, it must resolve LANDED.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git("init", "-q", cwd=repo)
+    _git("config", "user.email", "test@example.com", cwd=repo)
+    _git("config", "user.name", "Test", cwd=repo)
+
+    plan_dir = repo / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    findings = [
+        {
+            "id": "PAGINATION-03",
+            "axis": "PAGINATION",
+            "title": "unbounded nested IN-lists",
+            "severity": "low",
+            "files": ["restgdf/utils/getgdf.py"],
+        },
+    ]
+    (repo / "audit-recommendations" / "findings.json").write_text(
+        json.dumps(findings),
+        encoding="utf-8",
+    )
+    (plan_dir / "99-traceability.md").write_text(
+        "## Forward map\n\n| `PAGINATION-03` | low | t | `W4-3` | — |\n",
+        encoding="utf-8",
+    )
+    (repo / "restgdf" / "utils").mkdir(parents=True)
+    (repo / "restgdf" / "utils" / "getgdf.py").write_text("x = 1\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-q", "-m", "chore: seed repo", cwd=repo)
+
+    # The real landing.
+    (repo / "restgdf" / "utils" / "getgdf.py").write_text("x = 2\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-q", "-m", "fix: bound split OID lists (W4-3)", cwd=repo)
+
+    # A LATER squash-merge-shaped commit, confined to the oracle's own
+    # files, quotes "W4-3" next to deferral language while its subject
+    # carries a PR title rather than the "(dev-tooling)" scope.
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "audit_disposition.py").write_text(
+        "# oracle\n",
+        encoding="utf-8",
+    )
+    (repo / "tests").mkdir()
+    (repo / "tests" / "test_audit_disposition.py").write_text(
+        "# oracle tests\n",
+        encoding="utf-8",
+    )
+    _git("add", "-A", cwd=repo)
+    _git(
+        "commit",
+        "-q",
+        "-m",
+        "feat: audit disposition census oracle (M4 exit gate) (#213)\n\n"
+        "Regression example: a ledger-shaped row cross-contaminated "
+        "co-mentioned items with an owner+trigger/ NO-GO signal meant for "
+        "one item only; W4-3 citations undercounted landed items too.\n",
+        cwd=repo,
+    )
+
+    report = ad.build_report(repo)
+    by_id = {row["id"]: row for row in report["findings"]}
+    assert by_id["PAGINATION-03"]["disposition"] == "LANDED"
+
+
+# ---------------------------------------------------------------------------
+# parse_decision_closed_clarifications — traceability-doc-only evidence
+# ---------------------------------------------------------------------------
+
+
+def test_parse_decision_closed_clarifications_finds_confirm_only_bullet(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    plan_dir = tmp_path / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    traceability = (
+        "## Deliberate deferrals\n\n"
+        "One item is a recorded clarification:\n\n"
+        "- **`W3-6` was not dropped** — it resolved as *confirm-only* (Path a) "
+        "in M2/PR #203: the timeout/concurrency env vars were verified wired.\n"
+    )
+    (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
+    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
+    assert "W3-6" in decision_closed
+    assert decision_closed["W3-6"].kind == "traceability"
+
+
+def test_parse_decision_closed_clarifications_does_not_leak_to_a_co_mentioned_item(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """Regression for the real W3-6 bullet's exact shape: it cross-
+    references a DIFFERENT, genuinely-landed item (W6-7) in the SAME bullet
+    (in a later, semicolon-separated clause) purely as a citation of where
+    the docs fix landed. Only W3-6 -- whose OWN clause carries "confirm-
+    only" -- may resolve DECISION-CLOSED here; W6-7 must not, or it would
+    silently override its real LANDED evidence for every OTHER finding it
+    also owns.
+    """
+    plan_dir = tmp_path / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    traceability = (
+        "## Deliberate deferrals\n\n"
+        "- **`W3-6` was not dropped** — it resolved as *confirm-only* (Path a) "
+        "in M2/PR #203: the timeout/concurrency env vars were verified wired "
+        "and the three `RESTGDF_AUTH_*` vars verified absent from the "
+        "resolver; the documentation rows were corrected under W6-7 (M4).\n"
+    )
+    (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
+    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
+    assert "W3-6" in decision_closed
+    assert "W6-7" not in decision_closed
+
+
+def test_parse_decision_closed_clarifications_ignores_deferred_bullet(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """A DEFERRED (NO-GO) bullet -- e.g. the real ERRTAX-03/W2-5 record --
+    carries no "confirm-only"/"decision-closed" wording and must not be
+    picked up here; that item's DEFERRED disposition comes from
+    ``build_prose_signals`` reading the real commit history instead.
+    """
+    plan_dir = tmp_path / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    traceability = (
+        "## Deliberate deferrals\n\n"
+        "- **`ERRTAX-03` / `W2-5` — DEFERRED (NO-GO), M3.** Closed as NO-GO "
+        "per plan/02's own recommendation. Owner: a future pass. Trigger: "
+        "maintainer GO.\n"
+    )
+    (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
+    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
+    assert "W2-5" not in decision_closed
+
+
+def test_parse_decision_closed_clarifications_ignores_milestone_label_bullet(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """A milestone-label correction (e.g. the real W4-6/W5-9/W5-10/W5-11
+    note) carries no confirm-only/decision-closed marker and must not be
+    treated as decision-closed evidence for any of the items it names.
+    """
+    plan_dir = tmp_path / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    traceability = (
+        "## Deliberate deferrals\n\n"
+        "- **`W4-6`/`W5-9`/`W5-10`/`W5-11`** carry an M2 milestone label but "
+        "landed in the M1 typing-transition stack (PR #196) per the runbook.\n"
+    )
+    (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
+    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
+    assert decision_closed == {}
+
+
+def test_parse_decision_closed_clarifications_stops_at_next_heading(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    plan_dir = tmp_path / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    traceability = (
+        "## Deliberate deferrals\n\n"
+        "- **`W1-1`** resolved as *confirm-only*.\n\n"
+        "## Some other section\n\n"
+        "- **`W1-2`** resolved as *confirm-only* (should not be parsed).\n"
+    )
+    (plan_dir / "99-traceability.md").write_text(traceability, encoding="utf-8")
+    decision_closed = ad.parse_decision_closed_clarifications(tmp_path)
+    assert "W1-1" in decision_closed
+    assert "W1-2" not in decision_closed
+
+
+def test_build_report_resolves_zero_commit_item_via_traceability_clarification(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """End-to-end: an item with ZERO commits anywhere (resolved by
+    verifying existing behavior, never by shipping a change -- the real
+    W3-6/DOCS-02 shape) still reaches a terminal DECISION-CLOSED via the
+    traceability doc's clarification alone, with no commit evidence at all.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git("init", "-q", cwd=repo)
+    _git("config", "user.email", "test@example.com", cwd=repo)
+    _git("config", "user.name", "Test", cwd=repo)
+
+    plan_dir = repo / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    findings = [
+        {
+            "id": "CONFIRM-01",
+            "axis": "FAKE",
+            "title": "confirm-only finding",
+            "severity": "medium",
+            "files": ["restgdf/nowhere.py"],
+        },
+    ]
+    (repo / "audit-recommendations" / "findings.json").write_text(
+        json.dumps(findings),
+        encoding="utf-8",
+    )
+    (plan_dir / "99-traceability.md").write_text(
+        "## Forward map\n\n| `CONFIRM-01` | medium | t | `W9-2` | — |\n\n"
+        "## Deliberate deferrals\n\n"
+        "- **`W9-2` was not dropped** — it resolved as *confirm-only* (Path a): "
+        "existing behavior was verified correct, no change shipped.\n",
+        encoding="utf-8",
+    )
+    (repo / "restgdf").mkdir()
+    (repo / "restgdf" / "nowhere.py").write_text("x = 1\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-q", "-m", "chore: seed repo (no W9-2 commit anywhere)", cwd=repo)
+
+    report = ad.build_report(repo)
+    by_id = {row["id"]: row for row in report["findings"]}
+    assert by_id["CONFIRM-01"]["disposition"] == "DECISION-CLOSED"
+    assert by_id["CONFIRM-01"]["item_statuses"]["W9-2"]["status"] == "DECISION_CLOSED"
+    assert by_id["CONFIRM-01"]["item_statuses"]["W9-2"]["evidence"][0]["kind"] == (
+        "traceability"
+    )
+
+
+# ---------------------------------------------------------------------------
 # item_status_for_finding / disposition_for_finding — rollup logic
 # ---------------------------------------------------------------------------
 
@@ -644,6 +1016,28 @@ def _git(*args: str, cwd: Path) -> None:
         capture_output=True,
         text=True,
     )
+
+
+def _git_head_sha(cwd: Path) -> str:
+    return subprocess.run(  # nosec B603 B607 - test-only throwaway repo
+        ["git", "rev-parse", "HEAD"],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout.strip()
+
+
+def _git_show_message(cwd: Path, sha: str) -> str:
+    return subprocess.run(  # nosec B603 B607 - test-only throwaway repo
+        ["git", "show", "--format=%B", "-s", sha],
+        cwd=cwd,
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    ).stdout
 
 
 def test_end_to_end_against_a_throwaway_git_repo(
