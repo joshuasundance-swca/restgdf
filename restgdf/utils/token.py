@@ -96,6 +96,7 @@ def get_token(username: str, password: str | SecretStr) -> dict:
         "client": "requestip",
         "username": username,
         "password": pw,
+        "expiration": 60,
     }
     return requests.post(url, headers=headers, data=data, timeout=30).json()
 
@@ -154,6 +155,7 @@ class ArcGISTokenSession:
                 {
                     "token_url": self.token_url,
                     "credentials": self.credentials,
+                    "referer": self.credentials.referer,
                     "refresh_leeway_seconds": leeway,
                     "clock_skew_seconds": skew,
                     "verify_ssl": self.verify_ssl,
@@ -175,13 +177,17 @@ class ArcGISTokenSession:
                 context="token_request_payload",
                 raw=None,
             )
-        referer = getattr(self.config, "referer", None) if self.config else None
+        if self.config is not None:
+            referer = self.config.referer
+        else:
+            referer = getattr(self.credentials, "referer", None)
         payload = {
             "f": "json",
             "client": "referer" if referer else "requestip",
             "username": self.credentials.username,
             # Unwrap SecretStr only at the HTTP-POST boundary.
             "password": self.credentials.password.get_secret_value(),
+            "expiration": self.credentials.expiration,
         }
         if referer:
             payload["referer"] = referer

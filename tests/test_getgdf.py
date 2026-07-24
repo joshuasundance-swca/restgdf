@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
+import io
 from unittest.mock import AsyncMock, call, patch
 
 import pytest
@@ -306,6 +307,33 @@ async def test_get_sub_gdf_uses_geojson_driver_when_esrijson_missing(
             },
         ),
     ]
+    mock_read_file.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_sub_gdf_passes_file_like_geojson_to_reader(sample_feature_gdf):
+    geojson_text = '{"type":"FeatureCollection","features":[]}'
+    session = RecordingSession(response_text=geojson_text)
+
+    def _fake_read_file(source, *args, **kwargs):
+        assert isinstance(source, io.StringIO)
+        assert source.getvalue() == geojson_text
+        return sample_feature_gdf
+
+    with patch(
+        "restgdf.utils.getgdf.supported_drivers",
+        new={"GeoJSON": "rw"},
+    ), patch(
+        "restgdf.utils.getgdf.read_file",
+        side_effect=_fake_read_file,
+    ) as mock_read_file:
+        result = await get_sub_gdf(
+            "https://example.com/layer/0",
+            session,
+            query_data={"where": "1=1"},
+        )
+
+    assert result.equals(sample_feature_gdf)
     mock_read_file.assert_called_once()
 
 

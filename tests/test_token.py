@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
-from restgdf.utils.token import AGOLUserPass, ArcGISTokenSession, get_token
+from restgdf.utils.token import (
+    AGOLUserPass,
+    ArcGISTokenSession,
+    TokenSessionConfig,
+    get_token,
+)
 
 
 class MockRequestContext:
@@ -71,6 +76,7 @@ def test_get_token_uses_requests_post():
             "client": "requestip",
             "username": "user",
             "password": "password",
+            "expiration": 60,
         },
         timeout=30,
     )
@@ -98,6 +104,73 @@ def test_update_headers_and_dict_respect_existing_values():
     # Under default transport='header', update_dict does NOT inject body token.
     assert token_session.update_dict({"where": "1=1"}) == {"where": "1=1"}
     assert token_session.update_dict({"token": "explicit"}) == {"token": "explicit"}
+
+
+def test_token_request_payload_uses_credentials_referer_when_config_missing():
+    token_session = ArcGISTokenSession(
+        session=RecordingTokenSession(),
+        credentials=AGOLUserPass(
+            username="user",
+            password="password",
+            referer="https://www.arcgis.com",
+        ),
+    )
+
+    assert token_session.token_request_payload == {
+        "f": "json",
+        "client": "referer",
+        "username": "user",
+        "password": "password",
+        "expiration": 60,
+        "referer": "https://www.arcgis.com",
+    }
+
+
+def test_token_request_payload_config_none_disables_credentials_referer():
+    token_session = ArcGISTokenSession(
+        session=RecordingTokenSession(),
+        config=TokenSessionConfig(
+            token_url="https://www.arcgis.com/sharing/rest/generateToken",
+            credentials=AGOLUserPass(
+                username="user",
+                password="password",
+                referer="https://credentials.example.com",
+            ),
+            referer=None,
+        ),
+    )
+
+    assert token_session.token_request_payload == {
+        "f": "json",
+        "client": "requestip",
+        "username": "user",
+        "password": "password",
+        "expiration": 60,
+    }
+
+
+def test_token_request_payload_config_referer_overrides_credentials_referer():
+    token_session = ArcGISTokenSession(
+        session=RecordingTokenSession(),
+        config=TokenSessionConfig(
+            token_url="https://www.arcgis.com/sharing/rest/generateToken",
+            credentials=AGOLUserPass(
+                username="user",
+                password="password",
+                referer="https://credentials.example.com",
+            ),
+            referer="https://config.example.com",
+        ),
+    )
+
+    assert token_session.token_request_payload == {
+        "f": "json",
+        "client": "referer",
+        "username": "user",
+        "password": "password",
+        "expiration": 60,
+        "referer": "https://config.example.com",
+    }
 
 
 def test_token_needs_update_branching():

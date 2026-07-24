@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import math
 import warnings
 from asyncio import gather
@@ -328,7 +329,7 @@ async def get_sub_gdf(
         **kwargs,
     )
     sub_gdf = read_file(
-        await response.text(),
+        io.StringIO(await response.text()),
         # driver=gdfdriver,  # this line raises a warning when using pyogrio w/ ESRIJSON
         engine="pyogrio",
     )
