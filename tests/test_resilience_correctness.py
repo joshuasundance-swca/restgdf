@@ -17,11 +17,15 @@ per the repo's red-first rule.
 
 from __future__ import annotations
 
+import errno
+from collections.abc import Callable
 from typing import Any
 
+import aiohttp
 import pytest
 
 from restgdf._config import ResilienceConfig
+from restgdf.errors import RestgdfError, TransportError
 from restgdf.resilience import ResilientSession
 from restgdf.resilience._limiter import LimiterRegistry
 
@@ -123,4 +127,73 @@ class TestSubOneRateLimit:
         )
         async with session.get(_SVC_URL) as resp:
             assert resp.status == 200
+        assert stub._call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# H1-M2 — mid-flight transport errors must be retried and mapped
+# ---------------------------------------------------------------------------
+
+
+def _server_disconnected() -> aiohttp.ServerDisconnectedError:
+    return aiohttp.ServerDisconnectedError("server dropped the connection")
+
+
+def _conn_reset_oserror() -> aiohttp.ClientOSError:
+    return aiohttp.ClientOSError(errno.ECONNRESET, "connection reset by peer")
+
+
+def _conn_reset() -> aiohttp.ClientConnectionResetError:
+    return aiohttp.ClientConnectionResetError("cannot write to closing transport")
+
+
+def _payload_error() -> aiohttp.ClientPayloadError:
+    return aiohttp.ClientPayloadError("response payload was not fully received")
+
+
+_TRANSPORT_FACTORIES: list[tuple[str, Callable[[], Exception]]] = [
+    ("server_disconnected", _server_disconnected),
+    ("client_os_error_econnreset", _conn_reset_oserror),
+    ("client_connection_reset", _conn_reset),
+    ("client_payload_error", _payload_error),
+]
+
+
+class TestTransportErrorRetryAndMapping:
+    @pytest.mark.xfail(strict=True, reason="H1-M2: fixed in next commit")
+    @pytest.mark.parametrize(
+        ("_id", "make_exc"),
+        _TRANSPORT_FACTORIES,
+        ids=[c[0] for c in _TRANSPORT_FACTORIES],
+    )
+    @pytest.mark.asyncio
+    async def test_transport_error_retried_to_exhaustion_and_mapped(
+        self,
+        _fast_sleep: None,
+        _id: str,
+        make_exc: Callable[[], Exception],
+    ) -> None:
+        stub = StubSession([make_exc()] * 10)
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
+        with pytest.raises(RestgdfError) as exc_info:
+            async with session.get(_SVC_URL) as resp:
+                await resp.read()
+        # Connection-shaped and payload/truncated-body failures both surface as
+        # TransportError (isinstance RestgdfError) after retrying to exhaustion.
+        assert isinstance(exc_info.value, TransportError)
+        assert stub._call_count == 5
+
+    @pytest.mark.asyncio
+    async def test_deterministic_4xx_still_not_retried(
+        self,
+        _fast_sleep: None,
+    ) -> None:
+        # Behaviour-preservation guard: a non-429 4xx must never retry.
+        from restgdf.errors import RestgdfResponseError
+
+        stub = StubSession([_FakeResponse(404)])
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
+        with pytest.raises(RestgdfResponseError):
+            async with session.get(_SVC_URL) as resp:
+                await resp.read()
         assert stub._call_count == 1
