@@ -339,6 +339,21 @@ def test_inert_warning_lists_all_set_keys_in_one_warning() -> None:
     assert "RESTGDF_LIMITER_ENABLED" in msg
 
 
+def test_inert_warning_names_live_resilience_replacements() -> None:
+    # F5: the consolidated warning must point at the live RESTGDF_RESILIENCE_*
+    # replacements and say the RETRY/LIMITER knobs are deprecated -- not merely
+    # name what is dead.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        Config.from_env(env={"RESTGDF_RETRY_MAX_ATTEMPTS": "10"})
+    inert = [w for w in caught if issubclass(w.category, InertConfigWarning)]
+    assert len(inert) == 1
+    msg = str(inert[0].message)
+    assert "deprecated" in msg.lower()
+    assert "RESTGDF_RESILIENCE_MAX_ATTEMPTS" in msg
+    assert "RESTGDF_RESILIENCE_LIMITER_KEY" in msg
+
+
 def test_honored_env_var_does_not_warn_inert() -> None:
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

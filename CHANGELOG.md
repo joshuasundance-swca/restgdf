@@ -37,6 +37,21 @@ All notable changes to restgdf are documented here. This project follows
   to `DEBUG` to trace throttling and retries during a bulk crawl — making the
   `docs/recipes/tracing.md` promise true (H1-N4).
 
+### Deprecated
+
+- **`RetryConfig.max_attempts` / `RetryConfig.max_delay_s` and
+  `LimiterConfig.rate_per_host` are deprecated.** They validate but have never
+  been read by the resilience executor, and are now superseded by the live
+  `ResilienceConfig` knobs added above: `max_attempts` →
+  `ResilienceConfig.max_attempts`, `max_delay_s` →
+  `ResilienceConfig.retry_budget_s`, and `rate_per_host` →
+  `ResilienceConfig.rate_per_service_root_per_second` with
+  `ResilienceConfig.limiter_key="host"`. Their `RESTGDF_RETRY_*` /
+  `RESTGDF_LIMITER_*` env keys stay wired as a back-compat seam and still emit
+  `InertConfigWarning` (whose text now names the live replacements instead of
+  claiming the executor hardcodes its policy). The deprecated fields and env
+  keys are removed in 4.0.
+
 ### Fixed
 
 - **Sub-1.0 rate limits no longer crash.** A
