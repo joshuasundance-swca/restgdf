@@ -144,12 +144,40 @@ class ConcurrencyConfig(BaseModel):
 
 
 class AuthConfig(BaseModel):
-    """ArcGIS token-session defaults.
+    """ArcGIS token-session defaults (validated ``RESTGDF_AUTH_*`` namespace).
 
     .. versionchanged:: 3.0
         Default *transport* flipped from ``"body"`` to ``"header"``; default
         *header_name* is ``"X-Esri-Authorization"``.  Pass
         ``allow_query_transport=True`` to enable ``transport="query"``.
+
+    Not auto-applied to token sessions (AUTH-04 / CONFIG-02)
+    -------------------------------------------------------
+    ``AuthConfig`` is a *validated namespace* for the ``RESTGDF_AUTH_*``
+    environment variables; it is **not** auto-applied to any
+    :class:`~restgdf.utils.token.ArcGISTokenSession`. In particular the three
+    refresh knobs -- ``refresh_threshold_s``, ``refresh_leeway_s`` and
+    ``clock_skew_s`` -- are config *holders*, exactly like the
+    :class:`RetryConfig`/``LimiterConfig`` inert notes above: reading them off
+    ``get_config().auth`` changes nothing about a live session's refresh
+    timing on its own. The library never constructs the token session for
+    you, and ``ArcGISTokenSession.__post_init__`` deliberately never reads
+    ``get_config()`` -- a process-wide singleton flip must not silently change
+    transport/refresh timing for every session in the process.
+
+    To make these values take effect, construct a
+    :class:`~restgdf._models.credentials.TokenSessionConfig` explicitly and
+    pass it to ``ArcGISTokenSession`` -- e.g. via the opt-in
+    ``TokenSessionConfig.from_auth_config(get_config().auth)`` /
+    ``ArcGISTokenSession.from_config(...)`` hand-off (W2-11). Only that
+    explicit hand-off threads ``AuthConfig`` into a running session.
+
+    Default split to be aware of: a bare ``TokenSessionConfig`` derives its
+    refresh window from ``refresh_leeway_seconds (120) + clock_skew_seconds
+    (30) = 150`` s, whereas a bare ``ArcGISTokenSession`` uses the dataclass
+    default ``token_refresh_threshold = 60`` s. A caller migrating from the
+    dataclass argument to a config-driven session should expect ``150`` s,
+    not ``60`` s; the ``from_auth_config`` path is internally consistent.
     """
 
     model_config = _FROZEN
@@ -324,6 +352,23 @@ class Config(BaseModel):
 
     Use :func:`get_config` (process-cached) rather than instantiating directly
     in production code; direct instantiation is useful for tests.
+
+    Not request-path-injectable (CONFIG-03)
+    ---------------------------------------
+    A freshly built ``Config(...)`` instance is **test-only**: it is *not*
+    threaded into the runtime request path. Every library consumer
+    (``utils._http``, ``utils.getgdf``, ``utils.getinfo``, ``utils.crawl``,
+    ``telemetry._spans``) resolves configuration through the no-arg
+    process-global :func:`get_config`; there is no public API that accepts an
+    explicit ``Config`` and honors it below the public constructor. Passing a
+    ``Config`` instance somewhere and expecting it to override the process
+    global would silently do nothing. To change resolved configuration, set
+    the ``RESTGDF_*`` environment variables (then call
+    :func:`reset_config_cache`) -- the single documented precedence is
+    constructor/aiohttp kwargs > env vars > model defaults, resolved
+    process-globally. The separate, intentionally session-scoped
+    ``ArcGISTokenSession(config=...)`` / ``TokenSessionConfig`` injection is
+    *not* a global ``Config`` override -- do not conflate the two.
     """
 
     model_config = _FROZEN
