@@ -94,6 +94,7 @@ def _log_drift(
     kind: str,
     sample: Any,
     level: int,
+    context: str | None = None,
 ) -> None:
     """Emit a deduped drift log record.
 
@@ -101,6 +102,16 @@ def _log_drift(
     repeated occurrences of the same drift against the same model do not
     spam the log; semantically-distinct drift (different field or
     different observed type) still logs.
+
+    ``context`` (TELEMETRY-02 / W5-13) is threaded into the emitted record --
+    both in the message and as a ``drift_context`` ``extra`` field -- so the
+    first, non-deduped occurrence is attributable to its originating
+    service/URL. It is deliberately **excluded** from the dedupe key: a
+    drifty server exposing 500 distinct layer URLs must still collapse to
+    ONE record per ``(model, field, kind, type)`` tuple, not 500. The
+    trade-off is that a second service producing the identical tuple is
+    silenced (deduped) rather than re-attributed -- message attribution, not
+    per-service dedup, is the chosen scope; see MIGRATION.md (W6-4).
     """
     sample_type = type(sample).__name__
     key: _DriftKey = (model_name, path, kind, sample_type)
@@ -110,12 +121,15 @@ def _log_drift(
     logger = get_drift_logger()
     logger.log(
         level,
-        "schema drift on %s: field=%r kind=%s observed_type=%s sample=%r",
+        "schema drift on %s: field=%r kind=%s observed_type=%s context=%r "
+        "sample=%r",
         model_name,
         path,
         kind,
         sample_type,
+        context,
         sample,
+        extra={"drift_context": context},
     )
 
 
@@ -184,6 +198,18 @@ def _parse_response(
             ) from exc
 
     if _is_arcgis_error_envelope(raw):
+        # W2-5 (ERRTAX-03) status: an in-body ``{"error": {"code": 498|499}}``
+        # envelope currently surfaces here as a generic ``RestgdfResponseError``
+        # -- HTTP-status-only typed 498/499 detection is the documented
+        # contract (CHANGELOG BL-11 / MIGRATION R-14 / ARCHITECTURE). Mapping
+        # in-body code 498 -> TokenExpiredError / 499 -> AuthNotAttachedError
+        # (and firing the 498 auto-refresh on the in-body shape) is DEFERRED:
+        # it is a maintainer go/no-go-gated, documented-scope change whose
+        # auto-refresh half must be lifted above this parse layer into
+        # ``token._call_with_auth_retry`` (W2, L2-owned). Trigger to implement:
+        # maintainer GO + the coordinated token.py refresh-lift landing. Until
+        # then callers catching ``RestgdfResponseError`` already catch this;
+        # no data is silently lost.
         error = raw["error"]
         message = error.get("message") or "ArcGIS error response"
         code = error.get("code")
@@ -204,6 +230,7 @@ def _parse_response(
             kind="not_a_mapping",
             sample=raw,
             level=logging.WARNING,
+            context=context,
         )
 
     try:
@@ -226,6 +253,7 @@ def _parse_response(
                 kind="bad_type",
                 sample=sample,
                 level=logging.DEBUG,
+                context=context,
             )
             if (
                 len(loc) > 1
@@ -258,6 +286,7 @@ def _parse_response(
                 kind="unknown_extra",
                 sample=extra_val,
                 level=logging.DEBUG,
+                context=context,
             )
 
     result: _M = instance
@@ -351,6 +380,7 @@ class FieldSetDriftObserver:
                 kind="field_appeared",
                 sample=appeared,
                 level=logging.INFO,
+                context=self._context,
             )
         for disappeared in self._observed - page_keys:
             _log_drift(
@@ -359,6 +389,7 @@ class FieldSetDriftObserver:
                 kind="field_disappeared",
                 sample=disappeared,
                 level=logging.INFO,
+                context=self._context,
             )
         self._observed.update(page_keys)
         self._pages_seen += 1

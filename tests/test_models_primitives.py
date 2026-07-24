@@ -27,6 +27,7 @@ import pytest
 
 from restgdf._models import RestgdfResponseError
 from restgdf._models._drift import (
+    FieldSetDriftObserver,
     PermissiveModel,
     StrictModel,
     _parse_response,
@@ -187,6 +188,68 @@ def test_parse_response_passes_through_valid_permissive_model() -> None:
     result = _parse_response(FieldSpec, raw, context="ctx")
     assert isinstance(result, FieldSpec)
     assert result.name == "X"
+
+
+# --- W5-13 (TELEMETRY-02): per-service drift attribution -------------------
+
+
+def test_drift_record_carries_context_for_attribution(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """The first (non-deduped) drift record is attributable to its service.
+
+    The originating ``context`` must appear both in the log message and as a
+    ``drift_context`` extra attribute so an operator can tell WHICH service
+    drifted.
+    """
+    caplog.set_level(logging.DEBUG, logger="restgdf.schema_drift")
+    _parse_response(
+        FieldSpec,
+        {"name": "X", "type": "Y", "weirdKey": 1},
+        context="https://example.test/MapServer/7",
+    )
+    records = [
+        r
+        for r in caplog.records
+        if r.name == "restgdf.schema_drift" and "weirdKey" in r.getMessage()
+    ]
+    assert records, "expected a drift record for the unknown extra key"
+    record = records[0]
+    assert "https://example.test/MapServer/7" in record.getMessage()
+    assert record.drift_context == "https://example.test/MapServer/7"
+
+
+def test_drift_dedup_key_stays_context_free(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Two distinct contexts, same drift tuple, still collapse to one record.
+
+    The dedupe key remains the 4-tuple ``(model, field, kind, type)`` -- adding
+    the per-service URL context would let a drifty 500-layer server emit 500
+    identical records. The first context wins attribution; the second is
+    silenced (the accepted anti-spam trade-off).
+    """
+    caplog.set_level(logging.DEBUG, logger="restgdf.schema_drift")
+    payload = {"name": "X", "type": "Y", "weirdKey": 1}
+    _parse_response(FieldSpec, payload, context="service-A")
+    _parse_response(FieldSpec, payload, context="service-B")
+    weird = [r for r in caplog.records if "weirdKey" in r.getMessage()]
+    assert len(weird) == 1, f"dedupe must collapse to one record, got {len(weird)}"
+    assert "service-A" in weird[0].getMessage()
+    assert "service-B" not in weird[0].getMessage()
+
+
+def test_field_set_drift_observer_record_carries_context(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """FieldSetDriftObserver drift records are attributable to their context."""
+    caplog.set_level(logging.INFO, logger="restgdf.schema_drift")
+    observer = FieldSetDriftObserver(context="svc-root/0")
+    observer.observe_page([{"attributes": {"A": 1}}])
+    observer.observe_page([{"attributes": {"A": 1, "B": 2}}])
+    appeared = [r for r in caplog.records if "field_appeared" in r.getMessage()]
+    assert appeared, "expected a field_appeared drift record"
+    assert appeared[0].drift_context == "svc-root/0"
 
 
 def test_tier_base_classes_have_expected_configs() -> None:
