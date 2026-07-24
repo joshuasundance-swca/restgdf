@@ -6,12 +6,12 @@
 | restgdf/\_client/query\_options.py     |       56 |        0 |       12 |        0 |    100% |           |
 | restgdf/\_client/request.py            |       10 |        0 |        4 |        0 |    100% |           |
 | restgdf/\_compat.py                    |       22 |        0 |        2 |        0 |    100% |           |
-| restgdf/\_config.py                    |      139 |        1 |       20 |        1 |     99% |       151 |
+| restgdf/\_config.py                    |      139 |        1 |       20 |        1 |     99% |       176 |
 | restgdf/\_logging.py                   |       57 |        0 |       18 |        1 |     99% | 107-\>109 |
 | restgdf/\_models/\_\_init\_\_.py       |        7 |        0 |        0 |        0 |    100% |           |
 | restgdf/\_models/\_drift.py            |      145 |        2 |       66 |        3 |     98% |221, 241, 329-\>328 |
 | restgdf/\_models/\_errors.py           |        3 |        0 |        0 |        0 |    100% |           |
-| restgdf/\_models/\_settings.py         |      100 |        4 |       12 |        0 |     96% |284-285, 296-297 |
+| restgdf/\_models/\_settings.py         |      100 |        4 |       12 |        0 |     96% |289-290, 301-302 |
 | restgdf/\_models/crawl.py              |       20 |        0 |        0 |        0 |    100% |           |
 | restgdf/\_models/credentials.py        |       48 |        0 |        8 |        0 |    100% |           |
 | restgdf/\_models/responses.py          |      175 |        5 |       56 |        3 |     97% |492-\>489, 518, 522-525 |
@@ -29,7 +29,7 @@
 | restgdf/featurelayer/featurelayer.py   |      190 |        1 |       50 |        4 |     98% |206, 352-\>358, 473-\>478, 541-\>546 |
 | restgdf/resilience/\_\_init\_\_.py     |       10 |        0 |        0 |        0 |    100% |           |
 | restgdf/resilience/\_bounded\_retry.py |       19 |        0 |        0 |        0 |    100% |           |
-| restgdf/resilience/\_errors.py         |       20 |        0 |        4 |        0 |    100% |           |
+| restgdf/resilience/\_errors.py         |       21 |        0 |        4 |        0 |    100% |           |
 | restgdf/resilience/\_limiter.py        |       38 |        0 |        8 |        0 |    100% |           |
 | restgdf/resilience/\_retry.py          |      120 |        0 |       26 |        2 |     99% |134-\>exit, 177-\>180 |
 | restgdf/telemetry/\_\_init\_\_.py      |        6 |        0 |        0 |        0 |    100% |           |
@@ -51,4 +51,4 @@
 | restgdf/utils/getinfo.py               |       65 |        0 |       12 |        0 |    100% |           |
 | restgdf/utils/token.py                 |      182 |        3 |       46 |        5 |     96% |183, 206, 328, 397-\>399, 476-\>exit |
 | restgdf/utils/utils.py                 |        8 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                              | **2754** |   **29** |  **770** |   **37** | **98%** |           |
+| **TOTAL**                              | **2755** |   **29** |  **770** |   **37** | **98%** |           |
