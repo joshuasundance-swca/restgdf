@@ -45,10 +45,25 @@ lie" / "a LANDED claim whose commit doesn't contain the change = REFUTED"):
   no matching file in the diff is downgraded to MESSAGE_ONLY — reported, not
   silently promoted to LANDED.
 * Deferred (owner+trigger recorded) and decision-closed (NO-GO recorded)
-  language is mined from full commit bodies by paragraph, independent of the
-  subject/bullet restriction above (deferral rationale legitimately lives in
-  prose). PROGRAM-LEDGER.md is deliberately NOT scanned for this — see
-  ``build_prose_signals``'s docstring for the false-positive it produces.
+  language is mined from full commit bodies by paragraph, but an item is only
+  ELIGIBLE for either signal if (a) that exact item ID is one this commit
+  declares on its own top subject line, or (b) the item's own
+  semicolon-delimited clause within the paragraph carries an explicit
+  "no-go"/"defer*" marker of its own. Plain co-occurrence anywhere in the
+  same blank-line paragraph is deliberately NOT enough — a real bug: this
+  program's own genesis commit (``e65bf75``) mentions "W2-1" and
+  "owner+trigger"/"NO-GO" in the very same paragraph while narrating three
+  UNRELATED bugfixes, which mislabeled AUTH-01/W2-1 DEFERRED even though it
+  had landed cleanly via #195 (see ``build_prose_signals``'s and
+  ``_item_clauses``'s docstrings for the fix). PROGRAM-LEDGER.md is
+  deliberately NOT scanned for this either — see ``build_prose_signals``'s
+  docstring for the cross-contamination it produces at paragraph
+  granularity.
+* This program's OWN dev-tooling commits (Conventional-Commits scope
+  ``(dev-tooling)``, e.g. this module's genesis commit) are excluded from
+  every evidence scan above — see ``is_dev_tooling_commit``. The oracle's
+  own commit messages narrate its bugfix history in prose; they are never
+  themselves evidence about a finding's disposition.
 
 Disposition per finding, in this precedence order (this is aggregated across
 every work item the traceability map assigns to the finding — split-ownership
@@ -104,6 +119,35 @@ _BULLET_RE = re.compile(r"^\* (.+)$", re.MULTILINE)
 # A finding ID looks like "AUTH-01": >=2 uppercase letters, so it can never
 # collide with a work-item token like "W2-1" (single letter before the digit).
 _FINDING_ID_RE = re.compile(r"\b[A-Z]{2,}-\d+\b")
+
+# An explicit "this item is not landing" marker: "no-go"/"no go" (space or
+# hyphen), or any "defer*" stem (defer/deferred/deferral). Used to scope the
+# deferred/decision-closed ELIGIBILITY check to an item's own clause rather
+# than trusting a keyword found anywhere in a whole (possibly multi-topic)
+# paragraph — see ``build_prose_signals``'s docstring.
+_MARKER_RE = re.compile(r"no-go|no go|defer", re.IGNORECASE)
+
+# This program's own construction commits: Conventional-Commits scope
+# "(dev-tooling)", e.g. "feat(dev-tooling): add M4 exit oracle
+# audit_disposition.py + tests". These commits narrate the audit oracle's
+# OWN bugfix history in prose — e.g. this module's genesis commit says "an
+# owner+trigger/ NO-GO signal" while describing a DIFFERENT bug (the
+# PROGRAM-LEDGER.md cross-contamination fix), in the very same paragraph
+# that names "W2-1" for a THIRD, unrelated bug (the finding-ID-citation
+# undercount fix). ``git log --all`` picks up this very commit, so without
+# excluding it the oracle can cite its own retrospective prose as evidence
+# about a finding it merely talks about. See ``is_dev_tooling_commit``.
+_DEV_TOOLING_SUBJECT_RE = re.compile(r"^\w+\(dev-tooling\):", re.IGNORECASE)
+
+
+def is_dev_tooling_commit(commit_message: str) -> bool:
+    """True if ``commit_message``'s own subject line is this program's
+    dev-tooling commit-type scope — see ``_DEV_TOOLING_SUBJECT_RE``'s
+    docstring for why these are excluded from every evidence scan.
+    """
+    if not commit_message.strip():
+        return False
+    return bool(_DEV_TOOLING_SUBJECT_RE.match(commit_message.splitlines()[0]))
 
 
 def extract_all_items(text: str) -> set[str]:
@@ -275,6 +319,30 @@ def build_declared_landings(
     return declared_items, declared_findings
 
 
+def _item_clauses(paragraph: str) -> dict[str, str]:
+    """Map each work-item ID mentioned in ``paragraph`` to the
+    semicolon-delimited clause it appears in (the whole paragraph if there
+    are no semicolons at all).
+
+    A single blank-line-delimited paragraph can legitimately narrate several
+    UNRELATED topics in one breath — semicolons are this repo's commit-body
+    convention for that (e.g. this program's own genesis commit's "Three
+    self-caught bugs..." paragraph uses semicolons to separate three
+    distinct bugfix write-ups). Scoping the "explicit marker adjacent to
+    this item" eligibility check in ``build_prose_signals`` to the item's
+    own clause, rather than the whole paragraph, is what keeps an unrelated
+    co-mentioned item from inheriting a marker that actually describes a
+    DIFFERENT clause's topic. If the same item happens to appear in more
+    than one clause, the first one wins (good enough — no known real case
+    needs the others).
+    """
+    clauses: dict[str, str] = {}
+    for clause in paragraph.split(";"):
+        for item in extract_all_items(clause):
+            clauses.setdefault(item, clause)
+    return clauses
+
+
 def build_prose_signals(
     commits: list[CommitRecord],
 ) -> tuple[dict[str, Evidence], dict[str, Evidence]]:
@@ -284,6 +352,35 @@ def build_prose_signals(
     (case-insensitive) is a deferral-with-owner+trigger record. Otherwise a
     paragraph naming "no-go" (or "no go") is a decision-close record.
 
+    An item is only ELIGIBLE for either signal from a given paragraph if
+    EITHER (a) that exact item ID is one this commit declares on its own top
+    subject line (the first line of ``declaration_lines`` — NOT squash
+    bullets; a bullet's own sub-commit subject describes a different item and
+    should not borrow this paragraph's prose just by being in the same
+    commit), so the whole commit's prose can be trusted to be about the
+    item(s) it names up front; OR (b) the item's own semicolon-delimited
+    clause within the paragraph (``_item_clauses``) carries an explicit
+    "no-go"/"defer*" marker of its own (``_MARKER_RE``). Plain co-occurrence
+    anywhere in the same paragraph is deliberately NOT enough — that was a
+    real bug: this program's own genesis commit (``e65bf75``) mentions
+    "W2-1" and "owner+trigger"/"NO-GO" in the very same paragraph while
+    narrating three UNRELATED bugfixes (a traceability-parser fix, the
+    PROGRAM-LEDGER.md cross-contamination fix this very docstring describes
+    below, and the finding-ID-citation undercount fix that actually mentions
+    W2-1), which mislabeled AUTH-01/W2-1 DEFERRED even though it had landed
+    cleanly via #195. See ``is_dev_tooling_commit`` for the complementary
+    fix (that commit is now excluded outright); this eligibility scoping is
+    the general-purpose fix that also holds for a hypothetical
+    non-dev-tooling commit shaped the same way (regression-pinned by
+    ``test_build_prose_signals_ignores_unrelated_co_mention``).
+
+    Once an item is eligible, the deferred-vs-decision-closed CLASSIFICATION
+    itself still reads the WHOLE paragraph (not just the item's own clause):
+    an item's own clause need not restate "owner"/"trigger" verbatim if a
+    later clause/sentence in the same paragraph does — confirmed against the
+    real W2-5/ERRTAX-03 deferral, whose "NO-GO / deferred" clause and its
+    "owner + trigger" clause are two different sentences in one paragraph.
+
     Scanned over commit body paragraphs ONLY — deliberately NOT
     PROGRAM-LEDGER.md. The ledger records milestone-level progress as one
     dense summary row per milestone (many item IDs per row, e.g. the M3 row
@@ -292,21 +389,22 @@ def build_prose_signals(
     paragraph OR even row granularity mis-attributes those keywords to every
     other item co-mentioned in the same row — verified by a first draft of
     this function false-flagging W4-3 (landed, unrelated to any deferral) as
-    DEFERRED purely because it shares the M3 ledger row with "W2-5 NO-GO".
-    Commit bodies are the primary, per-item-scoped source instead (each
-    deferral/decision-close is its own paragraph naming only the item(s) it
-    actually applies to — confirmed by manual read of the W2-5/ERRTAX-03
-    commits).
+    DEFERRED purely because it shares the M3 ledger row with "W2-5 NO-GO"
+    (the clause-scoped eligibility check above independently also fixes this
+    exact shape now, but the ledger is still never fed in — belt and
+    braces). Commit bodies are the primary, per-item-scoped source instead
+    (each deferral/decision-close is its own paragraph naming only the
+    item(s) it actually applies to — confirmed by manual read of the
+    W2-5/ERRTAX-03 commits).
     """
     deferred: dict[str, Evidence] = {}
     decision_closed: dict[str, Evidence] = {}
 
-    sources: list[tuple[str, str, str]] = [
-        (commit.sha, "commit", commit.message) for commit in commits
-    ]
+    for commit in commits:
+        decl_lines = declaration_lines(commit.message)
+        subject_items = extract_all_items(decl_lines[0]) if decl_lines else set()
 
-    for source_id, kind, text in sources:
-        for para in paragraphs(text):
+        for para in paragraphs(commit.message):
             items = extract_all_items(para)
             if not items:
                 continue
@@ -314,11 +412,26 @@ def build_prose_signals(
             is_deferred = "owner" in lowered and "trigger" in lowered
             is_decision = "no-go" in lowered or "no go" in lowered
             snippet = para[:400]
+            item_clauses = _item_clauses(para)
             for item in items:
+                clause = item_clauses.get(item, para)
+                eligible = item in subject_items or bool(_MARKER_RE.search(clause))
+                if not eligible:
+                    continue
                 if is_deferred and item not in deferred:
-                    deferred[item] = Evidence(kind=kind, source=source_id, snippet=snippet)
-                elif is_decision and item not in deferred and item not in decision_closed:
-                    decision_closed[item] = Evidence(kind=kind, source=source_id, snippet=snippet)
+                    deferred[item] = Evidence(
+                        kind="commit",
+                        source=commit.sha,
+                        snippet=snippet,
+                    )
+                elif (
+                    is_decision and item not in deferred and item not in decision_closed
+                ):
+                    decision_closed[item] = Evidence(
+                        kind="commit",
+                        source=commit.sha,
+                        snippet=snippet,
+                    )
     # A later-scanned deferral should still win over an earlier decision-close
     # for the same item (deferred is the more complete signal).
     for item in list(deferred):
@@ -330,7 +443,13 @@ def build_prose_signals(
 # Disposition
 # ---------------------------------------------------------------------------
 
-_STATUS_RANK = {"GAP": 0, "MESSAGE_ONLY": 1, "DEFERRED": 2, "DECISION_CLOSED": 3, "LANDED": 4}
+_STATUS_RANK = {
+    "GAP": 0,
+    "MESSAGE_ONLY": 1,
+    "DEFERRED": 2,
+    "DECISION_CLOSED": 3,
+    "LANDED": 4,
+}
 
 
 @dataclass
@@ -369,7 +488,9 @@ def item_status_for_finding(
     # THIS finding's ID (a finding-ID citation is evidence for every item the
     # finding owns, scoped to this finding's own file list below).
     shas = list(
-        dict.fromkeys(declared_landings.get(item, []) + declared_findings.get(finding.id, [])),
+        dict.fromkeys(
+            declared_landings.get(item, []) + declared_findings.get(finding.id, []),
+        ),
     )
     if not shas:
         return ItemStatus(item, "GAP", [])
@@ -382,7 +503,11 @@ def item_status_for_finding(
         overlap = touched & set(finding.files)
         if overlap:
             landed_evidence.append(
-                {"kind": "commit", "source": sha, "snippet": f"touched: {sorted(overlap)}"},
+                {
+                    "kind": "commit",
+                    "source": sha,
+                    "snippet": f"touched: {sorted(overlap)}",
+                },
             )
 
     if landed_evidence:
@@ -390,7 +515,10 @@ def item_status_for_finding(
     return ItemStatus(
         item,
         "MESSAGE_ONLY",
-        [{"kind": "commit", "source": sha, "snippet": "cited, no file overlap"} for sha in shas],
+        [
+            {"kind": "commit", "source": sha, "snippet": "cited, no file overlap"}
+            for sha in shas
+        ],
     )
 
 
@@ -414,7 +542,14 @@ def disposition_for_finding(item_statuses: list[ItemStatus]) -> str:
 def build_report(repo_root: Path) -> dict[str, Any]:
     findings = load_findings(repo_root)
     forward_map = load_forward_map(repo_root)
-    commits = git_log_records(repo_root)
+    all_commits = git_log_records(repo_root)
+    # This program's own dev-tooling commits (e.g. this module's genesis
+    # commit) narrate the oracle's OWN bugfix history in prose and are
+    # excluded from every evidence scan below — see
+    # `is_dev_tooling_commit`'s docstring for the false-positive this
+    # prevents (AUTH-01/W2-1 self-mislabeled DEFERRED by co-mentioning its
+    # own construction history).
+    commits = [c for c in all_commits if not is_dev_tooling_commit(c.message)]
     # NOTE: PROGRAM-LEDGER.md exists (`_LEDGER_REL`) but is deliberately NOT
     # read into the deferred/decision-close prose scan — see
     # build_prose_signals' docstring for why (its per-milestone rows compress
@@ -473,13 +608,16 @@ def build_report(repo_root: Path) -> dict[str, Any]:
             "owning_items": owning_items,
             "disposition": disposition,
             "item_statuses": {
-                s.item: {"status": s.status, "evidence": s.evidence} for s in item_statuses
+                s.item: {"status": s.status, "evidence": s.evidence}
+                for s in item_statuses
             },
         }
         report_findings.append(row)
 
         if disposition == "GAP":
-            unresolved = [s.item for s in item_statuses if s.status in {"GAP", "MESSAGE_ONLY"}]
+            unresolved = [
+                s.item for s in item_statuses if s.status in {"GAP", "MESSAGE_ONLY"}
+            ]
             gap_punch_list.append({"id": finding.id, "unresolved_items": unresolved})
 
     return {
@@ -514,20 +652,29 @@ def render_table(report: dict[str, Any]) -> str:
         title = row["title"]
         if len(title) > 70:
             title = title[:67] + "..."
-        lines.append(f"{row['id']:<14} {row['severity']:<8} {row['disposition']:<16} {title}")
+        lines.append(
+            f"{row['id']:<14} {row['severity']:<8} {row['disposition']:<16} {title}",
+        )
 
     if report["gap_punch_list"]:
         lines.append("")
         lines.append("Open punch list (real gaps — coordinator's M4 to-do):")
         for entry in report["gap_punch_list"]:
-            lines.append(f"  - {entry['id']}: unresolved item(s) {entry['unresolved_items']}")
+            lines.append(
+                f"  - {entry['id']}: unresolved item(s) {entry['unresolved_items']}",
+            )
 
     orphans = report["orphans"]
-    if orphans["findings_without_work_items"] or orphans["traceability_rows_for_unknown_findings"]:
+    if (
+        orphans["findings_without_work_items"]
+        or orphans["traceability_rows_for_unknown_findings"]
+    ):
         lines.append("")
         lines.append("STRUCTURAL ORPHANS (data-integrity bug, not a punch-list item):")
         if orphans["findings_without_work_items"]:
-            lines.append(f"  findings with no work-item mapping: {orphans['findings_without_work_items']}")
+            lines.append(
+                f"  findings with no work-item mapping: {orphans['findings_without_work_items']}",
+            )
         if orphans["traceability_rows_for_unknown_findings"]:
             lines.append(
                 f"  traceability rows citing unknown findings: "
@@ -568,7 +715,8 @@ def main(argv: list[str] | None = None) -> int:
 
     orphans = report["orphans"]
     has_orphans = bool(
-        orphans["findings_without_work_items"] or orphans["traceability_rows_for_unknown_findings"],
+        orphans["findings_without_work_items"]
+        or orphans["traceability_rows_for_unknown_findings"],
     )
     return 1 if has_orphans else 0
 

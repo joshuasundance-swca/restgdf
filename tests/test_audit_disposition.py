@@ -122,8 +122,12 @@ def test_extract_finding_ids_never_collides_with_work_item(ad: ModuleType) -> No
 
 def test_declaration_lines_top_subject_only() -> None:
     ad = _load_module()
-    message = "fix: force POST when body carries a token (AUTH-01)\n\nBody prose here.\n"
-    assert ad.declaration_lines(message) == ["fix: force POST when body carries a token (AUTH-01)"]
+    message = (
+        "fix: force POST when body carries a token (AUTH-01)\n\nBody prose here.\n"
+    )
+    assert ad.declaration_lines(message) == [
+        "fix: force POST when body carries a token (AUTH-01)",
+    ]
 
 
 def test_declaration_lines_includes_squash_bullets() -> None:
@@ -193,7 +197,9 @@ def test_build_prose_signals_owner_trigger_labelled_form(ad: ModuleType) -> None
     assert deferred["W2-5"].source == "cafef00d"
 
 
-def test_build_prose_signals_decision_closed_without_owner_trigger(ad: ModuleType) -> None:
+def test_build_prose_signals_decision_closed_without_owner_trigger(
+    ad: ModuleType,
+) -> None:
     commits = [
         ad.CommitRecord(
             sha="1234567",
@@ -205,16 +211,19 @@ def test_build_prose_signals_decision_closed_without_owner_trigger(ad: ModuleTyp
     assert "W2-99" in decision_closed
 
 
-def test_build_prose_signals_does_not_cross_contaminate_dense_rows(ad: ModuleType) -> None:
+def test_build_prose_signals_does_not_cross_contaminate_dense_rows(
+    ad: ModuleType,
+) -> None:
     """Regression: a first draft scanned PROGRAM-LEDGER.md too, and its dense
     per-milestone summary row mentioned ~16 items alongside "owner+trigger"
     and "NO-GO" (which really only describe W2-5/W5-13), so EVERY co-mentioned
     item (including landed ones like W4-3) false-flagged as DEFERRED. The
-    fix was to stop scanning the ledger at all -- this test pins a
-    ledger-shaped dense row (fed in as if it were a commit body) and confirms
-    an unrelated co-mentioned item is untouched only because there is no
-    legitimate owner+trigger/NO-GO language attached to IT specifically in
-    its OWN paragraph.
+    ledger is still never fed in (belt and braces), but this test now pins
+    the GENERAL fix that also applies to any commit body shaped this way:
+    ``build_prose_signals`` is clause-scoped (``_item_clauses``, split on
+    ``;``), so an item sharing a dense multi-topic PARAGRAPH with the
+    owner+trigger/NO-GO language no longer inherits it unless the item's own
+    clause -- or the commit's own subject line -- actually carries it.
     """
     ad_mod = ad
     dense_row_as_commit_body = (
@@ -224,14 +233,152 @@ def test_build_prose_signals_does_not_cross_contaminate_dense_rows(ad: ModuleTyp
     )
     commits = [ad_mod.CommitRecord(sha="abc123", message=dense_row_as_commit_body)]
     deferred, decision_closed = ad_mod.build_prose_signals(commits)
-    # Because this single dense paragraph mentions W4-3 in the SAME paragraph
-    # as the owner+trigger/NO-GO language, build_prose_signals (which is
-    # deliberately paragraph-scoped, not line-scoped) WILL flag W4-3 too --
-    # that is exactly why the real script never feeds it PROGRAM-LEDGER.md.
-    # This test documents/pins that known limitation of paragraph granularity
-    # rather than asserting a false guarantee.
-    assert "W4-3" in deferred  # pinned limitation: dense single-paragraph rows do cross-contaminate
-    assert "W2-5" in deferred  # the item the language was actually about
+    # W4-3 shares the PARAGRAPH with "owner+trigger"/"NO-GO" but not the
+    # CLAUSE (it's on the "M3 Medium correctness COMPLETE (...)" side of the
+    # semicolon, the marker language is on the other side) and is not on the
+    # commit's subject line either -- no longer eligible.
+    assert "W4-3" not in deferred
+    assert "W4-3" not in decision_closed
+    assert "W2-5" in deferred  # the item the language was actually about, unaffected
+
+
+def test_build_prose_signals_ignores_unrelated_co_mention(ad: ModuleType) -> None:
+    """Regression for the real self-contamination bug this fix closes: a
+    fixture commit body co-mentioning ANOTHER item's ID in the same blank-
+    line paragraph as owner+trigger language -- but in an unrelated clause,
+    about an unrelated topic, with neither item on the commit's subject line
+    -- must not mark that other item DEFERRED. This is the exact shape of
+    this program's own genesis commit (``e65bf75``), which mentions "W2-1"
+    and "owner+trigger"/"NO-GO" in one paragraph while narrating three
+    unrelated bugfixes, only one of which is a real deferral (about a
+    completely different item). ``is_dev_tooling_commit`` now excludes that
+    specific commit outright, but this test proves the general-purpose
+    clause-scoping fix in ``build_prose_signals`` holds even for a
+    hypothetical commit that ISN'T dev-tooling-scoped.
+    """
+    commits = [
+        ad.CommitRecord(
+            sha="fixture01",
+            message=(
+                "fix: three unrelated bugs in one release (#999)\n\n"
+                "Three self-caught bugs fixed before shipping: a parser bug fixed "
+                "column-position-robustly; scanning the ledger's dense rows "
+                "cross-contaminated co-mentioned items with an owner+trigger/ "
+                "NO-GO signal meant for one item only (fixed by dropping the "
+                "ledger from that scan); and W9-1 citations undercounted landed "
+                "items (fixed by also matching finding IDs).\n"
+            ),
+        ),
+    ]
+    deferred, decision_closed = ad.build_prose_signals(commits)
+    assert "W9-1" not in deferred
+    assert "W9-1" not in decision_closed
+
+
+# ---------------------------------------------------------------------------
+# is_dev_tooling_commit / build_report's dev-tooling exclusion
+# ---------------------------------------------------------------------------
+
+
+def test_is_dev_tooling_commit_matches_the_real_genesis_commit_shape(
+    ad: ModuleType,
+) -> None:
+    assert ad.is_dev_tooling_commit(
+        "feat(dev-tooling): add M4 exit oracle audit_disposition.py + tests\n\nBody.\n",
+    )
+
+
+def test_is_dev_tooling_commit_false_for_ordinary_commits(ad: ModuleType) -> None:
+    assert not ad.is_dev_tooling_commit(
+        "fix: token 4xx taxonomy (W2-2, W2-3) (#209)\n\nBody.\n",
+    )
+
+
+def test_is_dev_tooling_commit_false_for_empty_message(ad: ModuleType) -> None:
+    assert not ad.is_dev_tooling_commit("")
+    assert not ad.is_dev_tooling_commit("   \n  \n")
+
+
+def test_build_report_excludes_dev_tooling_commit_from_deferral_evidence(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
+    """End-to-end: a dev-tooling commit's body quotes an item ID inside an
+    ILLUSTRATIVE example of this program's own deferral-notice convention
+    (marker word directly adjacent to the item ID -- exactly the shape
+    ``_item_clauses``' clause-scoping alone would treat as a legitimate
+    per-item deferral) -- while a SEPARATE, real commit lands that same item
+    cleanly against the finding's own file. Clause-scoping by itself is NOT
+    sufficient here (the illustrative example is deliberately shaped to pass
+    it); only excluding the dev-tooling commit outright (``is_dev_tooling_
+    commit``) keeps this from resolving DEFERRED instead of LANDED --
+    exercising the exclusion as a genuinely necessary second layer, not a
+    redundant one.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git("init", "-q", cwd=repo)
+    _git("config", "user.email", "test@example.com", cwd=repo)
+    _git("config", "user.name", "Test", cwd=repo)
+
+    plan_dir = repo / "audit-recommendations" / "plan"
+    plan_dir.mkdir(parents=True)
+    findings = [
+        {
+            "id": "AUTH-01",
+            "axis": "AUTH",
+            "title": "token leak",
+            "severity": "high",
+            "files": ["restgdf/utils/_http.py"],
+        },
+    ]
+    (repo / "audit-recommendations" / "findings.json").write_text(
+        json.dumps(findings),
+        encoding="utf-8",
+    )
+    (plan_dir / "99-traceability.md").write_text(
+        "## Forward map\n\n| `AUTH-01` | high | t | `W2-1` | — |\n",
+        encoding="utf-8",
+    )
+    (repo / "restgdf" / "utils").mkdir(parents=True)
+    (repo / "restgdf" / "utils" / "_http.py").write_text("x = 1\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    _git("commit", "-q", "-m", "chore: seed repo", cwd=repo)
+
+    # The real landing: touches the finding's own file, cites the item.
+    (repo / "restgdf" / "utils" / "_http.py").write_text("x = 2\n", encoding="utf-8")
+    _git("add", "-A", cwd=repo)
+    _git(
+        "commit",
+        "-q",
+        "-m",
+        "fix: force POST when body carries a token (W2-1)",
+        cwd=repo,
+    )
+
+    # A LATER dev-tooling commit quotes "W2-1" as an ILLUSTRATIVE example of
+    # this program's own deferral-notice convention, with the marker word
+    # directly adjacent -- clause-scoping alone would treat this as a real
+    # per-item deferral signal; only the dev-tooling exclusion prevents it.
+    (repo / "scripts").mkdir()
+    (repo / "scripts" / "audit_disposition.py").write_text(
+        "# oracle\n",
+        encoding="utf-8",
+    )
+    _git("add", "-A", cwd=repo)
+    _git(
+        "commit",
+        "-q",
+        "-m",
+        "feat(dev-tooling): add M4 exit oracle\n\n"
+        'Docstring example of the convention: "W2-1 (EXAMPLE-01): NO-GO / '
+        'deferred. Owner: X. Trigger: Y (illustrative only)."\n',
+        cwd=repo,
+    )
+
+    report = ad.build_report(repo)
+    by_id = {row["id"]: row for row in report["findings"]}
+    assert by_id["AUTH-01"]["disposition"] == "LANDED"
 
 
 # ---------------------------------------------------------------------------
@@ -288,7 +435,13 @@ def test_item_status_message_only_when_no_file_overlap(ad: ModuleType) -> None:
 
 
 def test_item_status_gap_when_no_evidence_at_all(ad: ModuleType) -> None:
-    finding = ad.Finding(id="TEST-01", axis="TEST", title="t", severity="low", files=["x.py"])
+    finding = ad.Finding(
+        id="TEST-01",
+        axis="TEST",
+        title="t",
+        severity="low",
+        files=["x.py"],
+    )
     status = ad.item_status_for_finding(
         "W9-1",
         finding,
@@ -329,9 +482,19 @@ def test_item_status_finding_id_citation_counts_as_declaration(ad: ModuleType) -
     assert status.status == "LANDED"
 
 
-def test_item_status_deferred_takes_precedence_over_landed_evidence(ad: ModuleType) -> None:
-    finding = ad.Finding(id="TEST-01", axis="TEST", title="t", severity="low", files=["x.py"])
-    deferred = {"W9-1": ad.Evidence(kind="commit", source="sha1", snippet="owner+trigger")}
+def test_item_status_deferred_takes_precedence_over_landed_evidence(
+    ad: ModuleType,
+) -> None:
+    finding = ad.Finding(
+        id="TEST-01",
+        axis="TEST",
+        title="t",
+        severity="low",
+        files=["x.py"],
+    )
+    deferred = {
+        "W9-1": ad.Evidence(kind="commit", source="sha1", snippet="owner+trigger"),
+    }
     status = ad.item_status_for_finding(
         "W9-1",
         finding,
@@ -346,7 +509,10 @@ def test_item_status_deferred_takes_precedence_over_landed_evidence(ad: ModuleTy
 
 
 def test_disposition_for_finding_all_landed(ad: ModuleType) -> None:
-    statuses = [ad.ItemStatus("W1-1", "LANDED", []), ad.ItemStatus("W1-2", "LANDED", [])]
+    statuses = [
+        ad.ItemStatus("W1-1", "LANDED", []),
+        ad.ItemStatus("W1-2", "LANDED", []),
+    ]
     assert ad.disposition_for_finding(statuses) == "LANDED"
 
 
@@ -356,7 +522,10 @@ def test_disposition_for_finding_one_gap_dominates(ad: ModuleType) -> None:
 
 
 def test_disposition_for_finding_message_only_counts_as_gap(ad: ModuleType) -> None:
-    statuses = [ad.ItemStatus("W1-1", "LANDED", []), ad.ItemStatus("W1-2", "MESSAGE_ONLY", [])]
+    statuses = [
+        ad.ItemStatus("W1-1", "LANDED", []),
+        ad.ItemStatus("W1-2", "MESSAGE_ONLY", []),
+    ]
     assert ad.disposition_for_finding(statuses) == "GAP"
 
 
@@ -369,7 +538,10 @@ def test_disposition_for_finding_deferred_beats_decision_closed(ad: ModuleType) 
 
 
 def test_disposition_for_finding_decision_closed_with_landed(ad: ModuleType) -> None:
-    statuses = [ad.ItemStatus("W1-1", "LANDED", []), ad.ItemStatus("W1-2", "DECISION_CLOSED", [])]
+    statuses = [
+        ad.ItemStatus("W1-1", "LANDED", []),
+        ad.ItemStatus("W1-2", "DECISION_CLOSED", []),
+    ]
     assert ad.disposition_for_finding(statuses) == "DECISION-CLOSED"
 
 
@@ -399,7 +571,10 @@ def test_load_findings_parses_json(ad: ModuleType, tmp_path: Path) -> None:
     assert findings[0].files == ["restgdf/foo.py"]
 
 
-def test_load_forward_map_handles_embedded_pipe_in_title(ad: ModuleType, tmp_path: Path) -> None:
+def test_load_forward_map_handles_embedded_pipe_in_title(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
     """Regression for the TYPING-04 parser bug: a title cell containing its
     own literal ``|`` (e.g. `` `session: ClientSession | None` ``) must not
     silently orphan the finding.
@@ -423,7 +598,10 @@ def test_load_forward_map_handles_embedded_pipe_in_title(ad: ModuleType, tmp_pat
     assert forward["AUTH-01"] == ["W2-1", "W6-6"]
 
 
-def test_load_forward_map_skips_header_and_separator_rows(ad: ModuleType, tmp_path: Path) -> None:
+def test_load_forward_map_skips_header_and_separator_rows(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
     plan_dir = tmp_path / "audit-recommendations" / "plan"
     plan_dir.mkdir(parents=True)
     traceability = (
@@ -468,7 +646,10 @@ def _git(*args: str, cwd: Path) -> None:
     )
 
 
-def test_end_to_end_against_a_throwaway_git_repo(ad: ModuleType, tmp_path: Path) -> None:
+def test_end_to_end_against_a_throwaway_git_repo(
+    ad: ModuleType,
+    tmp_path: Path,
+) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()
     _git("init", "-q", cwd=repo)
@@ -573,7 +754,10 @@ def test_real_repo_structural_invariants(ad: ModuleType) -> None:
 
     totals = report["totals"]
     assert (
-        totals["LANDED"] + totals["DECISION-CLOSED"] + totals["DEFERRED"] + totals["GAP"]
+        totals["LANDED"]
+        + totals["DECISION-CLOSED"]
+        + totals["DEFERRED"]
+        + totals["GAP"]
         == totals["findings"]
     )
 
@@ -582,36 +766,40 @@ def test_real_repo_structural_invariants(ad: ModuleType) -> None:
 
 
 def test_cli_json_format_is_valid_json() -> None:
-    result = subprocess.run(  # nosec B603 B607 - invoking our own script by absolute path
-        [
-            sys.executable,
-            str(_SCRIPT_PATH),
-            "--repo-root",
-            str(_REPO_ROOT),
-            "--format",
-            "json",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
+    result = (
+        subprocess.run(  # nosec B603 B607 - invoking our own script by absolute path
+            [
+                sys.executable,
+                str(_SCRIPT_PATH),
+                "--repo-root",
+                str(_REPO_ROOT),
+                "--format",
+                "json",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
     )
     payload = json.loads(result.stdout)
     assert payload["totals"]["findings"] == 61
 
 
 def test_cli_table_format_has_no_json() -> None:
-    result = subprocess.run(  # nosec B603 B607 - invoking our own script by absolute path
-        [
-            sys.executable,
-            str(_SCRIPT_PATH),
-            "--repo-root",
-            str(_REPO_ROOT),
-            "--format",
-            "table",
-        ],
-        capture_output=True,
-        text=True,
-        check=True,
+    result = (
+        subprocess.run(  # nosec B603 B607 - invoking our own script by absolute path
+            [
+                sys.executable,
+                str(_SCRIPT_PATH),
+                "--repo-root",
+                str(_REPO_ROOT),
+                "--format",
+                "table",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
     )
     assert result.stdout.startswith("M4 audit disposition census")
     with pytest.raises(json.JSONDecodeError):
@@ -619,10 +807,19 @@ def test_cli_table_format_has_no_json() -> None:
 
 
 def test_cli_exits_zero_on_the_real_repo() -> None:
-    result = subprocess.run(  # nosec B603 B607 - invoking our own script by absolute path
-        [sys.executable, str(_SCRIPT_PATH), "--repo-root", str(_REPO_ROOT), "--format", "table"],
-        capture_output=True,
-        text=True,
-        check=False,
+    result = (
+        subprocess.run(  # nosec B603 B607 - invoking our own script by absolute path
+            [
+                sys.executable,
+                str(_SCRIPT_PATH),
+                "--repo-root",
+                str(_REPO_ROOT),
+                "--format",
+                "table",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     )
     assert result.returncode == 0, result.stdout + result.stderr
