@@ -15,7 +15,7 @@
 | V0 Establish baseline | **COMPLETE** 2026-07-23 (fresh clone @ `70ebe00` + fresh 3.11 venv: all gates green — pytest 1169/4/2, cov 98%, 34/34 hooks, sphinx, base_install 15, compat 50, build+twine; report `scratch/v0/`) | fresh main clone passes the complete gate |
 | M1 Validation/security | **COMPLETE** 2026-07-24 (items: PRs #193 #194 #195 #196 #197 #198 #199 #200 — see log; 3.1.0 release evidence added on publish) | M1 exit gate plus 3.1.0 release evidence |
 | M2 High correctness | **COMPLETE** 2026-07-24 (PRs #203–#207 + this PR; all five high findings closed with regression evidence — verifier-run census: AUTH-01 ×3, PAGINATION-01 ×7, PAGINATION-02 ×4, CONFIG-01/AUTH-03 ×8 test nodes green; CICD-01 = the structural release gate. verify_ssl proven end-to-end via real-connector introspection) | all five high findings closed with regression evidence |
-| M3 Medium correctness | not started | M3 item/decision gates green |
+| M3 Medium correctness | **COMPLETE** 2026-07-24 (3 batched PRs; W2-2/3/11, W3-2/3/4, W2-13 warn-now, W4-3/4, W1-9, W5-2/3/6/13/14; decision-closes with recorded owner+trigger: W2-5 NO-GO per plan recommendation, W5-13 dedup-key kept context-free per anti-spam decision; wave verifier CONFIRMED, deferral ratified by coordinator) | M3 item/decision gates green |
 | M4 Docs/polish | not started | 61/61 findings closed or explicitly dispositioned |
 | R32 Release 3.2.0 | not started | clean tag-to-PyPI-to-install verification |
 
