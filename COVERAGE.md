@@ -13,7 +13,7 @@
 | restgdf/\_models/\_errors.py           |        3 |        0 |        0 |        0 |    100% |           |
 | restgdf/\_models/\_settings.py         |      100 |        4 |       12 |        0 |     96% |289-290, 301-302 |
 | restgdf/\_models/crawl.py              |       20 |        0 |        0 |        0 |    100% |           |
-| restgdf/\_models/credentials.py        |       48 |        0 |        8 |        0 |    100% |           |
+| restgdf/\_models/credentials.py        |       53 |        0 |        8 |        0 |    100% |           |
 | restgdf/\_models/responses.py          |      175 |        5 |       56 |        3 |     97% |492-\>489, 518, 522-525 |
 | restgdf/\_types.py                     |       12 |        0 |        2 |        0 |    100% |           |
 | restgdf/adapters/\_\_init\_\_.py       |       14 |        0 |        2 |        0 |    100% |           |
@@ -49,6 +49,6 @@
 | restgdf/utils/crawl.py                 |       82 |        1 |       16 |        1 |     98% |        25 |
 | restgdf/utils/getgdf.py                |      418 |        7 |      182 |       11 |     97% |68, 155, 162-\>161, 224-225, 497, 507-\>506, 634-\>636, 639-\>628, 990, 1023, 1026-\>1044, 1030-\>1032, 1032-\>1026 |
 | restgdf/utils/getinfo.py               |       65 |        0 |       12 |        0 |    100% |           |
-| restgdf/utils/token.py                 |      193 |        3 |       52 |        4 |     97% |183, 206, 352, 516-\>exit |
+| restgdf/utils/token.py                 |      209 |        3 |       56 |        4 |     97% |230, 253, 443, 627-\>exit |
 | restgdf/utils/utils.py                 |        8 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                              | **2800** |   **29** |  **790** |   **36** | **98%** |           |
+| **TOTAL**                              | **2821** |   **29** |  **794** |   **36** | **98%** |           |
