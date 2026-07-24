@@ -24,6 +24,15 @@ All notable changes to restgdf are documented here. This project follows
   naming the `restgdf[geo]` hint instead of escaping as a raw, unwrapped
   `ImportError`.
 
+### Fixed
+
+- Removed the false `.env` file-loading claims from `docs/configuration.rst`'s
+  precedence list and `docs/authentication.rst`'s credentials recipe. `restgdf`
+  has never read `.env` files or depended on `python-dotenv`/`pydantic-settings`
+  — `Config.from_env()` resolves only from the process environment (`os.environ`).
+  The docs now show how to opt in explicitly with `python-dotenv` yourself
+  (W3-5, CONFIG-04).
+
 ## [3.1.0] - 2026-07-24
 ### Added
 
