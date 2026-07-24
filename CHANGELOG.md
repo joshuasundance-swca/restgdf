@@ -4,6 +4,8 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [3.1.0] - 2026-07-24
 ### Added
 
 - `restgdf.utils.getinfo.build_spatial_filter_payload(geometry, *,

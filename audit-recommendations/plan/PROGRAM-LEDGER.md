@@ -8,12 +8,12 @@
 
 | Phase | State | Exit evidence |
 |------|-------|---------------|
-| P0A Preserve the plan | main merged back; completes when PR #190 merges (this row rides in it) | audit branch published and audit PR merged |
+| P0A Preserve the plan | **COMPLETE** (PR #190 merged → `70ebe00`, 125 checks green) | audit branch published and audit PR merged |
 | P0B Raise Python floor to 3.11 + repair fresh CI | **COMPLETE** (PR #191 → `0fa0332`, squash) | 3.11+ metadata/docs and 3.11–3.14 offline aggregate green |
-| P0C Reconcile open PRs | 9 open (2026-07-22) | each PR merged, superseded, refreshed, or deliberately deferred |
-| P0D Turn CI into policy | not started | offline aggregate required on `main`; `release` env reviewer set; ruleset exported |
-| V0 Establish baseline | not started | fresh main clone passes the complete gate |
-| M1 Validation/security | not started | M1 exit gate plus 3.1.0 release evidence |
+| P0C Reconcile open PRs | **COMPLETE** 2026-07-24: #175 merged (`4633288`, post-review docs); #189 merged (supply-chain verified); #188→recreated #192 merged (`1bbfd23`, +2 maintainer fixes: lockfile consistency, docs nitpick-ignore; closes all 34 Dependabot alerts); singles #176/#178/#184–#187 closed superseded | each PR merged, superseded, refreshed, or deliberately deferred |
+| P0D Turn CI into policy | **COMPLETE** 2026-07-23: `ci-offline` required on `main` (enforce_admins=false, no approval rule — solo-repo decision); `release` env reviewer = joshuasundance-swca; exports in git-excluded `scratch/p0d/*.json` | offline aggregate required on `main`; `release` env reviewer set; ruleset exported |
+| V0 Establish baseline | **COMPLETE** 2026-07-23 (fresh clone @ `70ebe00` + fresh 3.11 venv: all gates green — pytest 1169/4/2, cov 98%, 34/34 hooks, sphinx, base_install 15, compat 50, build+twine; report `scratch/v0/`) | fresh main clone passes the complete gate |
+| M1 Validation/security | **COMPLETE** 2026-07-24 (items: PRs #193 #194 #195 #196 #197 #198 #199 #200 — see log; 3.1.0 release evidence added on publish) | M1 exit gate plus 3.1.0 release evidence |
 | M2 High correctness | not started | all five high findings closed with regression evidence |
 | M3 Medium correctness | not started | M3 item/decision gates green |
 | M4 Docs/polish | not started | 61/61 findings closed or explicitly dispositioned |
@@ -33,3 +33,21 @@
   clean (zero conflicts). #175 adversarially reviewed (MERGE_WITH_CHANGES, 0 blocking —
   scratch/p0b/reports/pr175-review.md): P0C will carry CHANGELOG/MIGRATION bullets in the rebase;
   query-time Referer propagation noted for W2-10 (M2).
+- 2026-07-24 — **P0C, P0D, V0, M1 complete; 3.1.0 release prepped.** M1 delivery (every
+  substantive PR adversarially verified, default-refute): #193 quick wins (W1-5 W1-6 W3-7 W5-7
+  W6-1) · #194 release-path test gate + CHANGELOG gate (W1-1 inline shape, W1-4; CONFIRMED 0
+  mustFix) · #195 AUTH-01 red-first fix (W2-1; CONFIRMED 0 mustFix; 2-assertion characterization
+  re-pin adjudicated, W1-9 owns full verb-separation in M3) · #196 W1-2 typing transition stack
+  (deps-present mypy 16→0 errors, W4-6/W5-9/W5-10/W5-11 pulled forward; mypy job required via
+  both aggregators; CONFIRMED 0 mustFix; W5-9 resolved via audit fallback — current aiohttp
+  stubs preclude a static Protocol match) · #197 W1-8 bumpver fail-fast (CONFIRMED 0 mustFix) ·
+  #198 3.0.0 narrative + 2.0.0 header dedupe + CLAUDE.md refresh (ADJUSTED, 2 mustFix applied) ·
+  #199 W1-8b: coordinator-discovered release-gate deadlock (W1-8×W1-4 could never both pass —
+  bumpver doesn't rewrite CHANGELOG); guard now asserts the just-bumped version's own section ·
+  #200 W1-3 PR coverage gate + W1-7 + W6-2/PACKAGING-03; and the P0 finding that main's true
+  coverage had been 96.9069% (sub-floor since #175, 7 silent post-merge failures — TESTS-01
+  validated live) restored to **98.1271%** with real-shape `_geometry.py` tests (73.78%→100%,
+  fixtures verified against the ArcGIS REST spec). Suite at M1 exit: 1213 passed / 4 skipped /
+  4 deselected. Maintainer review items: #192 Snyk check red (auth-walled detail; pip-audit
+  clean); referer query-time `Referer` header gap → W2-10; POST bool-coercion parity +
+  FakeSession verb-mirror → W1-9.
