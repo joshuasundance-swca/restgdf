@@ -114,16 +114,21 @@ async def get_value_counts(
     """Get the value counts for a field."""
     require_pandas_dataframe("get_value_counts()")
     statstr = f'[{{"statisticType":"count","onStatisticField":"{field}","outStatisticFieldName":"{field}_count"}}]'
-    data = kwargs.pop("data", None) or {}
-    data = {
-        "where": "1=1",
-        "f": "json",
-        "returnGeometry": False,
-        "outFields": field,
-        "outStatistics": statstr,
-        "groupByFieldsForStatistics": field,
-        **data,
-    }
+    # W5-2 (API-01): conservative merge -- forward ONLY ``where``+``token``
+    # from the caller data so the instance ``datadict`` (returnGeometry=True /
+    # outFields="*" / returnCountOnly=False) cannot clobber the stats flags,
+    # while the user's WHERE filter is preserved.
+    data = build_conservative_query_data(
+        {
+            "where": "1=1",
+            "f": "json",
+            "returnGeometry": False,
+            "outFields": field,
+            "outStatistics": statstr,
+            "groupByFieldsForStatistics": field,
+        },
+        kwargs.pop("data", None),
+    )
     kwargs.setdefault("timeout", default_timeout())
     response = await _arcgis_request(
         session,
@@ -150,8 +155,20 @@ async def nested_count(
     session: AsyncHTTPSession,
     **kwargs,
 ) -> DataFrame:
-    """Get the nested value counts for a field."""
+    """Get the nested value counts for exactly two fields."""
     require_pandas_dataframe("nested_count()")
+    # W5-3 (API-04): the post-processing indexes ``fields[0]``/``fields[1]``
+    # unconditionally, so a single field IndexErrors deep in the helper and a
+    # third field leaves a redundant ``*_count`` column with an incomplete
+    # sort. Enforce exactly-two arity here too -- the helper is a public
+    # re-exported name (``restgdf.utils.getinfo.nested_count``), so a direct
+    # caller must get the clear error, not the FeatureLayer method alone.
+    field_list = [fields] if isinstance(fields, str) else list(fields)
+    if len(field_list) != 2:
+        raise ValueError(
+            "nested_count requires exactly two field names; got "
+            f"{len(field_list)}: {field_list!r}",
+        )
     statstr = "".join(
         (
             "[",
@@ -162,16 +179,18 @@ async def nested_count(
             "]",
         ),
     )
-    data = kwargs.pop("data", None) or {}
-    data = {
-        "where": "1=1",
-        "f": "json",
-        "returnGeometry": False,
-        "outFields": ",".join(fields),
-        "outStatistics": statstr,
-        "groupByFieldsForStatistics": ",".join(fields),
-        **data,
-    }
+    # W5-2 (API-01): conservative merge -- see get_value_counts above.
+    data = build_conservative_query_data(
+        {
+            "where": "1=1",
+            "f": "json",
+            "returnGeometry": False,
+            "outFields": ",".join(fields),
+            "outStatistics": statstr,
+            "groupByFieldsForStatistics": ",".join(fields),
+        },
+        kwargs.pop("data", None),
+    )
     kwargs.setdefault("timeout", default_timeout())
     response = await _arcgis_request(
         session,

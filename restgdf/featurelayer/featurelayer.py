@@ -663,7 +663,7 @@ class FeatureLayer:
         Parameters
         ----------
         fields : tuple of str
-            Two or more field names to cross-tabulate.
+            Exactly two field names to cross-tabulate.
 
         Returns
         -------
@@ -676,9 +676,19 @@ class FeatureLayer:
 
         Raises
         ------
+        ValueError
+            If *fields* does not contain exactly two field names (W5-3).
         FieldDoesNotExistError
             If any field in *fields* is not present in the layer schema.
         """
+        # W5-3 (API-04): the underlying helper cross-tabulates exactly two
+        # fields (it indexes fields[0]/fields[1]); reject other arities with a
+        # clear error instead of a deep IndexError / silently-wrong output.
+        if len(fields) != 2:
+            raise ValueError(
+                "get_nested_count requires exactly two field names; got "
+                f"{len(fields)}: {fields!r}",
+            )
         if fields not in self.nestedcount:
             if any(field not in self.fields for field in fields):
                 raise FieldDoesNotExistError(
