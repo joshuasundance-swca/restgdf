@@ -151,7 +151,7 @@ def get_fields(layer_metadata: LayerMetadataLike, types: bool = False):
     dropped from the result (mirroring ``get_object_id_field``'s
     ``isinstance(field.get("name"), str)`` guard); this is an
     intentional, contract-aligned skip, not silent data loss of a
-    resolvable field. ``types=True`` routes through :func:`_field_rows`
+    resolvable field. ``types=True`` routes through ``_field_rows``
     so the dict/list/DataFrame views agree on the surviving field set.
     """
     layer_metadata = _as_dict(layer_metadata)
@@ -181,7 +181,7 @@ def _field_rows(layer_metadata: LayerMetadataLike) -> list[tuple[str, str]]:
 def get_fields_frame(layer_metadata: LayerMetadataLike) -> DataFrame:
     """Get the fields of a layer as a DataFrame.
 
-    Routes through :func:`_field_rows`, so a field with no resolvable
+    Routes through ``_field_rows``, so a field with no resolvable
     ``name`` is dropped (W5-4/ADAPTERS-01) -- see that function's
     docstring for the full skip-behavior contract.
     """
