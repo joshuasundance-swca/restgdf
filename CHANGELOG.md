@@ -6,6 +6,19 @@ All notable changes to restgdf are documented here. This project follows
 ## [Unreleased]
 ### Changed
 
+- **Multi-page offset/count pagination now sends a deterministic
+  `orderByFields`.** When a layer is traversed with explicit
+  `resultOffset`/`resultRecordCount` pages (the `get_gdf` / `get_df` /
+  `stream_*` common path), each batch now defaults `orderByFields` to the
+  layer's resolved OID field unless the caller already supplied one — Esri's
+  documented remedy for reliable `resultOffset` paging, which otherwise leaves
+  row order server-dependent and can silently duplicate or drop features
+  across page boundaries (W4-2 / PAGINATION-02). A caller-supplied
+  `orderByFields` (any case) is never overridden, and a layer whose OID cannot
+  be resolved degrades gracefully to today's un-sorted batches. **Wire-payload
+  change** (semver-relevant): explicit-pagination request bodies now carry an
+  `orderByFields` member. The OID-chunked WHERE-fallback and
+  `on_truncation='split'` paths are unchanged.
 - **The GeoDataFrame path now raises on truncated responses instead of
   silently dropping rows.** `get_gdf` and `stream_gdf_chunks` (via
   `chunk_generator` → `get_sub_gdf`) now inspect each page's parsed JSON for

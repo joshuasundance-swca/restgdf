@@ -20,6 +20,7 @@ from restgdf._logging import get_logger
 from restgdf._models._drift import _parse_response
 from restgdf._models.responses import FeaturesResponse, LayerMetadata
 from restgdf.errors import (
+    FieldDoesNotExistError,
     PaginationError,
     PaginationInconsistencyWarning,
     RestgdfResponseError,
@@ -31,6 +32,7 @@ from restgdf.utils.getinfo import (
     get_feature_count,
     get_max_record_count,
     get_metadata,
+    get_object_id_field,
     get_object_ids,
     supports_pagination,
 )
@@ -228,6 +230,33 @@ def _advertised_max_record_count_factor(
     return value
 
 
+def _resolve_order_by_oid(
+    request_data: Mapping[str, Any],
+    metadata: Mapping[str, Any] | LayerMetadata,
+) -> dict[str, str]:
+    """Return ``{"orderByFields": <resolved OID>}`` to merge into explicit
+    pagination batches, or ``{}`` when injection must be skipped (W4-2).
+
+    Skips injection when the caller already supplied an ``orderByFields``
+    (checked **case-insensitively** so a key arriving via ``QueryOptions.extra``
+    is never clobbered), and degrades gracefully -- returning ``{}`` -- when the
+    layer's OID cannot be resolved (``FieldDoesNotExistError`` on
+    ambiguous/missing OID). OID-resolution failure must never break a query that
+    works today.
+    """
+    if any(key.lower() == "orderbyfields" for key in request_data):
+        return {}
+    try:
+        oid_field = get_object_id_field(metadata)
+    except FieldDoesNotExistError:
+        _METADATA_LOG.debug(
+            "pagination.order_by.oid_unresolved; emitting un-sorted "
+            "offset/count batches (PAGINATION-02 graceful degrade)",
+        )
+        return {}
+    return {"orderByFields": oid_field}
+
+
 async def get_query_data_batches(
     url: str,
     session: AsyncHTTPSession,
@@ -264,10 +293,16 @@ async def get_query_data_batches(
         return [request_data]
 
     if supports_pagination(metadata) and supports_pagination_explicitly(metadata):
+        # W4-2 (PAGINATION-02): default orderByFields to the resolved OID so
+        # multi-page offset/count traversal is deterministic (Esri's own
+        # remedy for reliable resultOffset paging). Resolved once; skipped when
+        # the caller sorted or the OID is unresolvable (see helper).
+        order_by = _resolve_order_by_oid(request_data, metadata)
         if isinstance(requested_page_size, int) and requested_page_size > 0:
             return [
                 {
                     **request_data,
+                    **order_by,
                     "resultOffset": offset,
                     "resultRecordCount": min(page_size, feature_count - offset),
                 }
@@ -288,6 +323,7 @@ async def get_query_data_batches(
         return [
             {
                 **request_data,
+                **order_by,
                 "resultOffset": offset,
                 "resultRecordCount": count,
             }
