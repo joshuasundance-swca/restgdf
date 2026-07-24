@@ -68,9 +68,9 @@ RestgdfError
 │   ├── ArcGISServiceError
 │   │   └── PaginationError(ArcGISServiceError, IndexError)
 │   └── AuthenticationError(RestgdfResponseError, PermissionError)
-│       ├── InvalidCredentialsError      # HTTP 401
+│       ├── InvalidCredentialsError      # /generateToken HTTP 4xx (400/401/403)
 │       ├── TokenExpiredError            # HTTP 498 after refresh
-│       ├── TokenRequiredError
+│       ├── TokenRequiredError           # reserved — not currently raised
 │       ├── TokenRefreshFailedError      # /generateToken retries exhausted
 │       └── AuthNotAttachedError         # HTTP 499
 ├── TransportError
@@ -85,9 +85,10 @@ Several classes co-inherit from stdlib exceptions (`ValueError`,
 so existing `except ValueError:` / `except TimeoutError:` code keeps
 working — see [MIGRATION.md](MIGRATION.md) for the full story.
 
-Detail types in `restgdf.errors` (e.g. `ErrorPayload`,
-`RateLimitError.retry_after`, `PaginationError.batch_index`) expose
-structured metadata for programmatic recovery.
+Exceptions in `restgdf.errors` carry structured attributes for
+programmatic recovery — for example `RestgdfResponseError.raw` /
+`RestgdfResponseError.model_name`, `RateLimitError.retry_after`, and
+`PaginationError.batch_index`.
 
 ## Logger hierarchy
 
@@ -95,14 +96,24 @@ restgdf uses namespaced loggers under the `restgdf.` prefix so
 applications can configure verbosity per subsystem.
 
 ```
-restgdf
+restgdf                       # root logger (NullHandler; get_logger(""))
+├── restgdf.transport         # aiohttp requests, verb selection (HTTP)
+├── restgdf.retry             # stamina retry attempts (restgdf[resilience])
+├── restgdf.limiter           # rate limiting (restgdf[resilience])
+├── restgdf.concurrency       # page-fetch concurrency gating
 ├── restgdf.auth              # token lifecycle, refresh attempts
-├── restgdf.transport         # aiohttp requests, retries
-├── restgdf.featurelayer      # prep / query / streaming
-├── restgdf.streaming         # pagination, split-on-truncation decisions
-├── restgdf.directory         # service enumeration
-└── restgdf.telemetry         # OpenTelemetry hooks (only when `telemetry` extra installed)
+├── restgdf.pagination        # streaming + split-on-truncation decisions
+├── restgdf.normalization     # attribute / row normalization
+└── restgdf.schema_drift      # permissive-tier schema-drift warnings
 ```
+
+These eight suffixes are the *only* names `get_logger()` accepts (see
+`LOGGER_SUFFIXES` in `restgdf/_logging.py`); any other suffix raises
+`ValueError`, so there are no `restgdf.featurelayer` / `restgdf.streaming`
+/ `restgdf.directory` / `restgdf.telemetry` loggers. Subsystem → logger:
+HTTP transport → `restgdf.transport` (retries → `restgdf.retry`),
+streaming/pagination → `restgdf.pagination`, schema drift →
+`restgdf.schema_drift`, normalization → `restgdf.normalization`.
 
 Loggers never emit at `DEBUG` with secrets; tokens and password-bearing
 request bodies are redacted at the transport layer.
@@ -112,31 +123,44 @@ request bodies are redacted at the transport layer.
 `restgdf.Config` (Pydantic v2, defined in `restgdf/_config.py`) resolves
 values in this order, highest precedence first:
 
-1. **Explicit constructor arguments** (`FeatureLayer.from_url(timeout=…)`).
-2. **`Config(...)` instance passed explicitly**.
-3. **Process environment variables** (`RESTGDF_*`).
-4. **`.env` file** in the working directory, if present.
-5. **Library defaults** (see `Config.model_fields`).
+1. **Explicit constructor / aiohttp keyword arguments**
+   (`FeatureLayer.from_url(timeout=…)`), applied per call.
+2. **Process environment variables** (`RESTGDF_*`), read by
+   `Config.from_env` and exposed process-globally through the size-1
+   LRU-cached `restgdf.get_config()` (reset with `reset_config_cache()`).
+3. **Library defaults** (see `Config.model_fields`).
+
+restgdf does **not** read a `.env` file — only the process environment,
+or a mapping you pass to `Config.from_env(env=…)`; `python-dotenv` is not
+a dependency. A directly built `Config(...)` instance is **not**
+injectable into the `FeatureLayer` / `Directory` request path (there is
+no `config=` parameter on either), so it does not sit in the precedence
+chain above; it is used in tests and to construct a session-scoped
+`ArcGISTokenSession(config=…)`, which is separate from the process-global
+`get_config()`.
 
 The legacy `restgdf.Settings` name is retained as a deprecation alias
 over `Config`; both resolve to the same cached instance via
 `restgdf.get_config()` / `restgdf.get_settings()`.
 
 Token-session settings (`TokenSessionConfig` in
-`restgdf/_models/credentials.py`) follow the same precedence but are
-stored on the session object, not globally.
+`restgdf/_models/credentials.py`) are stored on the session object, not
+globally.
 
 ## Session ownership
 
-`aiohttp.ClientSession` ownership is explicit and documented on every
-public API:
+`aiohttp.ClientSession` ownership is explicit and caller-driven:
 
-- **Caller-provided session** — passed to `FeatureLayer.from_url(...,
-  session=...)` or `Directory(..., session=...)`. restgdf does **not**
-  close it; the caller's `async with session:` block owns lifecycle.
-- **Library-owned session** — if no session is provided, restgdf
-  lazily constructs one and closes it when the owning object is
-  `close()`d or used as an async context manager.
+- **Caller-owned session (the only model for `FeatureLayer` /
+  `Directory`)** — both require a `session` argument
+  (`FeatureLayer.from_url(..., session=...)`, `Directory(...,
+  session=...)`). restgdf never closes a caller-supplied session, and
+  neither class defines `close()` / `__aenter__` / `__aexit__`; the
+  caller's `async with session:` block owns lifecycle.
+- **The one lazy-owning helper** — `restgdf.utils.getgdf.get_gdf(url,
+  session=None, ...)` builds a temporary `ClientSession` when none is
+  passed and closes it in a `finally` block. A caller-supplied session is
+  used as-is and left open.
 
 Token sessions wrap an inner `ClientSession` and propagate the same
 rule: the token session only closes what it created.

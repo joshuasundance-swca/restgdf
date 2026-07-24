@@ -49,11 +49,11 @@ asyncio.run(main())
 ```
 
 <details>
-<summary><strong>2.0 release highlights and migration summary</strong> (click to expand)</summary>
+<summary><strong>3.0 release highlights and migration summary</strong> (click to expand)</summary>
 
 ## Release highlights
 
-restgdf 2.0.0 includes the following major additions alongside the core
+restgdf 3.0 added the following major capabilities alongside the 2.0
 typed-model migration described below.
 
 - **Streaming APIs.** `FeatureLayer.stream_features`,
@@ -85,8 +85,10 @@ typed-model migration described below.
   [tracing recipe](https://restgdf.readthedocs.io/en/latest/recipes/tracing.html)
   and [streaming recipe](https://restgdf.readthedocs.io/en/latest/recipes/streaming.html).
 - **Header-token default.** Tokens now ride the
-  `X-Esri-Authorization` header by default; set
-  `AuthConfig.transport="body"` to restore the old behavior.
+  `X-Esri-Authorization` header by default; construct the session with
+  `TokenSessionConfig(transport="body")` to restore the old body
+  transport (a bare `AuthConfig(transport="body")` is a config holder
+  that is not auto-applied to a session).
 
 See [`CHANGELOG.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/CHANGELOG.md)
 and [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md)
@@ -184,7 +186,7 @@ pip install "restgdf[geo]"
 Treat the split above as the stable dependency boundary: geo-enabled
 environments should depend on `restgdf[geo]` explicitly. See
 [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md)
-for the full 1.x → 2.0 rewrite table and upgrade recipes.
+for the 1.x → 2.0 and 2.x → 3.0 upgrade guides.
 
 ## Light-core usage
 
@@ -329,6 +331,15 @@ Keyword arguments to `FeatureLayer.get_gdf()` are passed on to
 `aiohttp.ClientSession.post`; include query parameters like `where` and `token`
 in the `data` dict when needed.
 
+**Truncation now raises (PAGINATION-01).** `get_gdf()` and
+`stream_gdf_chunks()` — the GeoDataFrame path — now inspect each page for
+`exceededTransferLimit=true` and raise `restgdf.errors.PaginationError`,
+mirroring the raw-feature streaming engine, instead of silently returning
+a GeoDataFrame that is missing rows. If a very large layer trips this,
+read it through the `iter_pages`-based `stream_features` / `stream_rows`
+shapes, which expose `on_truncation="ignore" | "split"` (the legacy geo
+chunk path does not take that knob).
+
 ## Token authentication
 
 Token helpers are available in the base install. The GeoDataFrame example below
@@ -361,7 +372,13 @@ async def main():
 secured_gdf = asyncio.run(main())
 ```
 
-If you already have a token, you can pass it with `token="..."` or `data={"token": "..."}`.
+If you already have a token, you can pass it with `token="..."` or
+`data={"token": "..."}`. restgdf sends a token-bearing request as a **POST
+with the token in the request body** (never serialized into the URL query
+string), so the token does not leak into server or proxy access logs —
+this holds even for short requests that would otherwise use GET (AUTH-01).
+For fully header-based auth, use an `ArcGISTokenSession`, which sends the
+token via the `X-Esri-Authorization` header instead.
 
 ## Typed responses
 
@@ -391,7 +408,7 @@ name, max_record_count, arcgis_dict = asyncio.run(main())
 
 Need a plain dict during a transitional migration? Use
 `restgdf.compat.as_dict(md)`. See [`MIGRATION.md`](https://github.com/joshuasundance-swca/restgdf/blob/main/MIGRATION.md) for
-the full 1.x → 2.0 rewrite table.
+the 1.x → 2.0 and 2.x → 3.0 upgrade guides.
 
 ### ArcGIS drift guarantees and limitations
 
@@ -441,7 +458,8 @@ contents.
   taxonomy, logger hierarchy, config precedence, session ownership,
   streaming shapes, extras matrix.
 - [CHANGELOG.md](CHANGELOG.md) — every user-visible change.
-- [MIGRATION.md](MIGRATION.md) — upgrading from 1.x to 2.0.
+- [MIGRATION.md](MIGRATION.md) — upgrading across 1.x → 2.0, 2.x → 3.0,
+  and 3.0.x → 3.1.
 
 # Uses
 
