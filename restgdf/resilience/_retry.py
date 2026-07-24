@@ -9,7 +9,7 @@ import aiohttp
 import stamina
 
 from restgdf._config import ResilienceConfig
-from restgdf._logging import get_logger
+from restgdf._logging import build_log_extra, get_logger
 from restgdf.errors import (
     RateLimitError,
     RestgdfResponseError,
@@ -170,16 +170,12 @@ async def _do_retried_request(
         aiohttp.ClientConnectionError,
         aiohttp.ClientPayloadError,
     )
+    # Cause of the most recent failed attempt. stamina swallows the exception
+    # between attempts, so we record it here to name it in the retry-scheduled
+    # and exhaustion-mapping DEBUG logs (H1-N4).
+    last_cause: dict[str, str] = {}
 
-    @stamina.retry(
-        on=retry_on,
-        attempts=5,
-        timeout=60.0,
-        wait_initial=0.5,
-        wait_max=10.0,
-        wait_jitter=1.0,
-    )
-    async def _attempt() -> Any:
+    async def _attempt() -> tuple[Any, Any]:
         # 429 cooldown: wait if a previous 429 set a deadline for this service
         if cooldown is not None:
             await cooldown.wait_if_cooling(svc_root)
@@ -187,7 +183,11 @@ async def _do_retried_request(
         if limiter is not None:
             await limiter.get(svc_root).acquire()
         dispatch = getattr(inner, method)
-        ctx, resp = await _enter_request(dispatch(url, **kwargs))
+        try:
+            ctx, resp = await _enter_request(dispatch(url, **kwargs))
+        except (aiohttp.ClientConnectionError, aiohttp.ClientPayloadError) as exc:
+            last_cause["cause"] = type(exc).__name__
+            raise
 
         if resp.status in _RETRYABLE_STATUS:
             headers = dict(getattr(resp, "headers", {}))
@@ -200,7 +200,18 @@ async def _do_retried_request(
                     else config.fallback_retry_after_seconds
                 )
                 cooldown.set_cooldown(svc_root, cd)
+                _log.debug(
+                    "429 cooldown set: key=%s seconds=%.3f",
+                    svc_root,
+                    cd,
+                    extra=build_log_extra(
+                        service_root=svc_root,
+                        operation="cooldown",
+                        limiter_wait_s=cd,
+                    ),
+                )
             await ctx.__aexit__(None, None, None)
+            last_cause["cause"] = f"status={resp.status}"
             raise _RetryableHTTPError(resp.status, headers)
 
         if 400 <= resp.status < 500:
@@ -216,10 +227,48 @@ async def _do_retried_request(
 
         return ctx, resp
 
+    # ``retry_context`` is the equivalent of the ``@stamina.retry`` decorator
+    # (same kwargs) but exposes each attempt's number and backoff, so the
+    # per-retry DEBUG log can name them (H1-N4). ``prev_wait`` carries the
+    # backoff that was applied *before* the current attempt.
+    prev_wait = 0.0
     try:
-        return await _attempt()
+        async for attempt in stamina.retry_context(
+            on=retry_on,
+            attempts=5,
+            timeout=60.0,
+            wait_initial=0.5,
+            wait_max=10.0,
+            wait_jitter=1.0,
+        ):
+            if attempt.num > 1:
+                _log.debug(
+                    "retry scheduled: attempt=%d wait=%.3fs caused_by=%s",
+                    attempt.num,
+                    prev_wait,
+                    last_cause.get("cause", "unknown"),
+                    extra=build_log_extra(
+                        service_root=svc_root,
+                        retry_attempt=attempt.num,
+                        retry_delay_s=prev_wait,
+                        exception_type=last_cause.get("cause"),
+                    ),
+                )
+            prev_wait = attempt.next_wait
+            with attempt:
+                return await _attempt()
+        raise AssertionError(  # pragma: no cover - retry_context always returns or raises
+            "stamina.retry_context exited without returning or raising",
+        )
     except _RetryableHTTPError as exc:
         if exc.status == 429:
+            _log.debug(
+                "retry exhausted: status=429 mapped to RateLimitError",
+                extra=build_log_extra(
+                    service_root=svc_root,
+                    exception_type="RateLimitError",
+                ),
+            )
             retry_after = _parse_retry_after(exc.headers.get("Retry-After", ""))
             raise RateLimitError(
                 f"Rate limited (429) at {url}",
@@ -227,6 +276,14 @@ async def _do_retried_request(
                 url=url,
                 status_code=429,
             ) from exc
+        _log.debug(
+            "retry exhausted: status=%d mapped to RestgdfResponseError",
+            exc.status,
+            extra=build_log_extra(
+                service_root=svc_root,
+                exception_type="RestgdfResponseError",
+            ),
+        )
         raise RestgdfResponseError(
             f"Server error ({exc.status}) at {url}",
             model_name="",
@@ -238,18 +295,42 @@ async def _do_retried_request(
     except aiohttp.ServerTimeoutError as exc:
         # ServerTimeoutError subclasses ClientConnectionError — map it first so
         # read timeouts keep their dedicated RestgdfTimeoutError type fidelity.
+        _log.debug(
+            "retry exhausted: %s mapped to RestgdfTimeoutError",
+            type(exc).__name__,
+            extra=build_log_extra(
+                service_root=svc_root,
+                exception_type="RestgdfTimeoutError",
+            ),
+        )
         raise RestgdfTimeoutError(
             f"Read timeout: {exc}",
             url=url,
             timeout_kind="read",
         ) from exc
     except aiohttp.ClientPayloadError as exc:
+        _log.debug(
+            "retry exhausted: %s mapped to TransportError",
+            type(exc).__name__,
+            extra=build_log_extra(
+                service_root=svc_root,
+                exception_type="TransportError",
+            ),
+        )
         raise TransportError(
             f"Truncated or incomplete response body for {url}",
             url=url,
             status_code=None,
         ) from exc
     except aiohttp.ClientConnectionError as exc:
+        _log.debug(
+            "retry exhausted: %s mapped to TransportError",
+            type(exc).__name__,
+            extra=build_log_extra(
+                service_root=svc_root,
+                exception_type="TransportError",
+            ),
+        )
         raise TransportError(
             f"Connection failed for {url}",
             url=url,

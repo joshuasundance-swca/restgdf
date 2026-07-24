@@ -4,6 +4,17 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Added
+
+- **The resilient retry path now emits DEBUG observability logs.** The
+  `restgdf.retry` logger (previously created but never used) now records a
+  DEBUG line for each scheduled retry (attempt number, backoff wait, and the
+  failure that triggered it), each 429 cooldown set (service-root key and
+  seconds), and each exhaustion mapping (the `restgdf.errors` type the final
+  underlying failure is mapped to). Set `logging.getLogger("restgdf.retry")`
+  to `DEBUG` to trace throttling and retries during a bulk crawl — making the
+  `docs/recipes/tracing.md` promise true (H1-N4).
+
 ### Fixed
 
 - **Sub-1.0 rate limits no longer crash.** A

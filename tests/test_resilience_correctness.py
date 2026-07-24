@@ -254,6 +254,26 @@ class TestCooldownRaceSafety:
         await reg.wait_if_cooling(key)
         assert key not in reg._deadlines
 
+    @pytest.mark.asyncio
+    async def test_wait_returns_when_deadline_cleared_during_sleep(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Defensive branch: if the key is cleared concurrently while sleeping,
+        # the waiter returns cleanly rather than re-looping.
+        from restgdf.resilience._limiter import CooldownRegistry
+
+        reg = CooldownRegistry()
+        key = "https://example.com/arcgis/rest/services/Z/FeatureServer"
+        reg.set_cooldown(key, 0.05)
+
+        async def fake_sleep(_d: float, *a: Any, **kw: Any) -> None:
+            reg._deadlines.pop(key, None)  # concurrent clear during the sleep
+
+        monkeypatch.setattr("asyncio.sleep", fake_sleep)
+        await reg.wait_if_cooling(key)
+        assert key not in reg._deadlines
+
 
 # ---------------------------------------------------------------------------
 # H1-N4 — the restgdf.retry logger must actually emit (dead-logger fix)
@@ -265,7 +285,6 @@ def _retry_messages(caplog: pytest.LogCaptureFixture) -> list[str]:
 
 
 class TestRetryLogging:
-    @pytest.mark.xfail(strict=True, reason="H1-N4: fixed in next commit")
     @pytest.mark.asyncio
     async def test_retry_scheduled_emits_debug_log(
         self,
@@ -284,7 +303,6 @@ class TestRetryLogging:
             "retry scheduled" in m and "attempt=" in m and "wait=" in m for m in msgs
         ), msgs
 
-    @pytest.mark.xfail(strict=True, reason="H1-N4: fixed in next commit")
     @pytest.mark.asyncio
     async def test_429_cooldown_set_emits_debug_log(
         self,
@@ -301,7 +319,6 @@ class TestRetryLogging:
         msgs = _retry_messages(caplog)
         assert any("cooldown set" in m for m in msgs), msgs
 
-    @pytest.mark.xfail(strict=True, reason="H1-N4: fixed in next commit")
     @pytest.mark.asyncio
     async def test_exhaustion_mapping_emits_debug_log(
         self,
