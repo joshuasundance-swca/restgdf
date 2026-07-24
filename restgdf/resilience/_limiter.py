@@ -82,12 +82,30 @@ class CooldownRegistry:
         self._deadlines[key] = time.monotonic() + seconds
 
     async def wait_if_cooling(self, key: str) -> None:
-        """Sleep until *key*'s cooldown expires (no-op if none set)."""
-        deadline = self._deadlines.get(key)
-        if deadline is None:
+        """Sleep until *key*'s cooldown expires (no-op if none set).
+
+        After sleeping, re-reads the deadline before clearing it. A
+        concurrent :meth:`set_cooldown` (a fresh 429 on the same key) may
+        have installed a *newer* deadline while this waiter slept;
+        unconditionally popping would erase it, so this waiter is occasionally
+        not honoured at high concurrency (H1-N2). If the deadline changed
+        while sleeping, honour the new one; only clear it when it is unchanged.
+        """
+        while True:
+            deadline = self._deadlines.get(key)
+            if deadline is None:
+                return
+            remaining = deadline - time.monotonic()
+            if remaining > 0:
+                await asyncio.sleep(remaining)
+            # Re-read after sleeping: a concurrent set_cooldown may have
+            # replaced the deadline we just waited on.
+            current = self._deadlines.get(key)
+            if current is None:
+                return
+            if current != deadline:
+                # A different (typically fresher) deadline was set — honour it.
+                continue
+            # Unchanged — safe to clear and finish.
+            self._deadlines.pop(key, None)
             return
-        remaining = deadline - time.monotonic()
-        if remaining > 0:
-            await asyncio.sleep(remaining)
-        # Expired — clean up
-        self._deadlines.pop(key, None)

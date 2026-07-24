@@ -29,6 +29,13 @@ All notable changes to restgdf are documented here. This project follows
   alike), so a caller catching `TransportError` no longer silently misses half
   the transport failures. Deterministic 4xx responses still never retry
   (H1-M2).
+- **429 cooldowns are no longer erased by a racing waiter.**
+  `CooldownRegistry.wait_if_cooling` (`restgdf.resilience._limiter`) popped the
+  stored deadline unconditionally after sleeping, so if a fresh 429 installed a
+  *longer* cooldown while an older waiter was still asleep, the waking waiter
+  erased the newer deadline — occasionally not honouring a cooldown at high
+  crawl concurrency. It now re-reads the deadline after sleeping and honours a
+  concurrently-set fresher one instead of clearing it (H1-N2).
 
 ## [3.2.0] - 2026-07-24
 ### Added

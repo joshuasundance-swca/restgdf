@@ -204,7 +204,6 @@ class TestTransportErrorRetryAndMapping:
 
 
 class TestCooldownRaceSafety:
-    @pytest.mark.xfail(strict=True, reason="H1-N2: fixed in next commit")
     @pytest.mark.asyncio
     async def test_wait_preserves_fresher_concurrent_deadline(
         self,
