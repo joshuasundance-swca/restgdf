@@ -6,15 +6,15 @@
 #
 accessible-pygments==0.0.5
     # via furo
-aiohappyeyeballs==2.6.1
+aiohappyeyeballs==2.7.1
     # via aiohttp
-aiohttp==3.13.5
+aiohttp==3.14.3
     # via restgdf (pyproject.toml)
 aiosignal==1.4.0
     # via aiohttp
 alabaster==1.0.0
     # via sphinx
-annotated-types==0.7.0
+annotated-types==0.8.0
     # via pydantic
 attrs==26.1.0
     # via aiohttp
@@ -22,15 +22,15 @@ autodoc-pydantic==2.2.0
     # via restgdf (pyproject.toml)
 babel==2.18.0
     # via sphinx
-beautifulsoup4==4.14.3
+beautifulsoup4==4.15.0
     # via furo
-certifi==2026.4.22
+certifi==2026.7.22
     # via requests
-charset-normalizer==3.4.7
+charset-normalizer==3.4.9
     # via requests
 colorama==0.4.6
     # via sphinx
-docutils==0.22.4
+docutils==0.23
     # via
     #   myst-parser
     #   sphinx
@@ -41,7 +41,7 @@ frozenlist==1.8.0
     #   aiosignal
 furo==2025.12.19
     # via restgdf (pyproject.toml)
-idna==3.13
+idna==3.18
     # via
     #   requests
     #   yarl
@@ -53,13 +53,13 @@ jinja2==3.1.6
     #   sphinx
 linkify-it-py==2.1.0
     # via myst-parser
-markdown-it-py==4.0.0
+markdown-it-py==4.2.0
     # via
     #   mdit-py-plugins
     #   myst-parser
 markupsafe==3.0.3
     # via jinja2
-mdit-py-plugins==0.5.0
+mdit-py-plugins==0.6.1
     # via myst-parser
 mdurl==0.1.2
     # via markdown-it-py
@@ -67,22 +67,22 @@ multidict==6.7.1
     # via
     #   aiohttp
     #   yarl
-myst-parser[linkify]==5.0.0
+myst-parser[linkify]==5.1.0
     # via restgdf (pyproject.toml)
 packaging==26.2
     # via sphinx
-propcache==0.4.1
+propcache==0.5.2
     # via
     #   aiohttp
     #   yarl
-pydantic==2.13.3
+pydantic==2.13.4
     # via
     #   autodoc-pydantic
     #   pydantic-settings
     #   restgdf (pyproject.toml)
-pydantic-core==2.46.3
+pydantic-core==2.47.0
     # via pydantic
-pydantic-settings==2.14.0
+pydantic-settings==2.14.2
     # via autodoc-pydantic
 pygments==2.20.0
     # via
@@ -93,15 +93,15 @@ python-dotenv==1.2.2
     # via pydantic-settings
 pyyaml==6.0.3
     # via myst-parser
-requests==2.33.1
+requests==2.34.2
     # via
     #   restgdf (pyproject.toml)
     #   sphinx
 roman-numerals==4.1.0
     # via sphinx
-snowballstemmer==3.0.1
+snowballstemmer==3.1.1
     # via sphinx
-soupsieve==2.8.3
+soupsieve==2.9.1
     # via beautifulsoup4
 sphinx==9.0.4
     # via
@@ -138,7 +138,7 @@ sphinxcontrib-serializinghtml==2.0.0
     # via sphinx
 tabulate==0.10.0
     # via sphinx-markdown-builder
-typing-extensions==4.15.0
+typing-extensions==4.16.0
     # via
     #   aiosignal
     #   beautifulsoup4
@@ -151,7 +151,7 @@ typing-inspection==0.4.2
     #   pydantic-settings
 uc-micro-py==2.0.0
     # via linkify-it-py
-urllib3==2.6.3
+urllib3==2.7.0
     # via requests
-yarl==1.23.0
+yarl==1.24.5
     # via aiohttp
