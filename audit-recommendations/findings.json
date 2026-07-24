@@ -81,7 +81,9 @@
   "files": [
    "restgdf/utils/token.py",
    "restgdf/utils/getgdf.py",
-   "MIGRATION.md"
+   "MIGRATION.md",
+   "restgdf/_config.py",
+   "restgdf/_models/_settings.py"
   ]
  },
  {
@@ -154,7 +156,9 @@
   "location": "ARCHITECTURE.md:118, restgdf/_config.py:344, restgdf/_models/_settings.py:197",
   "files": [
    "ARCHITECTURE.md",
-   "restgdf/_config.py"
+   "restgdf/_config.py",
+   "docs/configuration.rst",
+   "docs/authentication.rst"
   ]
  },
  {
