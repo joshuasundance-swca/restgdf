@@ -6,7 +6,9 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from restgdf.errors import OptionalDependencyError
 from restgdf.featurelayer.featurelayer import FeatureLayer
+from restgdf.utils._optional import require_geopandas
 from restgdf.utils.getgdf import (
     get_gdf,
     get_query_data_batches,
@@ -524,3 +526,49 @@ async def test_featurelayer_get_gdf_requires_geo_extra_before_query():
             match=r"FeatureLayer\.get_gdf\(\).*restgdf\[geo\]",
         ):
             await layer.get_gdf()
+
+
+def test_require_geopandas_wraps_broken_but_present_import_error():
+    """W2-8/OPTDEPS-01: a present-but-unimportable geo dependency (e.g. a
+    broken GDAL/shapely native layer surfacing as a bare ImportError with
+    no ``.name``, such as a DLL load failure) must still surface as
+    OptionalDependencyError naming the restgdf[geo] hint, not escape as a
+    raw ImportError."""
+    broken_import_error = ImportError("DLL load failed while importing ogrext")
+    assert broken_import_error.name is None
+
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=broken_import_error,
+    ):
+        with pytest.raises(OptionalDependencyError, match=r"restgdf\[geo\]"):
+            require_geopandas("test feature")
+
+
+def test_require_geopandas_missing_package_still_raises_optional_dependency_error():
+    """Existing missing-package path (ModuleNotFoundError) is unaffected by
+    widening the except clause to ImportError."""
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_missing_optional_import("geopandas"),
+    ):
+        with pytest.raises(
+            OptionalDependencyError,
+            match=r"'geopandas'.*restgdf\[geo\]",
+        ):
+            require_geopandas("test feature")
+
+
+def test_require_geopandas_unrelated_exception_still_propagates_raw():
+    """A genuinely unrelated (non-ImportError) exception during import must
+    NOT be swallowed by the widened except clause."""
+
+    def _raise_runtime_error(module_name: str) -> ModuleType:
+        raise RuntimeError("unrelated failure, not an import problem")
+
+    with patch(
+        "restgdf.utils._optional.import_module",
+        side_effect=_raise_runtime_error,
+    ):
+        with pytest.raises(RuntimeError, match="unrelated failure"):
+            require_geopandas("test feature")
