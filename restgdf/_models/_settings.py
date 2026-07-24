@@ -110,7 +110,12 @@ class Settings(BaseModel):
     user_agent: str = Field(
         default_factory=_default_user_agent,
         min_length=1,
-        description="User-Agent header sent on ArcGIS REST requests.",
+        description=(
+            "User-Agent value for ArcGIS REST requests. Legacy shim field "
+            "mirroring ``TransportConfig.user_agent`` (the transport-layer "
+            "source of truth from which the data-path request headers "
+            "default)."
+        ),
     )
     log_level: str = Field(
         default="WARNING",
