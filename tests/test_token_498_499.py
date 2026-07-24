@@ -5,6 +5,7 @@ RED-first — these fail until feat(BL-11) adds _call_with_auth_retry.
 
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
@@ -112,3 +113,121 @@ class TestAuthNotAttachedOn499:
         with pytest.raises(AuthNotAttachedError):
             await ts.get("https://example.com/query")
         ts.update_token.assert_not_awaited()
+
+
+class TestSingleFlightRefreshUnderConcurrent498:
+    """W2-4 (ASYNC-01): N concurrent 498s → exactly ONE /generateToken.
+
+    Without the snapshot double-check inside the 498 branch, every task that
+    won the refresh lock re-mints, so N concurrent 498s produce N mints. The
+    fix captures ``tok_before`` before the request and only refreshes when
+    ``self.token == tok_before`` under the lock (mirroring the proactive
+    ``update_token_if_needed`` double-check).
+    """
+
+    @pytest.mark.asyncio
+    async def test_n_concurrent_498s_trigger_exactly_one_mint(self):
+        from restgdf._models.credentials import AGOLUserPass
+        from restgdf.utils.token import ArcGISTokenSession
+
+        from tests.test_token import RecordingTokenSession
+
+        k = 12
+        session = RecordingTokenSession()
+        ts = ArcGISTokenSession(
+            session=session,
+            credentials=AGOLUserPass(username="user", password="password"),
+            token="tok-0",
+            expires=9999999999999,
+        )
+
+        resp_498 = _make_response(status=498, json_body={"error": {"code": 498}})
+        resp_200 = _make_response(status=200, json_body={"features": []})
+
+        # Barrier: hold every task's FIRST response until all k have issued
+        # their first request, so all k capture the same tok_before ("tok-0")
+        # and receive 498 *before* any refresh runs. This removes timing luck
+        # -- the dedupe must come from the snapshot check, not from tasks
+        # arriving after the first refresh already rotated the token.
+        arrived = 0
+        gate = asyncio.Event()
+        first_seen: set[int] = set()
+
+        async def flaky_get(url, **kwargs):
+            task_id = id(asyncio.current_task())
+            if task_id not in first_seen:
+                first_seen.add(task_id)
+                nonlocal arrived
+                arrived += 1
+                if arrived == k:
+                    gate.set()
+                await gate.wait()
+                return resp_498
+            return resp_200
+
+        session.get = flaky_get
+
+        mint_count = 0
+
+        async def rotating_update_token():
+            nonlocal mint_count
+            mint_count += 1
+            # Rotate the token so later lock-winners see self.token != tok_before
+            # and correctly SKIP the redundant mint.
+            ts.token = f"tok-{mint_count}"
+
+        ts.update_token = rotating_update_token
+
+        results = await asyncio.gather(
+            *(ts.get("https://example.com/query", params={"where": "1=1"}) for _ in range(k))
+        )
+
+        assert all(r.status == 200 for r in results)
+        assert mint_count == 1
+
+    @pytest.mark.asyncio
+    async def test_concurrent_498s_all_retry_with_refreshed_token(self):
+        """Every concurrent task still completes its retry after the single mint."""
+        from restgdf._models.credentials import AGOLUserPass
+        from restgdf.utils.token import ArcGISTokenSession
+
+        from tests.test_token import RecordingTokenSession
+
+        k = 8
+        session = RecordingTokenSession()
+        ts = ArcGISTokenSession(
+            session=session,
+            credentials=AGOLUserPass(username="user", password="password"),
+            token="tok-0",
+            expires=9999999999999,
+        )
+
+        resp_498 = _make_response(status=498, json_body={"error": {"code": 498}})
+        resp_200 = _make_response(status=200, json_body={"features": []})
+
+        arrived = 0
+        gate = asyncio.Event()
+        first_seen: set[int] = set()
+
+        async def flaky_get(url, **kwargs):
+            task_id = id(asyncio.current_task())
+            if task_id not in first_seen:
+                first_seen.add(task_id)
+                nonlocal arrived
+                arrived += 1
+                if arrived == k:
+                    gate.set()
+                await gate.wait()
+                return resp_498
+            return resp_200
+
+        session.get = flaky_get
+        ts.update_token = AsyncMock(side_effect=lambda: setattr(ts, "token", "fresh"))
+
+        results = await asyncio.gather(
+            *(ts.get("https://example.com/query") for _ in range(k))
+        )
+
+        assert len(results) == k
+        assert all(r.status == 200 for r in results)
+        assert ts.update_token.await_count == 1
