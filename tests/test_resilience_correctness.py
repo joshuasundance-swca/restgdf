@@ -18,6 +18,7 @@ per the repo's red-first rule.
 from __future__ import annotations
 
 import errno
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -252,3 +253,66 @@ class TestCooldownRaceSafety:
         monkeypatch.setattr("asyncio.sleep", fake_sleep)
         await reg.wait_if_cooling(key)
         assert key not in reg._deadlines
+
+
+# ---------------------------------------------------------------------------
+# H1-N4 — the restgdf.retry logger must actually emit (dead-logger fix)
+# ---------------------------------------------------------------------------
+
+
+def _retry_messages(caplog: pytest.LogCaptureFixture) -> list[str]:
+    return [r.getMessage() for r in caplog.records if r.name == "restgdf.retry"]
+
+
+class TestRetryLogging:
+    @pytest.mark.xfail(strict=True, reason="H1-N4: fixed in next commit")
+    @pytest.mark.asyncio
+    async def test_retry_scheduled_emits_debug_log(
+        self,
+        _fast_sleep: None,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger="restgdf.retry")
+        stub = StubSession(
+            [_server_disconnected(), _server_disconnected(), _FakeResponse(200)],
+        )
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
+        async with session.get(_SVC_URL) as resp:
+            await resp.read()
+        msgs = _retry_messages(caplog)
+        assert any(
+            "retry scheduled" in m and "attempt=" in m and "wait=" in m for m in msgs
+        ), msgs
+
+    @pytest.mark.xfail(strict=True, reason="H1-N4: fixed in next commit")
+    @pytest.mark.asyncio
+    async def test_429_cooldown_set_emits_debug_log(
+        self,
+        _fast_sleep: None,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger="restgdf.retry")
+        stub = StubSession(
+            [_FakeResponse(429, {"Retry-After": "0"}), _FakeResponse(200)],
+        )
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
+        async with session.get(_SVC_URL) as resp:
+            await resp.read()
+        msgs = _retry_messages(caplog)
+        assert any("cooldown set" in m for m in msgs), msgs
+
+    @pytest.mark.xfail(strict=True, reason="H1-N4: fixed in next commit")
+    @pytest.mark.asyncio
+    async def test_exhaustion_mapping_emits_debug_log(
+        self,
+        _fast_sleep: None,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        caplog.set_level(logging.DEBUG, logger="restgdf.retry")
+        stub = StubSession([_server_disconnected()] * 10)
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
+        with pytest.raises(TransportError):
+            async with session.get(_SVC_URL) as resp:
+                await resp.read()
+        msgs = _retry_messages(caplog)
+        assert any("exhaust" in m.lower() and "TransportError" in m for m in msgs), msgs
