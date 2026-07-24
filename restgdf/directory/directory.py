@@ -1,5 +1,3 @@
-from typing import Optional
-
 from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._models.crawl import CrawlReport, CrawlServiceEntry
 from restgdf._models.responses import LayerMetadata
@@ -34,7 +32,7 @@ class Directory:
         self,
         url: str,
         session: AsyncHTTPSession,
-        token: Optional[str] = None,
+        token: str | None = None,
     ):
         """Initialize a Directory instance.
 
@@ -58,10 +56,10 @@ class Directory:
         self.url = url
         self.session = session
         self.token = token
-        self.services: Optional[list[CrawlServiceEntry]] = None
-        self.services_with_feature_count: Optional[list[CrawlServiceEntry]] = None
-        self.metadata: Optional[LayerMetadata] = None
-        self.report: Optional[CrawlReport] = None
+        self.services: list[CrawlServiceEntry] | None = None
+        self.services_with_feature_count: list[CrawlServiceEntry] | None = None
+        self.metadata: LayerMetadata | None = None
+        self.report: CrawlReport | None = None
 
     async def prep(self):
         """Fetch and validate directory metadata from the server.

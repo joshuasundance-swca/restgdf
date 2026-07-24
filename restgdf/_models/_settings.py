@@ -33,7 +33,8 @@ import warnings
 from collections.abc import Mapping
 from importlib.metadata import PackageNotFoundError, version as package_version
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from pydantic import (
     BaseModel,

@@ -3,6 +3,12 @@
 All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+### Changed
+
+- Raised the supported Python floor to 3.11 (3.9 is EOL 2025-10-31; 3.10
+  reaches EOL 2026-10-31); CI now tests 3.11–3.14.
+
 ## [3.0.0] - 2026-05-02
 
 ## [2.0.0] - 2026-05-02
