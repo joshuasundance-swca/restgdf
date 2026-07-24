@@ -14,11 +14,11 @@ from __future__ import annotations
 import asyncio
 import datetime
 import importlib
-import logging
 from dataclasses import dataclass, field
 
 import aiohttp
 
+from restgdf._logging import get_logger
 from restgdf._models._drift import _parse_response
 from restgdf._models.credentials import AGOLUserPass, TokenSessionConfig
 from restgdf._models.responses import TokenResponse
@@ -34,7 +34,7 @@ from restgdf.errors import (
 
 from pydantic import SecretStr
 
-_auth_logger = logging.getLogger("restgdf.auth")
+_auth_logger = get_logger("auth")
 
 _MAX_TOKEN_RETRIES: int = 3  # Max /generateToken POST attempts
 
