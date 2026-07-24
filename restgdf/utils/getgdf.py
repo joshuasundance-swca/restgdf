@@ -699,6 +699,33 @@ async def _fetch_page_dict(
     return raw
 
 
+# W4-3 (PAGINATION-03): common ArcGIS backing-store IN-predicate element
+# cap. A single-node IN-list larger than this is bisected one more level
+# (via ``_cap_oid_chunks``) instead of being emitted as one oversized
+# literal list -- see ``_resolve_page``'s split branch.
+_SPLIT_OID_INLIST_CAP: int = 1000
+
+
+def _cap_oid_chunks(
+    oids: list[int],
+    cap: int = _SPLIT_OID_INLIST_CAP,
+) -> list[list[int]]:
+    """Recursively bisect ``oids`` until every chunk has at most ``cap`` elements.
+
+    Pure/sync -- no HTTP call, no truncation check. The per-node OID list
+    already shrinks geometrically as ``_resolve_page`` bisects on
+    ``exceededTransferLimit`` (N/2, N/4, ...); this helper applies the same
+    midpoint bisection *ahead of* the network round-trip whenever a single
+    half would still exceed the cap, so restgdf never emits one oversized
+    ``IN (...)`` literal. A list already at or under the cap (the common
+    case) returns as a single-element list unchanged.
+    """
+    if len(oids) <= cap:
+        return [oids]
+    mid = len(oids) // 2
+    return _cap_oid_chunks(oids[:mid], cap) + _cap_oid_chunks(oids[mid:], cap)
+
+
 async def _resolve_page(
     url: str,
     session: AsyncHTTPSession,
@@ -709,8 +736,18 @@ async def _resolve_page(
     depth: int,
     max_depth: int,
     request_kwargs: dict[str, Any],
+    oid_hint: tuple[str, list[int]] | None = None,
 ) -> AsyncGenerator[dict[str, Any]]:
-    """Yield ``page`` (and any sub-pages) honoring ``on_truncation``."""
+    """Yield ``page`` (and any sub-pages) honoring ``on_truncation``.
+
+    ``oid_hint`` (W4-3, PAGINATION-03): when the caller already holds the
+    materialized ``(oid_field, oids)`` pair backing this page's predicate
+    (a child node bisecting a parent's split half), pass it here to skip
+    the redundant ``get_object_ids`` round-trip -- the parent already
+    fetched the full OID list under the pre-bisection predicate, and each
+    half is a slice of it. ``None`` (the root call from ``_iter_pages_raw``,
+    which has no parent slice to reuse) falls back to fetching fresh.
+    """
     envelope = _parse_response(
         FeaturesResponse,
         page,
@@ -762,12 +799,17 @@ async def _resolve_page(
             url=f"{url}/query",
         )
     current_where = query_data.get("where", "1=1") or "1=1"
-    split_kwargs = {k: v for k, v in request_kwargs.items() if k != "data"}
-    split_kwargs["data"] = {
-        **(request_kwargs.get("data") or {}),
-        "where": current_where,
-    }
-    oid_field, oids = await get_object_ids(url, session, **split_kwargs)
+    if oid_hint:
+        # W4-3: reuse the parent's materialized slice -- no get_object_ids
+        # round-trip for this node.
+        oid_field, oids = oid_hint
+    else:
+        split_kwargs = {k: v for k, v in request_kwargs.items() if k != "data"}
+        split_kwargs["data"] = {
+            **(request_kwargs.get("data") or {}),
+            "where": current_where,
+        }
+        oid_field, oids = await get_object_ids(url, session, **split_kwargs)
     if len(oids) <= 1:
         raise RestgdfResponseError(
             f"{url}/query: on_truncation='split' could not bisect "
@@ -779,32 +821,38 @@ async def _resolve_page(
     mid = len(oids) // 2
     halves = (oids[:mid], oids[mid:])
     for half in halves:
-        half_where = combine_where_clauses(
-            current_where,
-            where_var_in_list(oid_field, half),
-        )
-        sub_qd = dict(query_data)
-        sub_qd["where"] = half_where
-        # Bisection changes the partitioning scheme; offset/count no longer apply.
-        sub_qd.pop("resultOffset", None)
-        sub_qd.pop("resultRecordCount", None)
-        sub_page = await _fetch_page_dict(
-            url,
-            session,
-            sub_qd,
-            **{k: v for k, v in request_kwargs.items() if k != "data"},
-        )
-        async for resolved in _resolve_page(
-            url,
-            session,
-            sub_page,
-            sub_qd,
-            on_truncation=on_truncation,
-            depth=depth + 1,
-            max_depth=max_depth,
-            request_kwargs=request_kwargs,
-        ):
-            yield resolved
+        # W4-3: cap each half's IN-list element count; a half that still
+        # exceeds the cap is bisected further (no network call) rather
+        # than emitted as one oversized literal list.
+        for capped_half in _cap_oid_chunks(half):
+            half_where = combine_where_clauses(
+                current_where,
+                where_var_in_list(oid_field, capped_half),
+            )
+            sub_qd = dict(query_data)
+            sub_qd["where"] = half_where
+            # Bisection changes the partitioning scheme; offset/count no
+            # longer apply.
+            sub_qd.pop("resultOffset", None)
+            sub_qd.pop("resultRecordCount", None)
+            sub_page = await _fetch_page_dict(
+                url,
+                session,
+                sub_qd,
+                **{k: v for k, v in request_kwargs.items() if k != "data"},
+            )
+            async for resolved in _resolve_page(
+                url,
+                session,
+                sub_page,
+                sub_qd,
+                on_truncation=on_truncation,
+                depth=depth + 1,
+                max_depth=max_depth,
+                request_kwargs=request_kwargs,
+                oid_hint=(oid_field, capped_half),
+            ):
+                yield resolved
 
 
 async def _iter_pages_raw(

@@ -147,3 +147,91 @@ async def test_iter_pages_raw_rejects_non_mapping_page_payload() -> None:
     with patch.object(getgdf_mod, "_arcgis_request", AsyncMock(return_value=response)):
         with pytest.raises(RestgdfResponseError, match="non-object JSON payload"):
             await _fetch_page_dict(url, object(), {"where": "1=1"})  # type: ignore[arg-type]
+
+
+# ---------------------------------------------------------------------------
+# W4-3 (PAGINATION-03): bound the split path's OID IN-lists and reuse the
+# parent's materialized slice instead of re-calling get_object_ids per node.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_resolve_page_split_reuses_parent_oid_slice_across_two_levels() -> None:
+    """A 2-level split calls get_object_ids only once (at the root)."""
+    url = "https://x/FeatureServer/0"
+    truncated = {"features": [], "exceededTransferLimit": True}
+    resolved_page = {"features": [{"attributes": {}}], "exceededTransferLimit": False}
+    fetch_calls: list[dict] = []
+
+    async def fake_fetch(_url, _session, query_data, **_kw):
+        fetch_calls.append(dict(query_data))
+        # Root fetch (#1) and the first-half sub-fetch (#2) both still
+        # report truncation, forcing a second bisection level; every
+        # fetch after that resolves cleanly.
+        if len(fetch_calls) in (1, 2):
+            return truncated
+        return resolved_page
+
+    with (
+        patch.object(
+            getgdf_mod,
+            "get_query_data_batches",
+            AsyncMock(return_value=[{"where": "1=1"}]),
+        ),
+        patch.object(getgdf_mod, "_fetch_page_dict", side_effect=fake_fetch),
+        patch.object(
+            getgdf_mod,
+            "get_object_ids",
+            AsyncMock(return_value=("OBJECTID", [1, 2, 3, 4, 5, 6, 7, 8])),
+        ) as mock_get_object_ids,
+    ):
+        agen = _iter_pages_raw(url, object(), on_truncation="split")  # type: ignore[arg-type]
+        results = [page async for page in agen]
+
+    # root fetch + half([1,2,3,4]) fetch + its two sub-halves + half([5..8]).
+    assert len(fetch_calls) == 5
+    assert len(results) == 3
+    # The child nodes reused the parent's held OID slice -- no re-fetch.
+    mock_get_object_ids.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_resolve_page_split_caps_oversized_inlist_and_recurses() -> None:
+    """A half exceeding the IN-list cap is bisected further, not emitted whole."""
+    url = "https://x/FeatureServer/0"
+    big_oid_list = list(range(1, 3001))  # 3000 OIDs -> each 1500-element half > cap
+    truncated = {"features": [], "exceededTransferLimit": True}
+    resolved_page = {"features": [{"attributes": {}}], "exceededTransferLimit": False}
+    fetch_calls: list[dict] = []
+
+    async def fake_fetch(_url, _session, query_data, **_kw):
+        fetch_calls.append(dict(query_data))
+        if len(fetch_calls) == 1:
+            return truncated
+        return resolved_page
+
+    with (
+        patch.object(
+            getgdf_mod,
+            "get_query_data_batches",
+            AsyncMock(return_value=[{"where": "1=1"}]),
+        ),
+        patch.object(getgdf_mod, "_fetch_page_dict", side_effect=fake_fetch),
+        patch.object(
+            getgdf_mod,
+            "get_object_ids",
+            AsyncMock(return_value=("OBJECTID", big_oid_list)),
+        ),
+    ):
+        agen = _iter_pages_raw(url, object(), on_truncation="split")  # type: ignore[arg-type]
+        results = [page async for page in agen]
+
+    sub_fetches = fetch_calls[1:]
+    # Each 1500-element half is bisected once more into two 750-element
+    # chunks (1000-element cap) instead of one 1500-element IN-list.
+    assert len(sub_fetches) == 4
+    assert len(results) == 4
+    for query_data in sub_fetches:
+        element_count = query_data["where"].count(",") + 1
+        assert element_count == 750
+        assert element_count <= 1000
