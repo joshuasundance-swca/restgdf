@@ -61,6 +61,31 @@ jobs:
       - name: Run tests
         run: python -m pytest -q -m "not network"
 
+  mypy:
+    name: mypy (deps-present)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package with all extras + mypy
+        # Deps-present type check: real aiohttp / pydantic / geo /
+        # resilience / telemetry types, unlike the intentionally lean
+        # pre-commit mypy hook. mypy is pinned to the mirrors-mypy hook
+        # version (v1.20.1) for parity. pandas / geopandas stay untyped
+        # via the pyproject ignore_missing_imports override (their
+        # published stubs surface intended-Any DataFrame boundaries as
+        # noise — TYPING-01 anti-recommendation), so no stub packages here.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,geo,resilience,telemetry]"
+          python -m pip install "mypy==1.20.1" types-requests
+      - name: Type-check restgdf (pydantic plugin, deps present)
+        run: python -m mypy restgdf/
+
   install_combinations:
     name: install-${{ matrix.label }}
     runs-on: ubuntu-latest
@@ -181,13 +206,13 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [lint, test, install_combinations, base_install, network, stress, docs]
+    needs: [lint, test, mypy, install_combinations, base_install, network, stress, docs]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate job results
         run: |
-          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ] || [ "${{ needs.stress.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
-            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} network=${{ needs.network.result }} stress=${{ needs.stress.result }} docs=${{ needs.docs.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.mypy.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ] || [ "${{ needs.stress.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} mypy=${{ needs.mypy.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} network=${{ needs.network.result }} stress=${{ needs.stress.result }} docs=${{ needs.docs.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."
@@ -195,13 +220,13 @@ jobs:
   ci-offline:
     name: ci-offline
     if: always()
-    needs: [lint, test, install_combinations, base_install, docs]
+    needs: [lint, test, mypy, install_combinations, base_install, docs]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate offline job results
         run: |
-          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
-            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} docs=${{ needs.docs.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.mypy.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} mypy=${{ needs.mypy.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} docs=${{ needs.docs.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."

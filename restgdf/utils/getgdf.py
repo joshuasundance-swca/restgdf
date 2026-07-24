@@ -9,7 +9,7 @@ import warnings
 from asyncio import gather
 from collections.abc import AsyncGenerator, Mapping
 from functools import reduce
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from aiohttp import ClientSession
 
@@ -501,14 +501,18 @@ async def gdf_by_concat(
 
 async def get_gdf(
     url: str,
-    session: ClientSession | None = None,
+    session: AsyncHTTPSession | None = None,
     where: str | None = None,
     token: str | None = None,
     **kwargs,
 ) -> GeoDataFrame:
     _require_geo_query_support("get_gdf()")
     owns_session = session is None
-    session = session or ClientSession()
+    # A bare aiohttp ClientSession satisfies AsyncHTTPSession at runtime
+    # (runtime_checkable presence check) but is not a static structural
+    # subtype under current aiohttp stubs (see _protocols.AsyncHTTPSession);
+    # cast bridges that gap rather than forcing aiohttp to conform (TYPING-04).
+    session = session or cast(AsyncHTTPSession, ClientSession())
     datadict = default_data(kwargs.pop("data", None) or {})
     if where is not None:
         datadict["where"] = where

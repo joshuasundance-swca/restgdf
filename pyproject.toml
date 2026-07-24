@@ -192,6 +192,17 @@ markers = [
 ]
 
 [tool.mypy]
+plugins = ["pydantic.mypy"]
+
+# pandas / geopandas are optional-extra (`geo`) deps whose import boundary is
+# deliberately untyped (Any). Published stubs exist (pandas-stubs,
+# types-geopandas) but installing them surfaces intended-Any DataFrame⇄list
+# conversion boundaries as noise (the TYPING-01 / W1-2 anti-recommendation
+# against a broad strict/stub flip), so scope-silence the missing imports here
+# rather than type-hardening the extras integration.
+[[tool.mypy.overrides]]
+module = ["pandas", "pandas.*", "geopandas", "geopandas.*"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["restgdf._client.*", "restgdf._models.*", "restgdf.compat"]

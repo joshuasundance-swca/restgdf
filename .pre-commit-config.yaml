@@ -27,8 +27,15 @@ repos:
     rev: v1.20.1
     hooks:
       - id: mypy
+        # Scope to the package to match the deps-present CI mypy job
+        # (`mypy restgdf/`); the isolated hook env stays lean (pydantic is
+        # required only so the `pydantic.mypy` plugin declared in
+        # pyproject `[tool.mypy]` can load). Extras (aiohttp/geo/resilience)
+        # are intentionally absent here — the CI job is the deps-present gate.
+        files: ^restgdf/
         additional_dependencies:
           - types-requests
+          - pydantic
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0

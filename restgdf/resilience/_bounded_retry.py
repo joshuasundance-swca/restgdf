@@ -34,7 +34,7 @@ __all__ = ["bounded_retry_timeout"]
 
 T = TypeVar("T")
 
-_TIMEOUT_EXCS: tuple[type[BaseException], ...] = (
+_TIMEOUT_EXCS: tuple[type[Exception], ...] = (
     asyncio.TimeoutError,
     TimeoutError,
     aiohttp.ServerTimeoutError,

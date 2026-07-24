@@ -23,12 +23,32 @@ from typing import Any, Protocol, runtime_checkable
 class AsyncHTTPSession(Protocol):
     """Structural type for restgdf transport sessions.
 
-    Matches :class:`aiohttp.ClientSession` and
-    :class:`~restgdf.utils.token.ArcGISTokenSession`, and is the
-    forward-compatible target for resilience/telemetry adapters
-    (BL-31 / BL-32). Only method/attribute *presence* is checked at
-    ``isinstance`` time; signature details are advisory per
-    :class:`typing.Protocol`.
+    This is a **runtime presence contract**: flagged
+    :func:`typing.runtime_checkable`, ``isinstance`` verifies only that
+    ``get`` / ``post`` / ``close`` / ``closed`` are present, and both
+    :class:`aiohttp.ClientSession` and
+    :class:`~restgdf.utils.token.ArcGISTokenSession` satisfy it at
+    runtime. It is the forward-compatible target for resilience /
+    telemetry adapters (BL-31 / BL-32).
+
+    Static-typing note (TYPING-02): restgdf's own
+    :class:`~restgdf.utils.token.ArcGISTokenSession` *is* a static
+    structural subtype of this Protocol, but
+    :class:`aiohttp.ClientSession` is **not**. Current aiohttp type
+    stubs declare ``get`` / ``post`` as
+    ``def get(self, url, **kwargs: Unpack[_RequestOptions])`` — a typed
+    keyword-args unpack that only accepts the specific ``_RequestOptions``
+    keys, which no ``**kwargs: Any`` protocol can be a supertype of. The
+    ``get`` / ``post`` signatures below therefore document the call
+    surface restgdf relies on; they are *not* a claim that
+    ``ClientSession`` is statically assignable here (only method/attribute
+    *presence* is guaranteed, per :class:`typing.Protocol`). Where a
+    concrete :class:`aiohttp.ClientSession` must reach an
+    ``AsyncHTTPSession``-typed seam (e.g. the bare session built inside
+    :func:`restgdf.utils.getgdf.get_gdf`), an explicit
+    :func:`typing.cast` bridges the runtime-valid-but-statically-unprovable
+    gap rather than forcing aiohttp to conform structurally (the audit's
+    explicit anti-recommendation).
 
     .. note::
        ``get`` and ``post`` are declared as non-async ``def`` because
