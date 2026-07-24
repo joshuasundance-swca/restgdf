@@ -191,3 +191,17 @@ jobs:
             exit 1
           fi
           echo "All required jobs succeeded."
+
+  ci-offline:
+    name: ci-offline
+    if: always()
+    needs: [lint, test, install_combinations, base_install, docs]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Aggregate offline job results
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} docs=${{ needs.docs.result }}"
+            exit 1
+          fi
+          echo "All required jobs succeeded."
