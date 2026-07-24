@@ -57,6 +57,10 @@ All notable changes to restgdf are documented here. This project follows
   minutes) and the deprecated synchronous `get_token` helper sends
   `expiration=60`. Behaviourally equivalent to the ArcGIS server-side
   default of 60 minutes; the value is now explicit on the wire.
+- The `dev` extra now composes `restgdf[doc]` and adds `build`+`twine`,
+  so `pip install -e ".[dev]"` alone is enough to run every gate in
+  `CONTRIBUTING.md`'s gate suite (docs build, packaging metadata sanity)
+  without installing `doc` separately.
 
 ### Security
 

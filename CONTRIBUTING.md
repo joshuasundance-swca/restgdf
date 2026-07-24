@@ -2,8 +2,7 @@
 
 Thanks for your interest in restgdf! This document captures the local
 workflow, commit conventions, and the gate suite contributors are
-expected to run before opening a pull request against
-`integration/3.0-rewrite` (or `main` once 3.0 is released).
+expected to run before opening a pull request against `main`.
 
 See also:
 
@@ -27,10 +26,11 @@ python -m pip install -e ".[dev,resilience,telemetry,geo]"
 python -m pre_commit install
 ```
 
-`.[dev]` covers testing + linting + docs tooling; adding
-`resilience`, `telemetry`, and `geo` gives you the full extras matrix
-locally. See [ARCHITECTURE.md §Extras](ARCHITECTURE.md#extras-matrix)
-for the trade-offs.
+`.[dev]` covers testing + linting + docs tooling + packaging (it
+composes `restgdf[doc]` and adds `build`/`twine`); adding `resilience`,
+`telemetry`, and `geo` gives you the full extras matrix locally. See
+[ARCHITECTURE.md §Extras](ARCHITECTURE.md#extras-matrix) for the
+trade-offs.
 
 ## Pull-request checklist
 
@@ -64,8 +64,9 @@ Before you open the PR, verify:
   `test:`, `docs:`, `ci:`, `build:`, `chore:`.
 - First line ≤ 72 characters, imperative mood.
 - Body wrapped at ~72 columns. Explain *why* first, then *what*.
-  Reference plan item IDs (e.g. `BL-46`) and backlog rows when
-  applicable.
+  Illustrative plan item IDs (e.g. `BL-46`) are welcome shorthand when a
+  change traces to a specific backlog entry — no `plan.md`/backlog file
+  ships in this repo, so treat the ID as context, not a cross-reference.
 - Sign commits with `Co-authored-by:` trailers for any shared work.
 - Keep each commit self-contained — each commit must pass the full
   gate suite on its own so `git bisect` stays useful.
@@ -83,7 +84,7 @@ implementation in a single commit.
 All commands assume the project root and an activated venv (or invoke
 `.venv\Scripts\python.exe` directly on Windows).
 
-Gates mirror plan.md §2 exactly:
+The gate suite below:
 
 | # | Command                                                                                      | Purpose                                 |
 |---|----------------------------------------------------------------------------------------------|-----------------------------------------|
@@ -106,7 +107,8 @@ light core (`aiohttp`, `pydantic`) plus opt-in extras:
 - `resilience` — `stamina`-based retry on transient network / HTTP 5xx.
 - `telemetry` — OpenTelemetry tracing hooks.
 - `geo` — `geopandas` / `pyogrio` GeoDataFrame conversion.
-- `dev` — testing + linting + docs (not shipped to end users).
+- `dev` — testing + linting + docs + packaging tooling (composes
+  `restgdf[doc]`, adds `build`/`twine`; not shipped to end users).
 
 Prefer `[extras]` over unconditional `install_requires` whenever a
 feature is optional. See [ARCHITECTURE.md §Extras](ARCHITECTURE.md#extras-matrix).

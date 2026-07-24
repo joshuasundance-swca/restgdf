@@ -82,7 +82,9 @@ telemetry = [
 ]
 
 dev = [
+    "restgdf[doc]",
     "aioresponses>=0.7.8",
+    "build",
     "bumpver",
     "coverage",
     "hypothesis",
@@ -92,6 +94,7 @@ dev = [
     "pytest",
     "pytest-asyncio",
     "setuptools>=82.0.1",
+    "twine",
 ]
 
 doc = [
