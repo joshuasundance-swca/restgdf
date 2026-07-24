@@ -16,6 +16,19 @@ All notable changes to restgdf are documented here. This project follows
   (`restgdf.resilience._limiter.LimiterRegistry.get`), so the limiter paces at
   the requested rate. Rates `>= 1` keep their existing burst semantics exactly
   (H1-M1).
+- **Mid-flight transport errors are now retried and mapped.** The resilient
+  retry path (`restgdf.resilience._retry`) previously retried and typed only
+  connect-time (`ClientConnectorError` → `TransportError`) and read-timeout
+  (`ServerTimeoutError` → `RestgdfTimeoutError`) failures. Server disconnects,
+  connection resets (`ServerDisconnectedError`, `ClientOSError`/ECONNRESET,
+  `ClientConnectionResetError`), and truncated response bodies
+  (`ClientPayloadError`) — the most common transient failures when crawling
+  thousands of flaky ArcGIS hosts — leaked out raw and unretried on the first
+  occurrence. They are now retried to exhaustion and surfaced as
+  `restgdf.errors.TransportError` (connection-shaped and payload/truncated-body
+  alike), so a caller catching `TransportError` no longer silently misses half
+  the transport failures. Deterministic 4xx responses still never retry
+  (H1-M2).
 
 ## [3.2.0] - 2026-07-24
 ### Added

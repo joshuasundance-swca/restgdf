@@ -160,7 +160,6 @@ _TRANSPORT_FACTORIES: list[tuple[str, Callable[[], Exception]]] = [
 
 
 class TestTransportErrorRetryAndMapping:
-    @pytest.mark.xfail(strict=True, reason="H1-M2: fixed in next commit")
     @pytest.mark.parametrize(
         ("_id", "make_exc"),
         _TRANSPORT_FACTORIES,

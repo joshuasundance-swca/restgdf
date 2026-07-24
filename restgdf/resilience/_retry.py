@@ -158,10 +158,17 @@ async def _do_retried_request(
 ) -> tuple[Any, Any]:
     """Execute request with stamina retry, token-bucket, and cooldown."""
     svc_root = _service_root(url)
+    # ``ClientConnectionError`` is the common base for every connection-shaped
+    # aiohttp failure — ``ClientConnectorError`` (DNS/connect), ``ClientOSError``
+    # (incl. ECONNRESET), ``ClientConnectionResetError``, ``ServerDisconnectedError``,
+    # and ``ServerTimeoutError`` — so retrying it covers mid-flight disconnects and
+    # resets that a bulk crawl routinely hits, not just connect-time and read-timeout
+    # failures. ``ClientPayloadError`` (truncated/incomplete body) is a sibling of
+    # ``ClientError`` outside that base, so it is listed separately.
     retry_on = (
         _RetryableHTTPError,
-        aiohttp.ClientConnectorError,
-        aiohttp.ServerTimeoutError,
+        aiohttp.ClientConnectionError,
+        aiohttp.ClientPayloadError,
     )
 
     @stamina.retry(
@@ -179,13 +186,8 @@ async def _do_retried_request(
         # Token-bucket rate limit
         if limiter is not None:
             await limiter.get(svc_root).acquire()
-        try:
-            dispatch = getattr(inner, method)
-            ctx, resp = await _enter_request(dispatch(url, **kwargs))
-        except aiohttp.ClientConnectorError:
-            raise  # retryable
-        except aiohttp.ServerTimeoutError:
-            raise  # retryable
+        dispatch = getattr(inner, method)
+        ctx, resp = await _enter_request(dispatch(url, **kwargs))
 
         if resp.status in _RETRYABLE_STATUS:
             headers = dict(getattr(resp, "headers", {}))
@@ -233,17 +235,25 @@ async def _do_retried_request(
             url=url,
             status_code=exc.status,
         ) from exc
-    except aiohttp.ClientConnectorError as exc:
-        raise TransportError(
-            f"Connection failed for {url}",
-            url=url,
-            status_code=None,
-        ) from exc
     except aiohttp.ServerTimeoutError as exc:
+        # ServerTimeoutError subclasses ClientConnectionError — map it first so
+        # read timeouts keep their dedicated RestgdfTimeoutError type fidelity.
         raise RestgdfTimeoutError(
             f"Read timeout: {exc}",
             url=url,
             timeout_kind="read",
+        ) from exc
+    except aiohttp.ClientPayloadError as exc:
+        raise TransportError(
+            f"Truncated or incomplete response body for {url}",
+            url=url,
+            status_code=None,
+        ) from exc
+    except aiohttp.ClientConnectionError as exc:
+        raise TransportError(
+            f"Connection failed for {url}",
+            url=url,
+            status_code=None,
         ) from exc
 
 
