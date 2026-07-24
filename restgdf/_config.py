@@ -341,7 +341,10 @@ class ResilienceConfig(BaseModel):
     sleeps count against it: honouring a ``Retry-After`` at or above
     ``retry_budget_s`` collapses the whole retry loop to roughly a single
     cooldown cycle before giving up. ``respect_retry_after_max_s`` caps how
-    long a single honoured ``Retry-After`` may be; setting it at or above
+    long a single honoured ``Retry-After`` may be -- one in-attempt cooldown
+    wait is bounded by the deadline in force when the attempt reaches it and
+    never chains a second wait, so the cap holds regardless of how many
+    requests are in flight on the same key; setting it at or above
     ``retry_budget_s`` therefore lets one cooldown consume the entire budget.
     Keep ``respect_retry_after_max_s`` below ``retry_budget_s`` if you want
     more than one real retry after a 429 (the defaults are deliberately equal

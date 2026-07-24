@@ -320,13 +320,17 @@ class TestCooldownRaceSafety:
                 reg.set_cooldown(key, 100.0)
 
         monkeypatch.setattr("asyncio.sleep", fake_sleep)
+        before = reg._deadlines[key]
         await reg.wait_if_cooling(key)
 
         # Buggy code slept once on the 0.05s deadline then unconditionally
         # popped, erasing the fresher 100s cooldown. The fix re-reads the
-        # deadline after sleeping and honours the newer one (a second sleep).
-        assert len(sleeps) >= 2
-        assert max(sleeps) > 1.0
+        # deadline after sleeping and leaves the newer one in place for the
+        # next attempt/request to honour -- WITHOUT chaining a second wait
+        # inside this call (see TestCooldownWaitIsBounded).
+        assert key in reg._deadlines
+        assert reg._deadlines[key] > before
+        assert len(sleeps) == 1
 
     @pytest.mark.asyncio
     async def test_wait_clears_own_deadline_when_unchanged(
@@ -366,6 +370,77 @@ class TestCooldownRaceSafety:
 
         monkeypatch.setattr("asyncio.sleep", fake_sleep)
         await reg.wait_if_cooling(key)
+        assert key not in reg._deadlines
+
+
+class TestCooldownWaitIsBounded:
+    """A single in-attempt cooldown wait must not scale with concurrency.
+
+    ``wait_if_cooling`` is awaited *inside* a retried attempt, and stamina
+    evaluates ``stop_after_delay`` only between attempts, so neither
+    ``max_attempts`` nor ``retry_budget_s`` can interrupt a wait that re-loops.
+    Chaining waits made one attempt block for 14.8s at concurrency 16 against a
+    0.5s cooldown, falsifying ``respect_retry_after_max_s``'s documented cap
+    (V1-M2).
+    """
+
+    @pytest.mark.asyncio
+    async def test_single_wait_even_under_repeated_concurrent_cooldowns(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        from restgdf.resilience._limiter import CooldownRegistry
+
+        reg = CooldownRegistry()
+        key = "https://example.com/arcgis/rest/services/W/FeatureServer"
+        reg.set_cooldown(key, 0.05)
+
+        sleeps: list[float] = []
+
+        async def fake_sleep(d: float, *a: Any, **kw: Any) -> None:
+            sleeps.append(d)
+            if len(sleeps) > 3:
+                raise AssertionError(
+                    "wait_if_cooling chained waits: one call must sleep once",
+                )
+            # Every wake loses the race to a fresh 429 on the same key -- the
+            # pathological shape that serialised every waiter pre-fix.
+            reg.set_cooldown(key, 100.0)
+
+        monkeypatch.setattr("asyncio.sleep", fake_sleep)
+        await reg.wait_if_cooling(key)
+
+        assert len(sleeps) == 1
+        assert sleeps[0] <= 0.05
+
+    @pytest.mark.asyncio
+    async def test_deferred_fresher_deadline_is_honoured_next_call(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Boundedness must not cost the N2 protection: the fresher deadline is
+        # deferred, not dropped -- the next attempt/request waits it out.
+        from restgdf.resilience._limiter import CooldownRegistry
+
+        reg = CooldownRegistry()
+        key = "https://example.com/arcgis/rest/services/V/FeatureServer"
+        reg.set_cooldown(key, 0.05)
+
+        sleeps: list[float] = []
+
+        async def fake_sleep(d: float, *a: Any, **kw: Any) -> None:
+            sleeps.append(d)
+            if len(sleeps) == 1:
+                reg.set_cooldown(key, 7.0)
+
+        monkeypatch.setattr("asyncio.sleep", fake_sleep)
+        await reg.wait_if_cooling(key)
+        assert len(sleeps) == 1
+        assert key in reg._deadlines
+
+        await reg.wait_if_cooling(key)
+        assert len(sleeps) == 2
+        assert sleeps[1] > 1.0
         assert key not in reg._deadlines
 
 

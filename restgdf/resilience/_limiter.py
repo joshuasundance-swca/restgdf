@@ -98,28 +98,39 @@ class CooldownRegistry:
     async def wait_if_cooling(self, key: str) -> None:
         """Sleep until *key*'s cooldown expires (no-op if none set).
 
-        After sleeping, re-reads the deadline before clearing it. A
-        concurrent :meth:`set_cooldown` (a fresh 429 on the same key) may
-        have installed a *newer* deadline while this waiter slept;
-        unconditionally popping would erase it, so this waiter is occasionally
-        not honoured at high concurrency (H1-N2). If the deadline changed
-        while sleeping, honour the new one; only clear it when it is unchanged.
+        **Bounded by construction:** one call sleeps at most until the deadline
+        observed on entry. It never chains a second sleep.
+
+        After sleeping, the deadline is re-read before being cleared. A
+        concurrent :meth:`set_cooldown` (a fresh 429 on the same key) may have
+        installed a *newer* deadline while this waiter slept; unconditionally
+        popping would erase it, so the newer deadline is left in place for the
+        next attempt/request to honour (H1-N2). Only a deadline this call
+        actually waited out — unchanged since entry — is cleared.
+
+        Re-waiting here instead would make a single in-attempt wait scale with
+        the number of concurrent waiters on the key (measured: 0.52s at
+        concurrency 1 rising to 14.8s at 16 against a 0.5s cooldown), which
+        neither ``max_attempts`` nor ``retry_budget_s`` can interrupt —
+        stamina evaluates ``stop_after_delay`` only *between* attempts — and
+        would falsify
+        :attr:`restgdf.ResilienceConfig.respect_retry_after_max_s`'s cap on a
+        single honoured ``Retry-After``.
         """
-        while True:
-            deadline = self._deadlines.get(key)
-            if deadline is None:
-                return
-            remaining = deadline - time.monotonic()
-            if remaining > 0:
-                await asyncio.sleep(remaining)
-            # Re-read after sleeping: a concurrent set_cooldown may have
-            # replaced the deadline we just waited on.
-            current = self._deadlines.get(key)
-            if current is None:
-                return
-            if current != deadline:
-                # A different (typically fresher) deadline was set — honour it.
-                continue
-            # Unchanged — safe to clear and finish.
-            self._deadlines.pop(key, None)
+        deadline = self._deadlines.get(key)
+        if deadline is None:
             return
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            await asyncio.sleep(remaining)
+        # Re-read after sleeping: a concurrent set_cooldown may have replaced
+        # the deadline we just waited on.
+        current = self._deadlines.get(key)
+        if current is None:
+            return
+        if current != deadline:
+            # A fresher deadline was installed while we slept. Leave it for the
+            # next attempt/request rather than chaining another wait here.
+            return
+        # Unchanged — this call waited it out, so clear it.
+        self._deadlines.pop(key, None)

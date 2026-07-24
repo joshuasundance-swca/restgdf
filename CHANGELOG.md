@@ -113,8 +113,14 @@ All notable changes to restgdf are documented here. This project follows
   stored deadline unconditionally after sleeping, so if a fresh 429 installed a
   *longer* cooldown while an older waiter was still asleep, the waking waiter
   erased the newer deadline — occasionally not honouring a cooldown at high
-  crawl concurrency. It now re-reads the deadline after sleeping and honours a
-  concurrently-set fresher one instead of clearing it (H1-N2).
+  crawl concurrency. It now re-reads the deadline after sleeping and leaves a
+  concurrently-set fresher one in place for the next attempt/request to honour
+  instead of clearing it (H1-N2). A single `wait_if_cooling` call sleeps at
+  most until the deadline it observed on entry and never chains a second wait,
+  so one attempt's cooldown stays bounded by `respect_retry_after_max_s`
+  however many requests are in flight on the key — stamina evaluates the retry
+  budget only *between* attempts, so an unbounded in-attempt sleep would be
+  uninterruptible.
 - **A single failing layer no longer discards a whole service's metadata.**
   `service_metadata` (`restgdf.utils.getinfo`) fanned its per-layer
   `get_metadata` calls out through `bounded_gather` with the default
