@@ -133,16 +133,34 @@ async def safe_crawl(
     """Crawl an ArcGIS REST directory and aggregate results + errors.
 
     Unlike :func:`fetch_all_data`, this function never short-circuits on
-    the first failure. Every recoverable error is captured as a typed
-    :class:`~restgdf._models.crawl.CrawlError` entry in
+    the first failure. Every recoverable *service-level* error is captured
+    as a typed :class:`~restgdf._models.crawl.CrawlError` entry in
     :attr:`CrawlReport.errors` and successful services are always
     present in :attr:`CrawlReport.services`.
 
-    The three failure stages are ``"base_metadata"`` (root
+    The three ``CrawlError`` stages are ``"base_metadata"`` (root
     ``get_metadata`` call), ``"folder_metadata"`` (per-folder
     ``get_metadata`` call), and ``"service_metadata"`` (per-service
     ``service_metadata`` call). When a folder's metadata fails, services
     discovered in earlier folders (and the base) are still returned.
+
+    **Per-layer failures are NOT ``CrawlError`` entries.** Since 3.3, a
+    layer whose metadata call fails is contained *inside*
+    ``service_metadata`` (H2-1) so its siblings survive: the service still
+    lands in :attr:`CrawlReport.services` with ``metadata`` populated, and
+    the failed layer stays in the layer list carrying a ``layer_error``
+    marker (``"<ExcType>: <message>"``). Nothing is added to
+    :attr:`CrawlReport.errors`, so ``len(report.errors)`` alone will report
+    a service whose every layer failed as healthy. Each contained failure
+    emits one ``WARNING`` on the ``restgdf.crawl`` logger, and the markers
+    are countable in the returned data::
+
+        broken = [
+            layer
+            for entry in report.services
+            for layer in (entry.metadata.layers if entry.metadata else [])
+            if getattr(layer, "layer_error", None)
+        ]
     """
     errors: list[CrawlError] = []
     services_raw: list[dict[str, Any]] = []

@@ -135,6 +135,21 @@ All notable changes to restgdf are documented here. This project follows
   failure is visible rather than silently dropped. A service-*root* metadata
   failure is unchanged — `safe_crawl` still records it as a whole-service
   `CrawlError` (H2-1).
+  **Monitoring note (behaviour change):** a contained per-layer failure is
+  *not* a `CrawlError`, so it no longer appears in `CrawlReport.errors` at all
+  — a service whose every layer failed now looks healthy if you only count
+  `len(report.errors)`. Count `layer_error` markers in the returned layer lists
+  instead. Each contained failure also emits one `WARNING` on the new
+  `restgdf.crawl` logger (`"layer metadata failed, contained: url=… error=…"`,
+  with `service_root` / `layer_id` / `exception_type` in the structured extra),
+  so a crawl has an aggregate failure signal without inspecting the data.
+  Containment is scoped to transport and response failures
+  (`RestgdfResponseError`, `TransportError`, `RestgdfTimeoutError`,
+  `aiohttp.ClientConnectionError`, `aiohttp.ClientPayloadError`, `TimeoutError`)
+  — deliberately *not* the `RestgdfError` / `aiohttp.ClientError` roots, so
+  `ConfigurationError`, `OptionalDependencyError` and `aiohttp.InvalidURL`
+  keep failing loudly on the first service instead of degrading into thousands
+  of identical markers.
 
 ## [3.2.0] - 2026-07-24
 ### Added

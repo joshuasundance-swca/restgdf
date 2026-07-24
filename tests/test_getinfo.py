@@ -1,13 +1,19 @@
 import asyncio
 import importlib
+import logging
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from aiohttp import ClientConnectionError, ClientSession
+from aiohttp import ClientConnectionError, ClientSession, InvalidURL
 from pandas import DataFrame
 
 from restgdf import get_config
-from restgdf.errors import FieldDoesNotExistError, RestgdfResponseError
+from restgdf.errors import (
+    ConfigurationError,
+    FieldDoesNotExistError,
+    OptionalDependencyError,
+    RestgdfResponseError,
+)
 from tests.id_schema_fixtures import load_id_schema_fixture
 from restgdf.utils.utils import ends_with_num, where_var_in_list
 from restgdf.utils.getinfo import (
@@ -815,3 +821,91 @@ async def test_service_metadata_still_raises_on_service_level_failure():
                 object(),
                 "https://example.com/service",
             )
+
+
+# ---------------------------------------------------------------------------
+# H2-1 follow-ups (V2-M1 / V2-M3): containment must be AUDIBLE, and it must
+# not absorb configuration / programming errors.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_service_metadata_logs_warning_per_contained_layer(caplog):
+    """A contained layer produces no ``CrawlError``, so it must at least
+    produce one ``restgdf.crawl`` WARNING naming the layer and the failure."""
+
+    async def fake_get_metadata(url, session, token=None):
+        if url.endswith("/service"):
+            return {"layers": [{"id": 0}, {"id": 1}, {"id": 2}]}
+        if url.endswith("/0"):
+            return {"type": "Feature Layer", "name": "ok"}
+        raise TimeoutError(f"{url} timed out")
+
+    with caplog.at_level(logging.WARNING, logger="restgdf.crawl"):
+        with patch(
+            "restgdf.utils.getinfo.get_metadata",
+            side_effect=fake_get_metadata,
+        ):
+            result = await service_metadata(
+                object(),
+                "https://example.com/service",
+            )
+
+    assert len(result.layers) == 3
+    records = [r for r in caplog.records if r.name == "restgdf.crawl"]
+    assert len(records) == 2, [r.getMessage() for r in records]
+    messages = sorted(r.getMessage() for r in records)
+    assert "https://example.com/service/1" in messages[0]
+    assert "TimeoutError" in messages[0]
+    assert "https://example.com/service/2" in messages[1]
+    assert records[0].levelno == logging.WARNING
+    assert records[0].exception_type == "TimeoutError"
+
+
+@pytest.mark.asyncio
+async def test_service_metadata_healthy_service_logs_nothing(caplog):
+    """Behaviour guard: no warning noise when every layer succeeds."""
+
+    async def fake_get_metadata(url, session, token=None):
+        if url.endswith("/service"):
+            return {"layers": [{"id": 0}]}
+        return {"type": "Feature Layer", "name": "ok"}
+
+    with caplog.at_level(logging.DEBUG, logger="restgdf"):
+        with patch(
+            "restgdf.utils.getinfo.get_metadata",
+            side_effect=fake_get_metadata,
+        ):
+            await service_metadata(object(), "https://example.com/service")
+
+    assert [r for r in caplog.records if r.name == "restgdf.crawl"] == []
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        ConfigurationError("RESTGDF_TIMEOUT_TOTAL_S must be > 0"),
+        OptionalDependencyError("geopandas is required; pip install restgdf[geo]"),
+        InvalidURL("http://[bad"),
+    ],
+    ids=["configuration", "optional_dependency", "invalid_url"],
+)
+@pytest.mark.asyncio
+async def test_service_metadata_does_not_contain_config_or_programming_errors(exc):
+    """V2-M3: the catch set is the transport/response subset, not the
+    ``RestgdfError`` / ``aiohttp.ClientError`` roots. A misconfiguration or a
+    missing optional dependency must still fail loudly on the first service
+    rather than degrading into thousands of identical ``layer_error`` strings.
+    """
+
+    async def fake_get_metadata(url, session, token=None):
+        if url.endswith("/service"):
+            return {"layers": [{"id": 0}, {"id": 1}]}
+        raise exc
+
+    with patch(
+        "restgdf.utils.getinfo.get_metadata",
+        side_effect=fake_get_metadata,
+    ):
+        with pytest.raises(type(exc)):
+            await service_metadata(object(), "https://example.com/service")

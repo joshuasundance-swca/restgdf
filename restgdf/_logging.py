@@ -30,6 +30,9 @@ LOGGER_SUFFIXES: Final[tuple[str, ...]] = (
     "pagination",
     "normalization",
     "schema_drift",
+    # 3.3: directory-crawl visibility -- per-layer metadata failures contained
+    # inside ``service_metadata`` are reported here at WARNING (H2-1 / V2-M1).
+    "crawl",
 )
 
 LOG_EXTRA_KEYS: Final[tuple[str, ...]] = (
