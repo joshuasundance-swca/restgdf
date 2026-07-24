@@ -16,6 +16,7 @@ from restgdf.errors import (
     TransportError,
 )
 from restgdf.resilience import ResilientSession
+from restgdf.resilience._errors import _parse_retry_after
 
 
 # ---------------------------------------------------------------------------
@@ -227,3 +228,34 @@ class TestRetryStaminaActive:
                 await resp.read()
         assert stub._call_count >= 3
         assert any(d > 0 for d in delays)
+
+
+class TestParseRetryAfterNonFinite:
+    """W2-7/TRANSPORT-02: _parse_retry_after must reject NaN/Inf/-Inf.
+
+    Non-finite floats parse successfully from ``float("nan")``/``float("inf")``
+    and pass the existing ``seconds < 0`` guard unmolested (NaN comparisons
+    are always False; +Inf is not negative), so they can poison the 429
+    cooldown deadline (``min(nan, cap)``) and the public
+    ``RateLimitError.retry_after`` attribute. Reject at the single parse
+    source.
+    """
+
+    @pytest.mark.parametrize("value", ["nan", "NaN", "inf", "-inf", "Infinity"])
+    def test_rejects_non_finite_values(self, value: str) -> None:
+        assert _parse_retry_after(value) is None
+
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [
+            ("120", 120.0),
+            ("-5", None),
+            ("not-a-number-or-date", None),
+        ],
+    )
+    def test_existing_parametric_cases_unaffected(
+        self,
+        value: str,
+        expected: float | None,
+    ) -> None:
+        assert _parse_retry_after(value) == expected
