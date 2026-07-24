@@ -4,6 +4,8 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [3.2.0] - 2026-07-24
 ### Added
 
 - **`FeatureLayer.from_config` / `Directory.from_config`** — opt-in
