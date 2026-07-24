@@ -700,7 +700,6 @@ async def test_service_metadata_sets_feature_count_none_when_count_lookup_fails(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason="H2-1: fixed in next commit")
 @pytest.mark.asyncio
 async def test_service_metadata_contains_layer_response_error():
     metadata_by_url = {
@@ -744,7 +743,6 @@ async def test_service_metadata_contains_layer_response_error():
     assert "Token Required" in dumped["layer_error"]
 
 
-@pytest.mark.xfail(strict=True, reason="H2-1: fixed in next commit")
 @pytest.mark.asyncio
 async def test_service_metadata_contains_layer_timeout():
     async def fake_get_metadata(url, session, token=None):
@@ -770,7 +768,6 @@ async def test_service_metadata_contains_layer_timeout():
     assert failed.model_dump(by_alias=True)["layer_error"].startswith("TimeoutError")
 
 
-@pytest.mark.xfail(strict=True, reason="H2-1: fixed in next commit")
 @pytest.mark.asyncio
 async def test_service_metadata_contains_layer_connection_error():
     async def fake_get_metadata(url, session, token=None):

@@ -90,6 +90,20 @@ All notable changes to restgdf are documented here. This project follows
   erased the newer deadline — occasionally not honouring a cooldown at high
   crawl concurrency. It now re-reads the deadline after sleeping and honours a
   concurrently-set fresher one instead of clearing it (H1-N2).
+- **A single failing layer no longer discards a whole service's metadata.**
+  `service_metadata` (`restgdf.utils.getinfo`) fanned its per-layer
+  `get_metadata` calls out through `bounded_gather` with the default
+  `return_exceptions=False`, so one layer that raised — a secured / deleted /
+  admin-disabled layer returning an ArcGIS `{"error": ...}` envelope
+  (`RestgdfError`), a dropped connection (`aiohttp.ClientError`), or a timeout
+  (`TimeoutError`) — cancelled its siblings and discarded the entire service's
+  layer inventory behind a single generic error (the exact failure mode at
+  public multi-server crawl scale). Such a layer is now contained: its siblings
+  are returned as before, and the failed layer stays present in the layer list
+  annotated with a `layer_error` marker (`"<ExcType>: <message>"`) so the
+  failure is visible rather than silently dropped. A service-*root* metadata
+  failure is unchanged — `safe_crawl` still records it as a whole-service
+  `CrawlError` (H2-1).
 
 ## [3.2.0] - 2026-07-24
 ### Added
