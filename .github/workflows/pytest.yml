@@ -1,21 +1,18 @@
 name: pytest
 
 on:
+  # No `paths:` filter — deliberately. `ci-offline` (below) is a REQUIRED
+  # branch-protection status check on main; with a path filter, a PR that
+  # touches only unlisted files (e.g. root-level markdown) never triggers
+  # this workflow, the required check never reports, and the PR is
+  # unmergeable without an admin bypass. Required checks and path filters
+  # do not compose — the gate must run on every PR.
   pull_request:
     branches: ["main"]
     types:
       - opened
       - synchronize
       - reopened
-    paths:
-      - ".github/workflows/**"
-      - "restgdf/**"
-      - "tests/**"
-      - "docs/**"
-      - "readthedocs.yaml"
-      - "pyproject.toml"
-      - "requirements.txt"
-      - ".pre-commit-config.yaml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
