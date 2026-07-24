@@ -132,10 +132,15 @@ per-service-root rate limiting, install the optional resilience extra:
 pip install restgdf[resilience]
 ```
 
-This adds `stamina` and `aiolimiter`. Wrap any `AsyncHTTPSession` with
-`restgdf.resilience.ResilientSession` and configure via
-`restgdf.resilience.ResilienceConfig` or `RESTGDF_RESILIENCE_ENABLED=1`.
-See [`MIGRATION.md`](MIGRATION.md) for details.
+This adds `stamina` and `aiolimiter`. Installing it applies nothing on its
+own: wrap any `AsyncHTTPSession` with `restgdf.resilience.ResilientSession`,
+configured via a `restgdf.ResilienceConfig` with `enabled=True`
+(`RESTGDF_RESILIENCE_ENABLED=1` sets that flag on the process-global config,
+but only a session you explicitly wrap with `ResilientSession` reads it —
+setting the env var alone does not add resilience to a `FeatureLayer` or
+`Directory` call). See [`MIGRATION.md`](MIGRATION.md) and the
+[polite bulk crawl recipe](https://restgdf.readthedocs.io/en/latest/recipes/bulk_crawl.html)
+for details.
 
 </details>
 
@@ -182,6 +187,22 @@ pip install "restgdf[geo]"
 - `FeatureLayer.fieldtypes`
 - pandas-backed helpers like `get_value_counts()` and `get_nested_count()`
 - low-level `restgdf.utils.getgdf` helpers
+
+Install the resilience extra for automatic retry with exponential back-off
+and configurable (per-service-root or per-host) rate limiting — useful for
+bulk/multi-server crawls:
+
+```bash
+pip install "restgdf[resilience]"
+```
+
+`restgdf[resilience]` adds `stamina` and `aiolimiter`. It changes no request
+behavior by itself — wrap your own `aiohttp.ClientSession` with
+`restgdf.resilience.ResilientSession` (configured via
+`restgdf.ResilienceConfig`) and pass the wrapped session as
+`session=` to `FeatureLayer`/`Directory`. See the
+[polite bulk crawl recipe](https://restgdf.readthedocs.io/en/latest/recipes/bulk_crawl.html)
+for a full worked example.
 
 Treat the split above as the stable dependency boundary: geo-enabled
 environments should depend on `restgdf[geo]` explicitly. See
@@ -465,3 +486,7 @@ contents.
 
 - [restgdf_api](https://github.com/joshuasundance-swca/restgdf_api)
 - [govgis_nov2023](https://huggingface.co/datasets/joshuasundance/govgis_nov2023)
+  — a bulk, multi-host crawl; see the
+  [polite bulk crawl recipe](https://restgdf.readthedocs.io/en/latest/recipes/bulk_crawl.html)
+  for the resilience + concurrency + User-Agent composition this kind of
+  workload needs.

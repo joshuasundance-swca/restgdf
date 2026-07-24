@@ -27,8 +27,30 @@ cfg = Config(
 ```
 
 The `restgdf.resilience` module logs every retry attempt, 429 cooldown, and
-error mapping through the `restgdf.retry` logger at **DEBUG** level.  Set
-the logger to `DEBUG` to see each attempt:
+error mapping through the `restgdf.retry` logger at **DEBUG** level:
+
+- `retry scheduled: attempt=N wait=…s caused_by=…` before each retried attempt.
+  The `wait` is the *scheduled* pre-jitter backoff — the actual sleep adds up
+  to `ResilienceConfig.wait_jitter_s` (default `1.0` s) on top, so a logged
+  `wait=0.500s` can be a 1.4 s sleep.
+- `429 cooldown set: key=… seconds=…` whenever a 429 sets a cooldown deadline
+  (the `key` is the service root, or the host when
+  `ResilienceConfig.limiter_key="host"`)
+- `retry exhausted: … mapped to <ExceptionType>` when retries give up and the
+  underlying failure is mapped to a `restgdf.errors` type
+
+Each record also carries structured `extra` fields — `limit_key` (the
+rate-limit/cooldown key), `retry_attempt`, `retry_delay_s`, `limiter_wait_s`
+and `exception_type` — for a structured-logging handler.
+
+Retries cover the request up to *headers received*. A failure raised while
+the response body is read (a truncated body, `aiohttp.ClientPayloadError`) is
+outside the retry scope and is not logged here — it surfaces raw to the
+caller.
+
+Set the logger to `DEBUG` to see each event (the `logging.basicConfig` call
+above already does this if the root logger is at `DEBUG`; use the line below
+if you only want `restgdf.retry` at a finer level than the rest of your app):
 
 ```python
 logging.getLogger("restgdf.retry").setLevel(logging.DEBUG)
@@ -75,18 +97,20 @@ Example:
 ```python
 from restgdf.errors import RateLimitError, RestgdfTimeoutError
 
-try:
-    await session.get(url).__aenter__()
-except RateLimitError as exc:
-    print(f"429 at {exc.url}, retry after {exc.retry_after}s")
-except RestgdfTimeoutError as exc:
-    print(f"Timeout ({exc.timeout_kind}) for {exc.url}")
+async def query_with_error_detail(session, url, params):
+    try:
+        async with session.get(url, params=params) as resp:
+            return await resp.json()
+    except RateLimitError as exc:
+        print(f"429 at {exc.url}, retry after {exc.retry_after}s")
+    except RestgdfTimeoutError as exc:
+        print(f"Timeout ({exc.timeout_kind}) for {exc.url}")
 ```
 
 ## Integrating with OpenTelemetry
 
 For full distributed tracing with automatic span creation, install the
-``restgdf[telemetry]`` extra — see the :doc:`/recipes/observability` recipe.
+``restgdf[telemetry]`` extra — see the {doc}`/recipes/observability` recipe.
 The example below shows how to add *manual* spans around resilience-wrapped
 calls using the structured error attributes:
 
@@ -119,8 +143,10 @@ When a 429 response is received, the retry wrapper:
 
 1. Parses the `Retry-After` header (integer seconds or RFC 7231 HTTP-date).
 2. Clamps the value to `ResilienceConfig.respect_retry_after_max_s` (default 60 s).
-3. Sets a *cooldown deadline* for the service root — subsequent requests to
-   the same `FeatureServer`/`MapServer` wait until the deadline passes.
+3. Sets a *cooldown deadline* keyed by `ResilienceConfig.limiter_key`
+   (default `"service_root"` — subsequent requests to the same
+   `FeatureServer`/`MapServer` wait until the deadline passes; `"host"`
+   applies the same cooldown to every service on that host).
 4. Stamina's exponential back-off then retries the request.
 
 The cooldown is **separate** from the token-bucket limiter — a 429 does
