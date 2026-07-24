@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from email.utils import parsedate_to_datetime
 
@@ -12,7 +13,8 @@ def _parse_retry_after(value: str) -> float | None:
     Supports both integer-seconds (``"120"``) and RFC 7231 HTTP-date
     formats (``"Sun, 06 Nov 1994 08:49:37 GMT"``).
 
-    Returns ``None`` for empty, unparsable, or negative values.
+    Returns ``None`` for empty, unparsable, negative, or non-finite
+    (NaN/Inf/-Inf) values.
     """
     if not value or not value.strip():
         return None
@@ -22,7 +24,7 @@ def _parse_retry_after(value: str) -> float | None:
     # Try integer/float seconds first
     try:
         seconds = float(value)
-        if seconds < 0:
+        if not math.isfinite(seconds) or seconds < 0:
             return None
         return seconds
     except ValueError:

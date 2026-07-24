@@ -8,8 +8,20 @@ Values resolve in this order (highest precedence first):
 1. **Explicit constructor arguments** — e.g. ``FeatureLayer.from_url(timeout=…)``
 2. **``Config(...)`` instance** passed explicitly
 3. **Process environment variables** (``RESTGDF_*``)
-4. **``.env`` file** in the working directory
-5. **Library defaults**
+4. **Library defaults**
+
+``restgdf`` does not read a ``.env`` file itself — ``Config.from_env()`` resolves values
+from the process environment (``os.environ``) only, and ``python-dotenv`` is not a
+``restgdf`` dependency. If you want ``.env``-file support, load it explicitly and pass
+the merged mapping in:
+
+.. code-block:: python
+
+   from dotenv import dotenv_values
+   from restgdf import Config
+   import os
+
+   cfg = Config.from_env(env={**dotenv_values(".env"), **os.environ})
 
 Quick start
 -----------

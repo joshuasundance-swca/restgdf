@@ -73,7 +73,32 @@ _LOG_LEVEL_ALIASES: Mapping[str, str] = {"WARN": "WARNING", "FATAL": "CRITICAL"}
 
 
 class TransportConfig(BaseModel):
-    """HTTP transport knobs (TLS, user agent)."""
+    """HTTP transport knobs (TLS, user agent).
+
+    Single source of truth for the **library-owned data-request** transport.
+    These two fields are the one place a caller sets the data-path TLS and
+    User-Agent behavior. The application seams that carry them into requests
+    -- the ``restgdf.utils._http`` request layer and the ``getgdf`` TLS
+    connector -- are the *designated* consumers: they read from these fields
+    (rather than any hardcoded value or separate flag) so a single change
+    here governs the whole data path. Those seams own the wiring; this
+    config only fixes where they read from.
+
+    * ``verify_ssl`` is the authoritative TLS-verification flag for
+      library-owned data-request sessions. It is deliberately **distinct**
+      from
+      :attr:`restgdf._models.credentials.TokenSessionConfig.verify_ssl`,
+      which is an explicit per-session override applied to the
+      ``/generateToken`` POST and token-attached data requests. The two are
+      NOT defaulted from one another: ``TokenSessionConfig`` never implicitly
+      reads ``get_config().transport.verify_ssl`` (that would make a
+      session-scoped knob follow a process-wide singleton). To harmonize
+      them, pass the same value to both explicitly.
+    * ``user_agent`` is the source the data-path request headers default
+      from. Do NOT re-introduce a hardcoded ``User-Agent`` at a leaf call
+      site -- change the default here (or ``RESTGDF_TRANSPORT_USER_AGENT``)
+      instead.
+    """
 
     model_config = _FROZEN
 

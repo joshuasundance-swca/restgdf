@@ -34,6 +34,29 @@ All notable changes to restgdf are documented here. This project follows
   (surfaced by stdlib `logging` as a swallowed stderr
   "--- Logging error ---" dump). `span_context_fields()` is unaffected
   and still returns `{}` outside a span.
+- `restgdf.utils.token._auth_logger` (the `restgdf.auth` logger backing
+  token-refresh debug logging) is now created through the library's
+  `get_logger("auth")` factory instead of a raw `logging.getLogger(...)`
+  call, so it carries the documented `NullHandler` like every other
+  `restgdf.*` logger (it previously silently lacked one).
+- `restgdf.resilience._errors._parse_retry_after` now rejects non-finite
+  `Retry-After` header values (`"nan"`, `"inf"`, `"-inf"`, `"Infinity"`,
+  etc.) instead of returning them as a poisoned `float`. Previously a
+  `NaN`/`+Inf` value passed the existing negative-value guard unmolested
+  and could reach the 429 cooldown deadline computation and the public
+  `RateLimitError.retry_after` attribute.
+- The optional-dependency gate (`require_pandas`/`require_geopandas`/
+  `require_pyogrio` and friends) now catches `ImportError` instead of only
+  `ModuleNotFoundError`, so a present-but-broken geo dependency (e.g. a
+  native GDAL/shapely load failure) surfaces as `OptionalDependencyError`
+  naming the `restgdf[geo]` hint instead of escaping as a raw, unwrapped
+  `ImportError`.
+- Removed the false `.env` file-loading claims from `docs/configuration.rst`'s
+  precedence list and `docs/authentication.rst`'s credentials recipe. `restgdf`
+  has never read `.env` files or depended on `python-dotenv`/`pydantic-settings`
+  — `Config.from_env()` resolves only from the process environment (`os.environ`).
+  The docs now show how to opt in explicitly with `python-dotenv` yourself
+  (W3-5, CONFIG-04).
 
 ## [3.1.0] - 2026-07-24
 ### Added

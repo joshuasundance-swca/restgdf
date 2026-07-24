@@ -30,7 +30,7 @@ def _import_optional_module(module_name: str, feature: str) -> ModuleType:
     """Import an optional dependency with a restgdf-specific error message."""
     try:
         return import_module(module_name)
-    except ModuleNotFoundError as exc:
+    except ImportError as exc:
         missing_module = exc.name or module_name
         raise _optional_dependency_error(feature, missing_module) from exc
 
