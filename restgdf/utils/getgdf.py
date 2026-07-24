@@ -11,7 +11,7 @@ from collections.abc import AsyncGenerator, Mapping
 from functools import reduce
 from typing import TYPE_CHECKING, Any, Literal, cast
 
-from aiohttp import ClientSession
+from aiohttp import ClientSession, TCPConnector
 
 from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._config import get_config
@@ -508,11 +508,24 @@ async def get_gdf(
 ) -> GeoDataFrame:
     _require_geo_query_support("get_gdf()")
     owns_session = session is None
-    # A bare aiohttp ClientSession satisfies AsyncHTTPSession at runtime
-    # (runtime_checkable presence check) but is not a static structural
-    # subtype under current aiohttp stubs (see _protocols.AsyncHTTPSession);
-    # cast bridges that gap rather than forcing aiohttp to conform (TYPING-04).
-    session = session or cast(AsyncHTTPSession, ClientSession())
+    if session is None:
+        # W4-5 (CONFIG-01/AUTH-03 part C): build the library-owned bare
+        # session with a connector whose TLS policy comes from the
+        # TransportConfig source of truth (W3-1), so
+        # RESTGDF_TRANSPORT_VERIFY_SSL=false is honored on the GeoDataFrame
+        # data path. A caller-supplied session is left untouched -- its own
+        # connector owns its TLS policy (no per-leaf ssl= injection).
+        #
+        # A bare aiohttp ClientSession satisfies AsyncHTTPSession at runtime
+        # (runtime_checkable presence check) but is not a static structural
+        # subtype under current aiohttp stubs (see _protocols.AsyncHTTPSession);
+        # cast bridges that gap rather than forcing aiohttp to conform (TYPING-04).
+        session = cast(
+            AsyncHTTPSession,
+            ClientSession(
+                connector=TCPConnector(ssl=get_config().transport.verify_ssl),
+            ),
+        )
     datadict = default_data(kwargs.pop("data", None) or {})
     if where is not None:
         datadict["where"] = where

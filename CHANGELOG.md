@@ -40,6 +40,16 @@ All notable changes to restgdf are documented here. This project follows
   session built with `verify_ssl=False` (self-signed ArcGIS Enterprise)
   no longer fails TLS verification on the actual query/metadata requests.
   A caller-supplied `ssl=` still wins (W2-10 / CONFIG-01 / AUTH-03).
+- The library-owned session that `get_gdf` builds when called with
+  `session=None` is now constructed with a `TCPConnector` whose `ssl`
+  policy comes from `get_config().transport.verify_ssl` (default `True`),
+  so `RESTGDF_TRANSPORT_VERIFY_SSL=false` / `TransportConfig(verify_ssl=False)`
+  is finally honored on the flagship GeoDataFrame data path — previously
+  the bare `ClientSession()` used the default connector and silently kept
+  TLS verification on. A **caller-supplied** session is passed through
+  untouched (its own connector owns its TLS policy). This completes the
+  three-seam verify_ssl wiring (config source W3-1, token/`_http` W2-10,
+  getgdf connector W4-5 / CONFIG-01 / AUTH-03).
 - `FeatureLayer.get_gdf`/`get_unique_values`/`get_value_counts`/
   `get_nested_count` now return an independent copy of the cached
   frame/list on every call (W5-1, ASYNC-02) instead of the shared cached
