@@ -48,7 +48,24 @@ All notable changes to restgdf are documented here. This project follows
 
 ## [3.0.0] - 2026-05-02
 
-## [2.0.0] - 2026-05-02
+restgdf 3.0.0 is a major, backwards-incompatible rewrite. The package
+splits into a light async core (`aiohttp` + `pydantic` v2) plus three
+opt-in extras — `restgdf[geo]` (GeoPandas/pandas/pyogrio),
+`restgdf[resilience]` (`ResilientSession`/`ResilienceConfig` retry and
+rate-limiting via `stamina`/`aiolimiter`), and `restgdf[telemetry]`
+(`RestgdfInstrumentor` OpenTelemetry instrumentation) — so a base
+install stays dependency-light. A typed streaming surface
+(`iter_pages`, `stream_features`, `stream_feature_batches`,
+`stream_rows`, `stream_gdf_chunks`) replaces the legacy synchronous
+helpers, with query-verb selection centralized in `_choose_verb`/
+`_arcgis_request` (`restgdf/utils/_http.py`). `restgdf.Config` adds
+layered, frozen pydantic sub-configs resolved from
+`RESTGDF_<CATEGORY>_<FIELD>` env vars, and `restgdf.errors` grows a
+wider exception taxonomy including a five-member `AuthenticationError`
+hierarchy. See `MIGRATION.md` for the full breaking-change list; the
+detailed change set below was carried forward from the pre-release
+tranche.
+
 ### Changed
 
 - **Gate-3 hardening follow-up.** Three review-driven
