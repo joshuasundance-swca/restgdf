@@ -393,7 +393,7 @@ class Config(BaseModel):
     ``Config`` instance somewhere and expecting it to override the process
     global would silently do nothing. To change resolved configuration, set
     the ``RESTGDF_*`` environment variables (then call
-    :func:`reset_config_cache`) -- the single documented precedence is
+    ``reset_config_cache``) -- the single documented precedence is
     constructor/aiohttp kwargs > env vars > model defaults, resolved
     process-globally. The separate, intentionally session-scoped
     ``ArcGISTokenSession(config=...)`` / ``TokenSessionConfig`` injection is
