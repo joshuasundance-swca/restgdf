@@ -375,6 +375,11 @@ class ArcGISTokenSession:
         )
         request_payload = self.update_dict(payload)
         kwargs.setdefault("timeout", default_timeout())
+        # W2-10 (CONFIG-01/AUTH-03): forward the token session's own
+        # verify_ssl to token-attached data requests, mirroring the
+        # /generateToken POST. setdefault so a caller-supplied ssl= wins;
+        # it also carries into the 498-retry call below (shared **kwargs).
+        kwargs.setdefault("ssl", self.verify_ssl)
 
         session_method = getattr(self.session, method)
         resp = await session_method(

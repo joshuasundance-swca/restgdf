@@ -4,8 +4,28 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Changed
+
+- The default `User-Agent` on ArcGIS REST data requests is now sourced from
+  `get_config().transport.user_agent` (default `restgdf/<version>`, e.g.
+  `restgdf/3.1.0`) instead of the hardcoded `"Mozilla/5.0"`
+  (`restgdf.utils._http.default_headers`, W2-10 / CONFIG-01 / AUTH-03).
+  **Wire-visible behavior change:** some Esri deployments sniff the
+  `User-Agent`, so a WAF or usage policy keyed on `"Mozilla/5.0"` may now
+  see `restgdf/<version>`. Override it explicitly per request
+  (`headers={"User-Agent": ...}`, still wins) or globally via
+  `RESTGDF_TRANSPORT_USER_AGENT` / `TransportConfig.user_agent`. The
+  exported `DEFAULT_METADATA_HEADERS` constant keeps its historical value
+  for back-compat but no longer determines the wire `User-Agent`.
+
 ### Fixed
 
+- `ArcGISTokenSession` now forwards its own `verify_ssl` flag to
+  token-attached **data** requests (not just the `/generateToken` POST), via
+  `setdefault("ssl", self.verify_ssl)` in `_call_with_auth_retry` — so a
+  session built with `verify_ssl=False` (self-signed ArcGIS Enterprise)
+  no longer fails TLS verification on the actual query/metadata requests.
+  A caller-supplied `ssl=` still wins (W2-10 / CONFIG-01 / AUTH-03).
 - `restgdf.utils.token._auth_logger` (the `restgdf.auth` logger backing
   token-refresh debug logging) is now created through the library's
   `get_logger("auth")` factory instead of a raw `logging.getLogger(...)`
