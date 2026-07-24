@@ -12,7 +12,7 @@ authors:
 repository-code: "https://github.com/joshuasundance-swca/restgdf"
 url: "https://restgdf.readthedocs.io/"
 license: MIT
-version: 3.1.0
+version: 3.2.0
 date-released: "2026-07-24"
 keywords:
   - geopandas
