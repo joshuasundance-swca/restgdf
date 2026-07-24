@@ -2,8 +2,9 @@
 
 ## What this is
 
-`restgdf` is a **lightweight async Esri/ArcGIS REST client** for Python ≥ 3.9, published to
-PyPI as a Production/Stable library (currently v3.0.0). The light core depends only on
+`restgdf` is a **lightweight async Esri/ArcGIS REST client** for Python ≥ 3.11, published to
+PyPI as a Production/Stable library (currently v3.0.0; a 3.1.0 release carrying the Python
+floor bump and other `## [Unreleased]` CHANGELOG entries is pending). The light core depends only on
 `aiohttp` + `pydantic` v2; GeoPandas/pandas, retry/rate-limiting, and OpenTelemetry are
 **optional extras** (`geo`, `resilience`, `telemetry`). The two public entry points are
 `FeatureLayer` (one ArcGIS feature layer) and `Directory` (service discovery / crawl).
@@ -23,11 +24,11 @@ namespace plus `restgdf.{adapters,compat,utils,errors}`.
   bullet under `## [Unreleased]`.
 - **`README.md`** — user-facing usage; **`SECURITY.md`** — vuln reporting + supply-chain.
 
-> Companion docs predate the 3.0 release in places and carry **known drift** (e.g. SECURITY.md
-> supported-versions table, CONTRIBUTING's `integration/3.0-rewrite` branch target,
-> ARCHITECTURE.md's `ErrorPayload`/`.env`/logger-name claims, an empty `## [3.0.0]` CHANGELOG
-> header). **When code and companion prose disagree, the code is the source of truth.** The
-> `audit-recommendations/` directory catalogs the specific drift.
+> Companion docs predate the 3.0 release in places and carry **known drift** (e.g.
+> CONTRIBUTING's `integration/3.0-rewrite` branch target and ARCHITECTURE.md's
+> `ErrorPayload`/`.env`/logger-name claims). **When code and companion prose disagree, the
+> code is the source of truth.** The `audit-recommendations/` directory catalogs the specific
+> drift; the remediation program is closing it item by item.
 
 ## Commands
 
@@ -71,7 +72,8 @@ on its own (so `git bisect` stays useful).
 - **Public surface is lazy (PEP 562):** `restgdf/__init__.py` resolves a 54-name `__all__`
   through `_LAZY_EXPORTS` via module `__getattr__`. Three internal duplications (`__all__`,
   `_LAZY_EXPORTS`, the `TYPE_CHECKING` import block) must stay in sync — they can drift
-  undetected (`FieldDoesNotExistError` is already missing from the `TYPE_CHECKING` block).
+  undetected (all three surfaces list `FieldDoesNotExistError` as of #193/W5-7; watch for the
+  next name that drifts).
 - **`FeatureLayer.from_url()` issues exactly two network calls** (metadata `?f=json` GET, count
   POST), then everything else is lazy. `.where(clause)` reuses the parent's cached metadata and
   only re-issues the scoped count.
@@ -133,9 +135,14 @@ on its own (so `git bisect` stays useful).
 - **Per-instance caches are not concurrency-safe:** `FeatureLayer.uniquevalues/valuecounts/`
   `nestedcount/gdf` are plain dicts with no lock; concurrent awaiters double-fetch, and
   multi-field results are returned by reference (mutating the result mutates the cache).
-- **Token transport:** a token in the `data` dict on a *plain* `aiohttp` session can be GET-
-  serialized into the URL when the encoded request is < 8192 bytes (the credential-leak guard
-  only triggers for body/query transport on an `ArcGISTokenSession`). Prefer header transport.
+- **Token transport (fixed in 3.1, AUTH-01):** a token in the `data` dict on a *plain*
+  `aiohttp` session used to be GET-serializable into the URL when the encoded request was
+  < 8192 bytes (the credential-leak guard previously only triggered for body/query transport
+  on an `ArcGISTokenSession`). `restgdf/utils/_http.py` now forces `POST` whenever the
+  outgoing body carries a token, regardless of session type or encoded length. Prefer header
+  transport regardless — it never touches this length-based routing at all.
 - **CI surprises:** the PR-gating `pytest.yml` does **not** run coverage (the 97% floor is only
-  checked post-merge in `coverage.yml`), and there is no CI gate on direct push/merge to `main`
-  (`pytest.yml` is `pull_request`-only). Run the local gate before merging.
+  checked post-merge in `coverage.yml` — this gap closes once W1-3 lands). `ci-offline` (a
+  `pytest.yml` job) IS now a required GitHub branch-protection status check on `main`, so a PR
+  cannot merge until it is green; `pytest.yml` itself still only triggers on `pull_request`
+  (no separate workflow re-runs it on a direct push). Run the local gate before merging.
