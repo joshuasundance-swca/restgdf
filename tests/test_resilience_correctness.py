@@ -17,15 +17,11 @@ per the repo's red-first rule.
 
 from __future__ import annotations
 
-import errno
-import logging
 from typing import Any
 
-import aiohttp
 import pytest
 
 from restgdf._config import ResilienceConfig
-from restgdf.errors import RestgdfError, TransportError
 from restgdf.resilience import ResilientSession
 from restgdf.resilience._limiter import LimiterRegistry
 
@@ -55,7 +51,10 @@ class _FakeResponse:
 class StubSession:
     """AsyncHTTPSession stub replaying queued responses/exceptions."""
 
-    def __init__(self, responses: list[_FakeResponse | Exception] | None = None) -> None:
+    def __init__(
+        self,
+        responses: list[_FakeResponse | Exception] | None = None,
+    ) -> None:
         self._responses = list(responses or [])
         self._call_count = 0
         self._closed = False
@@ -106,14 +105,12 @@ class TestSubOneRateLimit:
         assert lim.max_rate == 5.0
         assert lim.time_period == 1
 
-    @pytest.mark.xfail(strict=True, reason="H1-M1: fixed in next commit")
     def test_sub_one_rate_construction_uses_stretched_period(self) -> None:
         # 0.5 req/s => 1 token every 2 seconds, not AsyncLimiter(0.5, 1).
         lim = LimiterRegistry(rate_per_second=0.5).get("svc")
         assert lim.max_rate == 1
         assert lim.time_period == pytest.approx(2.0)
 
-    @pytest.mark.xfail(strict=True, reason="H1-M1: fixed in next commit")
     @pytest.mark.asyncio
     async def test_sub_one_rate_request_succeeds(self, _fast_sleep: None) -> None:
         stub = StubSession([_FakeResponse(200)])

@@ -43,10 +43,21 @@ class LimiterRegistry:
         self._limiters: dict[str, AsyncLimiter] = {}
 
     def get(self, service_root: str) -> AsyncLimiter:
-        """Return (or create) the limiter for *service_root*."""
+        """Return (or create) the limiter for *service_root*.
+
+        ``AsyncLimiter.acquire(1)`` refuses any amount above ``max_rate``,
+        so a fractional ``max_rate`` (rate < 1 req/s with ``time_period=1``)
+        crashes on the very first request. For sub-1 rates we instead spell
+        the bucket as one token per ``1 / rate`` seconds — the idiomatic
+        aiolimiter form — which paces at the requested rate. Rates >= 1 keep
+        the historical ``AsyncLimiter(rate, 1)`` burst semantics exactly.
+        """
         lim = self._limiters.get(service_root)
         if lim is None:
-            lim = AsyncLimiter(max_rate=self._rate, time_period=1)
+            if self._rate >= 1:
+                lim = AsyncLimiter(max_rate=self._rate, time_period=1)
+            else:
+                lim = AsyncLimiter(max_rate=1, time_period=1 / self._rate)
             self._limiters[service_root] = lim
         return lim
 

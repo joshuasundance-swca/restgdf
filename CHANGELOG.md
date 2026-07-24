@@ -4,6 +4,18 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Fixed
+
+- **Sub-1.0 rate limits no longer crash.** A
+  `ResilienceConfig.rate_per_service_root_per_second` below `1.0` (e.g. `0.5`
+  req/s — the natural setting for a polite bulk crawl) previously raised a raw,
+  unmapped `ValueError` ("Can't acquire more than the maximum capacity") on the
+  very first request, because the limiter built `AsyncLimiter(rate, 1)` and
+  `acquire(1)` refuses any amount above a fractional `max_rate`. Sub-1 rates are
+  now spelled as one token per `1 / rate` seconds
+  (`restgdf.resilience._limiter.LimiterRegistry.get`), so the limiter paces at
+  the requested rate. Rates `>= 1` keep their existing burst semantics exactly
+  (H1-M1).
 
 ## [3.2.0] - 2026-07-24
 ### Added
