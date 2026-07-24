@@ -15,6 +15,7 @@ import asyncio
 import datetime
 import importlib
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 import aiohttp
 
@@ -28,11 +29,17 @@ from restgdf._compat import _warn_deprecated
 from restgdf.errors import (
     AuthNotAttachedError,
     AuthenticationError,
+    InvalidCredentialsError,
+    RestgdfError,
+    RestgdfResponseError,
     TokenExpiredError,
     TokenRefreshFailedError,
 )
 
 from pydantic import SecretStr
+
+if TYPE_CHECKING:
+    from restgdf._config import AuthConfig
 
 _auth_logger = get_logger("auth")
 
@@ -112,6 +119,15 @@ class ArcGISTokenSession:
     fails fast with :class:`~restgdf._models.RestgdfResponseError`
     rather than surfacing as a 401 or an ``aiohttp`` error deep in
     the request path.
+
+    ``__post_init__`` never reads the process-global
+    :func:`~restgdf._config.get_config`: a plain
+    ``ArcGISTokenSession(session, credentials)`` keeps its dataclass
+    defaults (e.g. ``token_refresh_threshold=60``). The
+    :class:`~restgdf._config.AuthConfig` refresh knobs are config
+    holders, not auto-applied; opt in explicitly with
+    :meth:`from_config` when you want the ``RESTGDF_AUTH_*`` namespace to
+    drive a session's refresh timing / transport.
     """
 
     session: aiohttp.ClientSession
@@ -166,6 +182,37 @@ class ArcGISTokenSession:
             self.token_refresh_threshold = (
                 self.config.refresh_leeway_seconds + self.config.clock_skew_seconds
             )
+
+    @classmethod
+    def from_config(
+        cls,
+        session: aiohttp.ClientSession,
+        credentials: AGOLUserPass,
+        *,
+        config: AuthConfig | None = None,
+    ) -> ArcGISTokenSession:
+        """Build a token session from an :class:`~restgdf._config.AuthConfig` (opt-in).
+
+        W3-3 (CONFIG-02, hybrid decision): this classmethod is the ONLY
+        sanctioned path by which an ``AuthConfig`` namespace flows into a
+        session. It is strictly opt-in — nothing constructs a session this
+        way implicitly, and ``__post_init__`` never reaches into the
+        process-global config.
+
+        When *config* is ``None`` the process-global ``get_config().auth`` is
+        read, but **only here at call time**, never at import time. The
+        ``AuthConfig`` refresh knobs are projected onto a validated
+        :class:`~restgdf._models.credentials.TokenSessionConfig` via
+        :meth:`~restgdf._models.credentials.TokenSessionConfig.from_auth_config`,
+        so the effective refresh window is ``refresh_leeway_s + clock_skew_s``
+        (default ``150``), not the bare dataclass default of ``60``.
+        """
+        if config is None:
+            from restgdf._config import get_config
+
+            config = get_config().auth
+        token_session_config = TokenSessionConfig.from_auth_config(config, credentials)
+        return cls(session=session, config=token_session_config)
 
     @property
     def token_request_payload(self) -> dict:
@@ -307,13 +354,57 @@ class ArcGISTokenSession:
                     timeout=default_timeout(),
                     ssl=self.verify_ssl,
                 ) as resp:
-                    resp.raise_for_status()
+                    # W2-2 (AUTH-02/ERRTAX-01): a true-HTTP 4xx from
+                    # /generateToken must not escape as a raw
+                    # aiohttp.ClientResponseError. Map credential-rejection
+                    # statuses to InvalidCredentialsError and every other
+                    # non-2xx to RestgdfResponseError, both under the
+                    # RestgdfError umbrella, chained from the aiohttp error.
+                    # Scope this to the raise_for_status edge only: the
+                    # HTTP-200 JSON-error-envelope path is left to the strict
+                    # TokenResponse tier below (raise_for_status no-ops on 200).
+                    try:
+                        resp.raise_for_status()
+                    except aiohttp.ClientResponseError as exc:
+                        if exc.status in (400, 401, 403):
+                            raise InvalidCredentialsError(
+                                f"{exc.status} credential rejection from "
+                                f"{self.token_url}",
+                                context=self.token_url,
+                                cause=exc,
+                            ) from exc
+                        raise RestgdfResponseError(
+                            f"{exc.status} non-2xx from {self.token_url}",
+                            context=self.token_url,
+                            status_code=exc.status,
+                        ) from exc
                     data = await resp.json()
                 envelope = _parse_response(TokenResponse, data, context=self.token_url)
                 self.token = envelope.token
                 self.expires = envelope.expires
                 _auth_logger.debug("auth.refresh.success url=%s", self.token_url)
                 return
+            except RestgdfError:
+                # W2-3 (ERRTAX-02): restgdf's own deterministic errors
+                # co-inherit OSError via PermissionError
+                # (AuthenticationError -> PermissionError -> OSError). Without
+                # this guard placed BEFORE `except _RETRYABLE_ERRORS`, the
+                # None-credentials AuthenticationError from
+                # token_request_payload, the W2-2 InvalidCredentialsError, and
+                # the TokenResponse parse RestgdfResponseError would all be
+                # swept into the OSError retry bucket and mislabeled
+                # TokenRefreshFailedError. The match is by real exception
+                # instance (MRO), never by class name. Nothing raised inside
+                # the try that is a RestgdfError is a retryable transient, so
+                # it propagates immediately (no backoff). It is still a refresh
+                # failure, so it emits the documented auth.refresh.failure event.
+                _auth_logger.debug(
+                    "auth.refresh.failure url=%s attempt=%d/%d",
+                    self.token_url,
+                    attempt,
+                    _MAX_TOKEN_RETRIES,
+                )
+                raise
             except _RETRYABLE_ERRORS as exc:
                 last_exc = exc
                 _auth_logger.debug(
@@ -388,6 +479,26 @@ class ArcGISTokenSession:
           raise :class:`TokenExpiredError`.
         * **499** (Token Required): raise :class:`AuthNotAttachedError`
           immediately — no refresh, no retry.
+
+        W2-5 (ERRTAX-03) — **deferred, documented HTTP-status-only scope.**
+        Detection reads ``resp.status`` only; the common ArcGIS in-body
+        envelope shape (HTTP 200 carrying ``{"error": {"code": 498|499}}``)
+        is intentionally NOT inspected here. Reading the body in this retry
+        helper would consume the response stream that every downstream caller
+        re-reads, so in-body detection cannot live at this seam — it requires
+        lifting the refresh/retry decision into the parse layer
+        (``_models/_drift._parse_response``, W5-owned). This is a low-severity
+        resilience/ergonomics enhancement, not a correctness gap: an in-body
+        499 already surfaces as :class:`~restgdf.errors.RestgdfResponseError`
+        via the strict parse tier, so no data is silently lost; only callers
+        catching :class:`~restgdf.errors.TokenExpiredError` /
+        :class:`~restgdf.errors.AuthNotAttachedError` *specifically* miss the
+        in-body shape. **Owner:** a future reactive-auth-detection design pass
+        coordinated with the ``_drift.py`` owner. **Trigger to revisit:** a
+        maintainer go decision to change the documented status-only contract
+        (CHANGELOG BL-11 / MIGRATION R-14 / ARCHITECTURE "HTTP 498/499"), or
+        field reports of ArcGIS servers returning 498/499 as HTTP-200
+        envelopes causing silent auth failures for such callers.
         """
         await self.update_token_if_needed()
 

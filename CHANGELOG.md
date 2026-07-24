@@ -44,7 +44,46 @@ All notable changes to restgdf are documented here. This project follows
   exported `DEFAULT_METADATA_HEADERS` constant keeps its historical value
   for back-compat but no longer determines the wire `User-Agent`.
 
+### Added
+
+- `ArcGISTokenSession.from_config(session, credentials, config=...)` and
+  `TokenSessionConfig.from_auth_config(auth_config, credentials)` — opt-in
+  factories that thread an `AuthConfig` namespace (its `transport`,
+  `header_name`, `referer`, `token_url`, and `refresh_leeway_s`/`clock_skew_s`
+  refresh knobs) onto a validated token session (W3-3 / W2-11, CONFIG-02 /
+  AUTH-04). This is the **only** sanctioned way `AuthConfig` reaches a session:
+  it is strictly opt-in and read only at call time. `ArcGISTokenSession`
+  construction remains unchanged — `__post_init__` never reads the
+  process-global `get_config()`, so a plain `ArcGISTokenSession(session,
+  credentials)` keeps its dataclass defaults (e.g. `token_refresh_threshold=60`
+  rather than the AuthConfig-derived `150`). When `config` is omitted,
+  `from_config` reads `get_config().auth`.
+
 ### Fixed
+
+- **A 4xx from `/generateToken` no longer escapes as a raw
+  `aiohttp.ClientResponseError`.** `ArcGISTokenSession.update_token` now maps a
+  true-HTTP `400`/`401`/`403` credential rejection to
+  `restgdf.errors.InvalidCredentialsError` and any other non-2xx to
+  `restgdf.errors.RestgdfResponseError`, both under the `RestgdfError` umbrella
+  and chaining the originating aiohttp error as `__cause__` (W2-2 / AUTH-02 /
+  ERRTAX-01). The error is raised deterministically (not retried). The
+  HTTP-200 `{"error": {...}}` bad-credentials envelope path is unchanged (still
+  `RestgdfResponseError` via the strict `TokenResponse` tier). The
+  `InvalidCredentialsError` docstring now describes the 4xx contract, and
+  `TokenRequiredError` is documented as reserved/not-raised (a 499 surfaces as
+  `AuthNotAttachedError`, the single live 499 raise site).
+- **The token refresh retry filter no longer swallows deterministic auth
+  errors.** restgdf's own exceptions co-inherit `OSError` via `PermissionError`
+  (`AuthenticationError` → `PermissionError` → `OSError`), so a None-credentials
+  `AuthenticationError` (and the new W2-2 `InvalidCredentialsError`) were being
+  caught by the `OSError` retry bucket, retried three times, and re-raised as
+  the wrong class (`TokenRefreshFailedError`). An `except RestgdfError: raise`
+  guard now sits *before* the retryable-error handler, so deterministic restgdf
+  errors propagate immediately with zero backoff, distinguished by real
+  exception instance (MRO) rather than by class name. Genuine transient
+  `OSError`/`ConnectionError`/`asyncio.TimeoutError` still hit the retry ladder
+  (W2-3 / ERRTAX-02).
 
 - `ArcGISTokenSession` reactive token refresh is now single-flight under
   concurrent `498 Invalid Token` responses: it snapshots the token before
