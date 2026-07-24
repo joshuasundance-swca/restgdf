@@ -61,6 +61,34 @@ jobs:
       - name: Run tests
         run: python -m pytest -q -m "not network"
 
+  coverage:
+    name: coverage (>=97%)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install package with all test extras
+        # Mirrors coverage.yml's environment (single Python version, all
+        # extras) so the PR-time number matches the post-merge badge job.
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev,geo,resilience,telemetry]"
+      - name: Run coverage (offline suite only, marker-explicit)
+        # NEVER a bare `coverage run` here: [tool.coverage.run]
+        # command_line defaults to "-m pytest" with no marker filter, so
+        # an unqualified `coverage run` (as coverage.yml uses, since it
+        # only regenerates the post-merge badge) would silently pull in
+        # the live `network`/`stress` suites. Pass the markers explicitly
+        # to match CONTRIBUTING.md gate #2 exactly, then enforce the
+        # floor as its own step so a shortfall fails loudly.
+        run: |
+          python -m coverage run -m pytest -q -m "not network"
+          python -m coverage report --fail-under=97
+
   mypy:
     name: mypy (deps-present)
     runs-on: ubuntu-latest
@@ -206,13 +234,13 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [lint, test, mypy, install_combinations, base_install, network, stress, docs]
+    needs: [lint, test, mypy, coverage, install_combinations, base_install, network, stress, docs]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate job results
         run: |
-          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.mypy.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ] || [ "${{ needs.stress.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
-            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} mypy=${{ needs.mypy.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} network=${{ needs.network.result }} stress=${{ needs.stress.result }} docs=${{ needs.docs.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.mypy.result }}" != "success" ] || [ "${{ needs.coverage.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.network.result }}" != "success" ] || [ "${{ needs.stress.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} mypy=${{ needs.mypy.result }} coverage=${{ needs.coverage.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} network=${{ needs.network.result }} stress=${{ needs.stress.result }} docs=${{ needs.docs.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."
@@ -220,13 +248,13 @@ jobs:
   ci-offline:
     name: ci-offline
     if: always()
-    needs: [lint, test, mypy, install_combinations, base_install, docs]
+    needs: [lint, test, mypy, coverage, install_combinations, base_install, docs]
     runs-on: ubuntu-latest
     steps:
       - name: Aggregate offline job results
         run: |
-          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.mypy.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
-            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} mypy=${{ needs.mypy.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} docs=${{ needs.docs.result }}"
+          if [ "${{ needs.lint.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ] || [ "${{ needs.mypy.result }}" != "success" ] || [ "${{ needs.coverage.result }}" != "success" ] || [ "${{ needs.install_combinations.result }}" != "success" ] || [ "${{ needs.base_install.result }}" != "success" ] || [ "${{ needs.docs.result }}" != "success" ]; then
+            echo "One or more required jobs failed: lint=${{ needs.lint.result }} test=${{ needs.test.result }} mypy=${{ needs.mypy.result }} coverage=${{ needs.coverage.result }} install-combinations=${{ needs.install_combinations.result }} base-install=${{ needs.base_install.result }} docs=${{ needs.docs.result }}"
             exit 1
           fi
           echo "All required jobs succeeded."
