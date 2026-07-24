@@ -61,10 +61,24 @@ if TYPE_CHECKING:
     from geopandas import GeoDataFrame
     from pandas import DataFrame
 
+    from restgdf._config import Config
+
 
 def _require_featurelayer_geo_support(feature: str) -> None:
     """Fail fast for FeatureLayer GeoDataFrame helpers on base installs."""
     require_geo_stack(feature)
+
+
+def _auth_token_from_config(config: Config) -> str | None:
+    """Return the plaintext ``config.auth.token`` (unwrapped), or ``None``.
+
+    W5-14: the single ``AuthConfig`` value consumed by the opt-in
+    ``from_config`` construction seam. The credential is unwrapped from its
+    :class:`pydantic.SecretStr` only here, at the point it is threaded into
+    the request token.
+    """
+    secret = config.auth.token
+    return secret.get_secret_value() if secret is not None else None
 
 
 class FeatureLayer:
@@ -243,6 +257,62 @@ class FeatureLayer:
         self = cls(url, **kwargs)
         await self.prep()
         return self
+
+    @classmethod
+    async def from_config(
+        cls,
+        url: str,
+        config: Config,
+        **kwargs: Any,
+    ) -> FeatureLayer:
+        """Opt-in constructor that applies an explicit ``Config``'s auth token.
+
+        This is the FeatureLayer-side consume seam for the config hybrid
+        (CONFIG-02 / W5-14). It is **opt-in and explicit**: the caller passes
+        a ``config`` object; ``from_config`` never reads the process-global
+        :func:`~restgdf.get_config` on its own, and neither this method nor
+        :meth:`__init__` implicitly sources configuration at construction
+        time. Pass ``config=get_config()`` if the process config is wanted.
+
+        The one setting consumed is ``config.auth.token`` -- forwarded as the
+        layer ``token`` (the only ``AuthConfig`` field ``FeatureLayer``
+        natively accepts) -- then delegated to :meth:`from_url`. Every other
+        request/transport setting still resolves through the process-global
+        config at request time (the designated W2-10 seam); a directly built
+        ``Config`` is not otherwise threaded into the request path (CONFIG-03,
+        see :class:`restgdf.Config`).
+
+        Transport note: the forwarded token rides the standard
+        ``FeatureLayer(token=...)`` body/query path (AUTH-01 forces POST so it
+        is never serialized into the URL). For header-transport secured
+        services, prefer building an ``ArcGISTokenSession.from_config(...)``
+        and passing it as ``session=`` instead.
+
+        Parameters
+        ----------
+        url : str
+            ArcGIS REST FeatureLayer endpoint URL (must end with a numeric id).
+        config : restgdf.Config
+            An explicit configuration instance (required -- no implicit
+            process-global default).
+        **kwargs
+            Forwarded to :meth:`from_url` (``session``, ``where``, extra HTTP
+            request args). Do not also pass ``token=`` -- it is sourced from
+            ``config.auth.token``.
+
+        Returns
+        -------
+        FeatureLayer
+            A fully prepared instance.
+
+        See Also
+        --------
+        from_url : The underlying constructor this delegates to.
+        """
+        token = _auth_token_from_config(config)
+        if token is not None:
+            kwargs.setdefault("token", token)
+        return await cls.from_url(url, **kwargs)
 
     async def get_oids(self) -> list[int]:
         """Return all object IDs matching the current WHERE filter.

@@ -1,8 +1,13 @@
+from typing import TYPE_CHECKING
+
 from restgdf._client._protocols import AsyncHTTPSession
 from restgdf._models.crawl import CrawlReport, CrawlServiceEntry
 from restgdf._models.responses import LayerMetadata
 from restgdf.utils.getinfo import get_metadata
 from restgdf.utils.crawl import fetch_all_data, safe_crawl  # noqa: F401
+
+if TYPE_CHECKING:
+    from restgdf._config import Config
 
 
 class Directory:
@@ -96,6 +101,39 @@ class Directory:
         self = cls(url, **kwargs)
         await self.prep()
         return self
+
+    @classmethod
+    async def from_config(
+        cls,
+        url: str,
+        config: "Config",
+        **kwargs,
+    ) -> "Directory":
+        """Opt-in constructor applying an explicit ``Config``'s auth token.
+
+        Mirrors :meth:`restgdf.FeatureLayer.from_config` (CONFIG-02 / W5-14):
+        **opt-in and explicit** -- the caller passes ``config``; nothing here
+        or in :meth:`__init__` implicitly reads the process-global
+        :func:`~restgdf.get_config` at construction. ``config.auth.token`` is
+        unwrapped and forwarded as the directory ``token``, then delegated to
+        :meth:`from_url`. Other transport settings still resolve through the
+        process-global config at request time; a directly built ``Config`` is
+        not otherwise threaded into the request path (CONFIG-03).
+
+        Parameters
+        ----------
+        url : str
+            ArcGIS Server directory endpoint URL.
+        config : restgdf.Config
+            An explicit configuration instance (required).
+        **kwargs
+            Forwarded to :meth:`from_url` (``session``). Do not also pass
+            ``token=`` -- it is sourced from ``config.auth.token``.
+        """
+        secret = config.auth.token
+        if secret is not None:
+            kwargs.setdefault("token", secret.get_secret_value())
+        return await cls.from_url(url, **kwargs)
 
     async def crawl(
         self,
