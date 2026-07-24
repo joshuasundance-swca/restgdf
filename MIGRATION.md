@@ -331,18 +331,33 @@ required to materialize the frame.
 **Resilience extra** (`pip install restgdf[resilience]`)
 
 - `restgdf.resilience.ResilientSession` wraps any `AsyncHTTPSession`
-  with stamina-based retry (429/5xx awareness, configurable
-  max-attempts) and per-service-root token-bucket rate limiting.
+  with stamina-based retry (429/5xx awareness) and token-bucket rate
+  limiting.
 - Controlled by `restgdf.ResilienceConfig` (a peer sub-config on
   `Config.resilience`). Disabled by default; opt in via
   `RESTGDF_RESILIENCE_ENABLED=1` or `ResilienceConfig(enabled=True)`.
   When disabled, `ResilientSession` is a zero-overhead pass-through.
+  `enabled` is the sole gate.
+- Retry attempts and backoff are tunable on `ResilienceConfig`
+  (**3.3+**): `max_attempts` (default `5`), `retry_budget_s` (total
+  wall-clock budget, default `60.0`), and the backoff shape
+  `wait_initial_s` / `wait_max_s` / `wait_jitter_s` (`0.5` / `10.0` /
+  `1.0`). Defaults preserve the pre-3.3 hardcoded policy exactly. These
+  supersede the inert, now-**deprecated** `RetryConfig.max_attempts` /
+  `RetryConfig.max_delay_s` (removed in 4.0).
 - `LimiterRegistry` (backed by `aiolimiter.AsyncLimiter`) and
-  `CooldownRegistry` provide per-service-root rate limiting and
-  separate 429 back-off. The `_service_root()` helper truncates the
-  URL at `FeatureServer` / `MapServer` / `ImageServer` / `SceneServer`
-  to derive the rate-limit key. Cooldown is separate from the token
-  bucket — 429 back-off does NOT drain tokens.
+  `CooldownRegistry` provide the rate limiting and separate 429
+  back-off. `ResilienceConfig.rate_per_service_root_per_second` sets the
+  rate (sub-1.0 rates such as `0.5` are valid from 3.3); the
+  granularity is chosen by `ResilienceConfig.limiter_key` (**3.3+**):
+  `"service_root"` (default) keys per ArcGIS service root via the
+  `_service_root()` helper (truncated at `FeatureServer` / `MapServer`
+  / `ImageServer` / `SceneServer`), while `"host"` keys per
+  `scheme://host` so one polite rate covers every service behind a
+  host. The 429 cooldown follows the same selected key. `"host"`
+  supersedes the inert, now-**deprecated** `LimiterConfig.rate_per_host`
+  (removed in 4.0). Cooldown is separate from the token bucket — 429
+  back-off does NOT drain tokens.
 
 **Telemetry extra** (`pip install restgdf[telemetry]`)
 
@@ -413,8 +428,13 @@ happen in a future major release.
 - `TransportConfig` — user-agent, default headers, verify-SSL.
 - `TimeoutConfig` — `total_s` (default `30.0`); replaces the flat
   `Settings.timeout_seconds`.
-- `RetryConfig` — stamina knobs surfaced via the resilience extra.
-- `LimiterConfig` — aiolimiter token-bucket knobs.
+- `RetryConfig` — **deprecated (3.3)**, inert. `max_attempts` /
+  `max_delay_s` were never read by the executor; the live retry knobs
+  are `ResilienceConfig.max_attempts` / `ResilienceConfig.retry_budget_s`.
+  Removed in 4.0.
+- `LimiterConfig` — **deprecated (3.3)**, inert. `rate_per_host` was
+  never read; use `ResilienceConfig.rate_per_service_root_per_second`
+  with `ResilienceConfig.limiter_key="host"`. Removed in 4.0.
 - `ConcurrencyConfig` — `max_concurrent_requests` (default **8**,
   matches aiohttp `TCPConnector` default). Enforced at the three
   internal `asyncio.gather` sites (orchestrator call paths), not at
@@ -425,9 +445,14 @@ happen in a future major release.
 - `TelemetryConfig` — `enabled` (default `False`), log level, span
   attributes.
 - `ResilienceConfig` — opt-in wrapper for the stamina-based retry
-  policy and per-service-root token-bucket rate limiter. Disabled by
-  default (`enabled=False`); toggle via `RESTGDF_RESILIENCE_ENABLED=1`
-  or an explicit `ResilienceConfig(enabled=True, ...)`.
+  policy and token-bucket rate limiter, and (from 3.3) the single home
+  for the executor's live retry/limiter knobs: `max_attempts`,
+  `retry_budget_s`, `wait_initial_s`, `wait_max_s`, `wait_jitter_s`,
+  `rate_per_service_root_per_second`, and `limiter_key`
+  (`"service_root"` | `"host"`). Disabled by default (`enabled=False`,
+  the sole gate); toggle via `RESTGDF_RESILIENCE_ENABLED=1` or an
+  explicit `ResilienceConfig(enabled=True, ...)`. All knobs also resolve
+  from `RESTGDF_RESILIENCE_*` env vars.
 
 Use `restgdf.get_config()` to resolve the process-wide cached instance
 and `restgdf.reset_config_cache()` to clear it (tests, long-running
