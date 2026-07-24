@@ -20,6 +20,12 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Fixed
 
+- `ArcGISTokenSession` reactive token refresh is now single-flight under
+  concurrent `498 Invalid Token` responses: it snapshots the token before
+  the request and, inside the refresh lock, only re-mints when the token is
+  still unchanged. Previously N concurrent 498s issued N `/generateToken`
+  calls; now they collapse onto one, and the later requests retry with the
+  freshly minted token (W2-4 / ASYNC-01).
 - A **referer-bound** `ArcGISTokenSession` (built from
   `AGOLUserPass(referer=...)` / `TokenSessionConfig.referer`) now attaches a
   matching `Referer` HTTP header to its data requests, not only to the

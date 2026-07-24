@@ -406,6 +406,9 @@ class ArcGISTokenSession:
         kwargs.setdefault("ssl", self.verify_ssl)
 
         session_method = getattr(self.session, method)
+        # W2-4 (ASYNC-01): snapshot the token BEFORE issuing the request so
+        # concurrent 498s collapse onto a single refresh (see the 498 branch).
+        tok_before = self.token
         resp = await session_method(
             url,
             **{payload_key: request_payload},
@@ -422,11 +425,19 @@ class ArcGISTokenSession:
             )
 
         if status == 498:
-            # Single-flight refresh, then retry exactly once.
+            # Single-flight refresh, then retry exactly once. Under N
+            # concurrent 498s every task serializes on the lock; only the
+            # first (whose snapshot still matches self.token) mints. Later
+            # winners observe self.token != tok_before and skip the redundant
+            # /generateToken, then retry with the freshly minted token. This
+            # mirrors the proactive update_token_if_needed double-check; do
+            # NOT gate on token_needs_update() -- after a server-side
+            # invalidation the local token still looks valid.
             if self._refresh_lock is None:
                 self._refresh_lock = asyncio.Lock()
             async with self._refresh_lock:
-                await self.update_token()
+                if self.token == tok_before:
+                    await self.update_token()
 
             # Rebuild auth for the retry.
             request_headers = (
