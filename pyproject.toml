@@ -212,3 +212,10 @@ ignore = ["E501"]
 [tool.bandit]
 exclude_dirs = ["tests"]
 skips = ["B311"]
+
+[tool.pyright]
+# Point CLI pyright and VS Code Pylance at the project venv so venv-only imports
+# resolve instead of false reportMissingImports. (python.defaultInterpreterPath
+# configures Pylance only, not CLI pyright, so this block is still required.)
+venvPath = "."
+venv = ".venv"

@@ -1,0 +1,8 @@
+# crate-ci/typos configuration.
+#
+# The audit/plan prose under audit-recommendations/ uses the English prefix
+# "mis-" (e.g. "mislabeled", "mis-tagged", "mis-promoted", "mis-keyed"). typos
+# splits on the hyphen and flags the standalone token "mis" as a typo for
+# "miss"/"mist". Allowlist it so the legitimate prefix passes the pre-commit gate.
+[default.extend-words]
+mis = "mis"
