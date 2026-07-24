@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import datetime
+import logging
 from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from restgdf._logging import get_logger
 from restgdf.utils.token import (
     AGOLUserPass,
     ArcGISTokenSession,
     TokenSessionConfig,
+    _auth_logger,
     get_token,
 )
 
@@ -289,3 +292,29 @@ async def test_arcgistokensession_respects_explicit_token_in_request():
     assert session.post_calls[-1][1]["data"]["token"] == "explicit"
     assert session.get_calls[-1][1]["headers"] == {"X-Test": "yes"}
     assert session.get_calls[-1][1]["params"]["token"] == "explicit"
+
+
+def test_auth_logger_routes_through_get_logger_factory():
+    """W2-6 / TELEMETRY-03: importing ``restgdf.utils.token`` must itself
+    route the module-level auth logger through the ``get_logger`` factory
+    (not a raw ``logging.getLogger("restgdf.auth")`` call), so it already
+    carries the documented ``NullHandler`` before any test code calls the
+    factory itself. Asserting handler state BEFORE calling ``get_logger``
+    here is load-bearing: ``get_logger`` is idempotent and would silently
+    attach the missing handler if called first, masking a raw-getLogger
+    regression in ``token.py``."""
+    assert any(
+        isinstance(h, logging.NullHandler) for h in _auth_logger.handlers
+    ), (
+        "restgdf.utils.token._auth_logger has no NullHandler at import "
+        "time; it is not routed through restgdf._logging.get_logger"
+    )
+
+    # Now confirm identity against a fresh factory call (idempotent — must
+    # not stack a second NullHandler nor a duplicate _SpanContextFilter).
+    factory_logger = get_logger("auth")
+    assert _auth_logger is factory_logger
+    assert (
+        sum(isinstance(h, logging.NullHandler) for h in _auth_logger.handlers)
+        == 1
+    )
