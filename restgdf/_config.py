@@ -59,6 +59,37 @@ from restgdf._models._settings import _VALID_LOG_LEVELS, _default_user_agent
 
 _FROZEN = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
+
+class InertConfigWarning(UserWarning):
+    """A ``RESTGDF_*`` env var is set but does not (yet) affect runtime.
+
+    Emitted once (per :func:`Config.from_env` resolution) when a caller sets
+    a validated-but-currently-inert knob -- the ``RESTGDF_RETRY_*`` /
+    ``RESTGDF_LIMITER_*`` values (the resilience executor hardcodes its retry
+    and rate-limit policy) or ``RESTGDF_AUTH_REFRESH_THRESHOLD_S`` (token
+    sessions do not read ``AuthConfig``; see :class:`AuthConfig`). The value
+    still validates into :class:`Config`, but nothing consumes it yet
+    (warn-now, wire-later per the AUTH-04 / TRANSPORT-01 decision). Silence it
+    with
+    ``warnings.filterwarnings("ignore", category=restgdf._config.InertConfigWarning)``.
+    """
+
+
+# ``RESTGDF_*`` env keys that validate into :class:`Config` but that no live
+# code path reads yet (verified 2026-07-24: the ``@stamina.retry`` executor
+# hardcodes its policy and never reads ``config.retry``/``config.limiter``;
+# ``AuthConfig.refresh_threshold_s`` is surfaced only through the deprecated
+# ``Settings`` shim, never applied to a token session). Kept intact as a
+# back-compat seam (tests pin them); real wiring is deferred (W2-13/AUTH-04).
+_INERT_ENV_KEYS: tuple[str, ...] = (
+    "RESTGDF_RETRY_ENABLED",
+    "RESTGDF_RETRY_MAX_ATTEMPTS",
+    "RESTGDF_RETRY_MAX_DELAY_S",
+    "RESTGDF_LIMITER_ENABLED",
+    "RESTGDF_LIMITER_RATE_PER_HOST",
+    "RESTGDF_AUTH_REFRESH_THRESHOLD_S",
+)
+
 # pydantic HttpUrl-based validator for ``token_url`` strings. We keep the
 # public field type as ``str`` so consumers (e.g. TokenSessionConfig) that
 # expect plain strings do not break, but we reuse pydantic's URL parser for
@@ -144,12 +175,39 @@ class ConcurrencyConfig(BaseModel):
 
 
 class AuthConfig(BaseModel):
-    """ArcGIS token-session defaults.
+    """ArcGIS token-session defaults (validated ``RESTGDF_AUTH_*`` namespace).
 
     .. versionchanged:: 3.0
         Default *transport* flipped from ``"body"`` to ``"header"``; default
         *header_name* is ``"X-Esri-Authorization"``.  Pass
         ``allow_query_transport=True`` to enable ``transport="query"``.
+
+    **Not auto-applied to token sessions (AUTH-04 / CONFIG-02).**
+    ``AuthConfig`` is a *validated namespace* for the ``RESTGDF_AUTH_*``
+    environment variables; it is **not** auto-applied to any
+    :class:`~restgdf.utils.token.ArcGISTokenSession`. In particular the three
+    refresh knobs -- ``refresh_threshold_s``, ``refresh_leeway_s`` and
+    ``clock_skew_s`` -- are config *holders*, exactly like the
+    :class:`RetryConfig`/``LimiterConfig`` inert notes above: reading them off
+    ``get_config().auth`` changes nothing about a live session's refresh
+    timing on its own. The library never constructs the token session for
+    you, and ``ArcGISTokenSession.__post_init__`` deliberately never reads
+    ``get_config()`` -- a process-wide singleton flip must not silently change
+    transport/refresh timing for every session in the process.
+
+    To make these values take effect, construct a
+    :class:`~restgdf._models.credentials.TokenSessionConfig` explicitly and
+    pass it to ``ArcGISTokenSession`` -- e.g. via the opt-in
+    ``TokenSessionConfig.from_auth_config(get_config().auth)`` /
+    ``ArcGISTokenSession.from_config(...)`` hand-off (W2-11). Only that
+    explicit hand-off threads ``AuthConfig`` into a running session.
+
+    Default split to be aware of: a bare ``TokenSessionConfig`` derives its
+    refresh window from ``refresh_leeway_seconds (120) + clock_skew_seconds
+    (30) = 150`` s, whereas a bare ``ArcGISTokenSession`` uses the dataclass
+    default ``token_refresh_threshold = 60`` s. A caller migrating from the
+    dataclass argument to a config-driven session should expect ``150`` s,
+    not ``60`` s; the ``from_auth_config`` path is internally consistent.
     """
 
     model_config = _FROZEN
@@ -324,6 +382,22 @@ class Config(BaseModel):
 
     Use :func:`get_config` (process-cached) rather than instantiating directly
     in production code; direct instantiation is useful for tests.
+
+    **Not request-path-injectable (CONFIG-03).**
+    A freshly built ``Config(...)`` instance is **test-only**: it is *not*
+    threaded into the runtime request path. Every library consumer
+    (``utils._http``, ``utils.getgdf``, ``utils.getinfo``, ``utils.crawl``,
+    ``telemetry._spans``) resolves configuration through the no-arg
+    process-global :func:`get_config`; there is no public API that accepts an
+    explicit ``Config`` and honors it below the public constructor. Passing a
+    ``Config`` instance somewhere and expecting it to override the process
+    global would silently do nothing. To change resolved configuration, set
+    the ``RESTGDF_*`` environment variables (then call
+    ``reset_config_cache``) -- the single documented precedence is
+    constructor/aiohttp kwargs > env vars > model defaults, resolved
+    process-globally. The separate, intentionally session-scoped
+    ``ArcGISTokenSession(config=...)`` / ``TokenSessionConfig`` injection is
+    *not* a global ``Config`` override -- do not conflate the two.
     """
 
     model_config = _FROZEN
@@ -419,6 +493,26 @@ class Config(BaseModel):
             )
             _coerce(old_key, dotted, caster)
 
+        # W2-13 (TRANSPORT-01 / AUTH-04): a validated-but-inert knob is a
+        # silent lie -- the caller set it expecting an effect it never has.
+        # Emit ONE consolidated warning naming every inert key that is set.
+        # ``get_config`` is LRU-cached size-1, so in production this resolves
+        # (and warns) at most once per process; the knobs + env aliases stay
+        # wired (tests pin them). Real executor/session wiring is deferred.
+        inert_present = [key for key in _INERT_ENV_KEYS if key in source]
+        if inert_present:
+            warnings.warn(
+                "These RESTGDF_* environment variables are set but currently "
+                "inert -- they validate into Config yet do not affect runtime "
+                "behavior (the resilience executor hardcodes retry/limiter "
+                "policy; token sessions do not read "
+                "AuthConfig.refresh_threshold_s): "
+                f"{', '.join(sorted(inert_present))}. Real wiring is deferred "
+                "(warn-now, wire-later; see AUTH-04 / TRANSPORT-01).",
+                InertConfigWarning,
+                stacklevel=_warn_stacklevel,
+            )
+
         try:
             return cls(
                 transport=TransportConfig(**sub_kwargs["transport"]),
@@ -467,6 +561,7 @@ __all__ = [
     "AuthConfig",
     "ConcurrencyConfig",
     "Config",
+    "InertConfigWarning",
     "LimiterConfig",
     "ResilienceConfig",
     "RetryConfig",

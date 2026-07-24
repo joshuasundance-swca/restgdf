@@ -4,6 +4,19 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Added
+
+- **`FeatureLayer.from_config` / `Directory.from_config`** — opt-in
+  classmethods that build a prepared instance from an explicit
+  `restgdf.Config`, applying `config.auth.token` as the request token before
+  delegating to `from_url` (W5-14 / CONFIG-02). They are deliberately explicit:
+  `config` is a required argument, so nothing implicitly reads the
+  process-global `get_config()` at construction, and no global `Config` is
+  threaded into the request path (CONFIG-03). The forwarded token rides the
+  standard `token=` path (POST-forced by AUTH-01, never URL-serialized); for
+  header-transport secured services prefer building an
+  `ArcGISTokenSession.from_config(...)` and passing it as `session=`.
+
 ### Changed
 
 - **Multi-page offset/count pagination now sends a deterministic
@@ -43,6 +56,25 @@ All notable changes to restgdf are documented here. This project follows
   `RESTGDF_TRANSPORT_USER_AGENT` / `TransportConfig.user_agent`. The
   exported `DEFAULT_METADATA_HEADERS` constant keeps its historical value
   for back-compat but no longer determines the wire `User-Agent`.
+- **Setting a currently-inert `RESTGDF_*` knob now warns.** `Config.from_env`
+  (hence `get_config()`) emits one `restgdf._config.InertConfigWarning`
+  (a `UserWarning`) naming any set-but-unwired `RESTGDF_RETRY_*` /
+  `RESTGDF_LIMITER_*` / `RESTGDF_AUTH_REFRESH_THRESHOLD_S` variable — those
+  validate into `Config` but no live path consumes them (the resilience
+  executor hardcodes its retry/limiter policy; token sessions never read
+  `AuthConfig.refresh_threshold_s`). The knobs and their env aliases stay
+  wired for back-compat; real executor/session wiring is deferred (warn-now,
+  wire-later; W2-13 / TRANSPORT-01 / AUTH-04). Silence with
+  `warnings.filterwarnings("ignore", category=restgdf._config.InertConfigWarning)`.
+- **`nested_count` / `FeatureLayer.get_nested_count` now require exactly two
+  fields.** Passing any other arity raises a clear `ValueError` instead of an
+  `IndexError` deep in post-processing (one field) or leaving a redundant
+  `*_count` column with an incomplete sort (three or more) (W5-3 / API-04).
+- Schema-drift log records now carry the originating service **context** (in
+  the message and a `drift_context` extra field) so the first, non-deduped
+  occurrence is attributable to which service drifted. The dedupe key stays
+  the context-free `(model, field, kind, type)` 4-tuple, preserving the
+  anti-spam guarantee for many-layer servers (W5-13 / TELEMETRY-02).
 
 ### Added
 
@@ -166,6 +198,19 @@ All notable changes to restgdf are documented here. This project follows
   — `Config.from_env()` resolves only from the process environment (`os.environ`).
   The docs now show how to opt in explicitly with `python-dotenv` yourself
   (W3-5, CONFIG-04).
+- **`FeatureLayer.get_value_counts` / `get_nested_count` now send a
+  conservative statistics body.** The instance request `data` (carrying
+  `returnGeometry=True` / `outFields="*"` / `returnCountOnly=False`) previously
+  clobbered the stats-only flags, so the server received a geometry+all-fields
+  query instead of the grouped statistics one. The bodies now forward only
+  `where`+`token` from the caller data (matching `get_unique_values`), so the
+  stats flags win while the instance `where` filter is preserved (W5-2 /
+  API-01).
+- `resolve_domains` (used by `FeatureLayer.get_df(resolve_domains=True)`) is
+  now robust to malformed-but-real domain metadata: a non-dict `domain` is
+  skipped instead of raising `AttributeError`, and coded values are mapped
+  only when they carry both `code` and `name`. A name-less code passes through
+  unchanged rather than being silently replaced with `NaN` (W5-6 / ADAPTERS-03).
 - `iter_pages`/`stream_*`'s `on_truncation='split'` path no longer re-fetches
   the OID list at every recursion node (each bisected half now reuses the
   parent's already-materialized slice) and no longer emits an unbounded

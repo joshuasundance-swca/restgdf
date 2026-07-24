@@ -12,6 +12,7 @@ from restgdf._config import (
     AuthConfig,
     ConcurrencyConfig,
     Config,
+    InertConfigWarning,
     LimiterConfig,
     RetryConfig,
     TelemetryConfig,
@@ -302,6 +303,55 @@ def test_from_env_empty_mapping_uses_defaults() -> None:
     cfg = Config.from_env(env={})
     assert cfg.timeout.total_s == 30.0
     assert cfg.concurrency.max_concurrent_requests == 8
+
+
+# ---- W2-13 (TRANSPORT-01 / AUTH-04): warn on set-but-inert knobs ----------
+
+
+def test_inert_retry_env_var_warns() -> None:
+    with pytest.warns(InertConfigWarning, match="RESTGDF_RETRY_MAX_ATTEMPTS"):
+        Config.from_env(env={"RESTGDF_RETRY_MAX_ATTEMPTS": "10"})
+
+
+def test_inert_limiter_env_var_warns() -> None:
+    with pytest.warns(InertConfigWarning, match="RESTGDF_LIMITER_RATE_PER_HOST"):
+        Config.from_env(env={"RESTGDF_LIMITER_RATE_PER_HOST": "5"})
+
+
+def test_inert_auth_refresh_env_var_warns() -> None:
+    with pytest.warns(InertConfigWarning, match="RESTGDF_AUTH_REFRESH_THRESHOLD_S"):
+        Config.from_env(env={"RESTGDF_AUTH_REFRESH_THRESHOLD_S": "120"})
+
+
+def test_inert_warning_lists_all_set_keys_in_one_warning() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        Config.from_env(
+            env={
+                "RESTGDF_RETRY_MAX_ATTEMPTS": "10",
+                "RESTGDF_LIMITER_ENABLED": "1",
+            },
+        )
+    inert = [w for w in caught if issubclass(w.category, InertConfigWarning)]
+    assert len(inert) == 1, f"expected one consolidated warning, got {len(inert)}"
+    msg = str(inert[0].message)
+    assert "RESTGDF_RETRY_MAX_ATTEMPTS" in msg
+    assert "RESTGDF_LIMITER_ENABLED" in msg
+
+
+def test_honored_env_var_does_not_warn_inert() -> None:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        Config.from_env(env={"RESTGDF_TIMEOUT_TOTAL_S": "13.0"})
+    assert not [w for w in caught if issubclass(w.category, InertConfigWarning)]
+
+
+def test_inert_warning_surfaces_through_get_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("RESTGDF_RETRY_MAX_ATTEMPTS", "7")
+    with pytest.warns(InertConfigWarning, match="RESTGDF_RETRY_MAX_ATTEMPTS"):
+        get_config()
 
 
 # ---- gate-2: log_level aliases (WARN/FATAL) -------------------------------
