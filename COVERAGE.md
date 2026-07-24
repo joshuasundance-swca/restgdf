@@ -24,9 +24,9 @@
 | restgdf/compat.py                      |       12 |        0 |        4 |        0 |    100% |           |
 | restgdf/directory/\_\_init\_\_.py      |        2 |        0 |        0 |        0 |    100% |           |
 | restgdf/directory/directory.py         |       58 |        0 |       18 |        2 |     97% |134-\>136, 171-\>180 |
-| restgdf/errors.py                      |       78 |        0 |       16 |        1 |     99% | 255-\>257 |
+| restgdf/errors.py                      |       78 |        0 |       16 |        1 |     99% | 256-\>258 |
 | restgdf/featurelayer/\_\_init\_\_.py   |        2 |        0 |        0 |        0 |    100% |           |
-| restgdf/featurelayer/featurelayer.py   |      204 |        1 |       56 |        4 |     98% |220, 434-\>440, 555-\>560, 623-\>628 |
+| restgdf/featurelayer/featurelayer.py   |      204 |        1 |       56 |        4 |     98% |220, 441-\>447, 562-\>567, 630-\>635 |
 | restgdf/resilience/\_\_init\_\_.py     |       10 |        0 |        0 |        0 |    100% |           |
 | restgdf/resilience/\_bounded\_retry.py |       19 |        0 |        0 |        0 |    100% |           |
 | restgdf/resilience/\_errors.py         |       21 |        0 |        4 |        0 |    100% |           |
