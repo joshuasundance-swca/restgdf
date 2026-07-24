@@ -116,7 +116,7 @@ Many exceptions carry structured metadata for programmatic recovery:
    * - ``PaginationError``
      - ``batch_index``, ``page_size``
    * - ``FieldDoesNotExistError``
-     - ``field``, ``context``
+     - ``field_name``, ``context``
 
 See also
 --------

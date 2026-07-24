@@ -38,12 +38,12 @@ The token-mint payload also now carries an explicit `expiration` field
 synchronous `get_token` helper sends `expiration=60`). This matches the
 ArcGIS server-side default and is not a behaviour change in practice.
 
-## 2.0.0 migration notes
+## 2.x → 3.0 migration notes
 
-restgdf 2.0.0 reshapes install surface, error taxonomy, configuration,
+restgdf 3.0 reshapes install surface, error taxonomy, configuration,
 authentication, observability, and streaming on top of the typed
-pydantic models that now ship in the release. The preserved 1.x → 2.0
-guide follows below.
+pydantic models introduced in 2.0. The preserved 1.x → 2.0 guide
+follows below.
 
 ### Summary
 
@@ -144,8 +144,12 @@ guide follows below.
 
 - `ArcGISTokenSession` now defaults to sending the token via the
   `X-Esri-Authorization` header. If your server requires the legacy
-  body/query transport, set `AuthConfig(transport="body")` or
-  `TokenSessionConfig(transport="body")`.
+  body/query transport, construct the session with
+  `TokenSessionConfig(transport="body")` — that is the value the session
+  actually reads. A bare `AuthConfig(transport="body")` is a config
+  *holder* that is never auto-applied to a session; opt in explicitly via
+  `ArcGISTokenSession.from_config(...)` /
+  `TokenSessionConfig.from_auth_config(...)`.
 - `refresh_leeway_seconds` default raised from **60 → 120** — proactive
   token refresh now fires two minutes before expiry instead of one.
 - `refresh_threshold_seconds` on `TokenSessionConfig` is retained as a
@@ -180,9 +184,9 @@ RestgdfError
 │   ├── ArcGISServiceError
 │   │   └── PaginationError(ArcGISServiceError, IndexError)  # .batch_index, .page_size
 │   └── AuthenticationError(RestgdfResponseError, PermissionError)
-│       ├── InvalidCredentialsError        # HTTP 401
+│       ├── InvalidCredentialsError        # /generateToken HTTP 4xx (400/401/403)
 │       ├── TokenExpiredError              # HTTP 498 after refresh
-│       ├── TokenRequiredError
+│       ├── TokenRequiredError             # reserved — not currently raised
 │       ├── TokenRefreshFailedError        # /generateToken retries exhausted
 │       └── AuthNotAttachedError           # HTTP 499
 ├── TransportError
@@ -249,8 +253,10 @@ See `docs/recipes/streaming.md` for copy-pasteable examples.
 **Tabular output** (`FeatureLayer.get_df`)
 
 Pandas-first sibling to `get_gdf()`. Returns a `pandas.DataFrame` built
-from the same row stream; raises `OptionalDependencyError`
-(`extra="pandas"`) if pandas is missing. Geopandas is **not** required.
+from the same row stream; raises `OptionalDependencyError` naming
+`restgdf[geo]` if pandas is missing (pandas ships in the `geo` extra —
+there is no separate `pandas` extra). Geopandas itself is **not**
+required to materialize the frame.
 
 **Response normalization** (`restgdf._models.responses`)
 
@@ -287,7 +293,7 @@ from the same row stream; raises `OptionalDependencyError`
   `(resultOffset, resultRecordCount)` tuples byte-identical to the
   previous inline arithmetic. When `factor` exceeds
   `advertised_factor` the planner clamps to the advertised value and
-  logs a warning via `restgdf.pagination`. In 2.0.0,
+  logs a warning via `restgdf.pagination`. In 3.0,
   `get_query_data_batches` now forwards live
   `advancedQueryCapabilities.maxRecordCountFactor` values into
   `build_pagination_plan(advertised_factor=...)` when the server
@@ -500,9 +506,14 @@ Resilience / telemetry toggles:
   Exhausted timeouts raise `RestgdfTimeoutError` with the original
   exception chained as `__cause__`. Inline-only; no soft-dep on the
   resilience extra.
-- **`verify_ssl` plumbed through.** `ArcGISTokenSession.update_token`
-  now forwards `ssl=self.verify_ssl` to aiohttp, matching the existing
-  behavior of other library-maintained request sites.
+- **`verify_ssl` plumbed through end-to-end.**
+  `ArcGISTokenSession.update_token` forwards `ssl=self.verify_ssl` on the
+  `/generateToken` POST, and `_call_with_auth_retry` forwards
+  `ssl=self.verify_ssl` (via `setdefault`, so a caller-supplied `ssl=`
+  still wins) on token-attached data requests. The bare-session path,
+  `get_gdf(session=None)`, builds its temporary `ClientSession` with
+  `TCPConnector(ssl=get_config().transport.verify_ssl)`. A caller-supplied
+  session's own connector continues to own TLS policy for its requests.
 - **Safe-crawl concurrency bound.** `Directory.safe_crawl` routes the
   per-layer `feature_count` probe through a `BoundedSemaphore` sized
   from `ConcurrencyConfig.max_concurrent_requests`.
@@ -827,7 +838,12 @@ Log levels:
 
 Drift events are deduped per process via `(model_name, path, kind,
 value_type)` so repeated calls against the same drifty server don't
-spam the log.
+spam the log. The originating service/URL is threaded into the first
+(non-deduped) record — both in the log message and as a `drift_context`
+`extra` field — so that emission is attributable, but `drift_context` is
+deliberately **excluded** from the dedupe key: a second service that
+drifts on the same tuple is silenced rather than re-attributed (message
+attribution, not per-service dedup).
 
 ## `Settings` usage
 

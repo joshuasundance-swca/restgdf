@@ -1,14 +1,15 @@
 Configuration
 =============
 
-``restgdf`` uses a layered configuration system based on
-`Pydantic Settings <https://docs.pydantic.dev/latest/concepts/pydantic_settings/>`_.
-Values resolve in this order (highest precedence first):
+``restgdf`` uses a layered, environment-variable + explicit-argument
+configuration system. Values resolve in this order (highest precedence first):
 
-1. **Explicit constructor arguments** — e.g. ``FeatureLayer.from_url(timeout=…)``
-2. **``Config(...)`` instance** passed explicitly
-3. **Process environment variables** (``RESTGDF_*``)
-4. **Library defaults**
+1. **Explicit constructor / aiohttp keyword arguments** — e.g.
+   ``FeatureLayer.from_url(timeout=…)``, applied per call
+2. **Process environment variables** (``RESTGDF_*``), read by
+   ``Config.from_env`` and exposed process-globally through the
+   size-1-cached ``get_config()``
+3. **Library defaults**
 
 ``restgdf`` does not read a ``.env`` file itself — ``Config.from_env()`` resolves values
 from the process environment (``os.environ``) only, and ``python-dotenv`` is not a
@@ -30,12 +31,15 @@ Quick start
 
    from restgdf import Config, get_config
 
-   # Read from environment + defaults
+   # Resolve from the environment + defaults — this is the instance the
+   # request path reads.
    cfg = get_config()
 
-   # Override explicitly
+   # Build an explicit Config object (for tests, or an
+   # ``ArcGISTokenSession(config=...)``); a directly built Config is not
+   # injected into the FeatureLayer/Directory request path.
    cfg = Config(
-       transport={"timeout_total": 120},
+       timeout={"total_s": 120},
        concurrency={"max_concurrent_requests": 8},
    )
 
@@ -53,24 +57,15 @@ are supported with a ``DeprecationWarning``.
    * - Variable
      - Default
      - Description
-   * - ``RESTGDF_TRANSPORT_TIMEOUT_TOTAL``
-     - ``300``
+   * - ``RESTGDF_TIMEOUT_TOTAL_S``
+     - ``30``
      - Total HTTP timeout in seconds
    * - ``RESTGDF_TRANSPORT_USER_AGENT``
      - ``"restgdf/<version>"``
      - User-Agent header value
    * - ``RESTGDF_CONCURRENCY_MAX_CONCURRENT_REQUESTS``
-     - ``10``
+     - ``8``
      - Global concurrency cap for parallel page fetches
-   * - ``RESTGDF_AUTH_TRANSPORT``
-     - ``"header"``
-     - Token delivery method: ``"header"`` or ``"body"``
-   * - ``RESTGDF_AUTH_REFRESH_LEEWAY_SECONDS``
-     - ``120``
-     - Seconds before expiry to trigger proactive refresh
-   * - ``RESTGDF_AUTH_CLOCK_SKEW_SECONDS``
-     - ``30``
-     - Clock skew tolerance for token expiry comparison
    * - ``RESTGDF_RESILIENCE_ENABLED``
      - ``false``
      - Enable retry + rate limiting (requires ``restgdf[resilience]``)
@@ -86,6 +81,11 @@ are supported with a ``DeprecationWarning``.
    * - ``RESTGDF_TELEMETRY_SERVICE_NAME``
      - ``"restgdf"``
      - OTel service name for emitted spans
+
+The token-session knobs ``AuthConfig.transport``, ``refresh_leeway_s``, and
+``clock_skew_s`` are **not** driven by dedicated ``RESTGDF_AUTH_*`` environment
+variables. Set them on an explicit ``Config`` instead — for example
+``Config(auth=AuthConfig(transport="body", refresh_leeway_s=180, clock_skew_s=45))``.
 
 Config model reference
 ----------------------

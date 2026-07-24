@@ -481,10 +481,10 @@ tranche.
 
 #### Configuration
 
-- `restgdf.Config` — frozen pydantic 2.x aggregate of seven frozen
+- `restgdf.Config` — frozen pydantic 2.x aggregate of eight frozen
   sub-configs (`TransportConfig`, `TimeoutConfig`, `RetryConfig`,
   `LimiterConfig`, `ConcurrencyConfig`, `AuthConfig`,
-  `TelemetryConfig`) plus `Config.from_env(env=None)` classmethod.
+  `TelemetryConfig`, `ResilienceConfig`) plus `Config.from_env(env=None)` classmethod.
   Sub-configs and the aggregate are immutable at both slot and
   nested-field level.
 - `restgdf.get_config()` — process-wide cached `Config` accessor
@@ -898,5 +898,7 @@ Earlier releases were not formally tracked here. See the
 [PyPI release notes](https://pypi.org/project/restgdf/#history) for pre-2.0
 changes.
 
-[Unreleased]: https://github.com/joshuasundance-swca/restgdf/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/joshuasundance-swca/restgdf/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/joshuasundance-swca/restgdf/compare/v3.0.0...v3.1.0
+[3.0.0]: https://github.com/joshuasundance-swca/restgdf/compare/v2.0.0...v3.0.0
 [2.0.0]: https://github.com/joshuasundance-swca/restgdf/releases/tag/v2.0.0

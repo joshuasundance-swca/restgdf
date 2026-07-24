@@ -86,6 +86,14 @@ order** and does not accept `on_truncation`, `order`, or
 output, compose `stream_rows` or `stream_features` with your own
 geometry assembly, or call `get_gdf` / `get_gdf_list` for a single-
 shot batch.
+
+Even without the `on_truncation` knob it is **not** silent about
+truncation: if a page reports `exceededTransferLimit=true`, the geo path
+(`stream_gdf_chunks` and `get_gdf`) now raises
+{class}`~restgdf.errors.PaginationError`, mirroring the `iter_pages`
+engine's default, instead of returning a chunk that is missing rows. For
+ignore/split behavior, read the layer through the `iter_pages`-based
+shapes above.
 :::
 
 `stream_rows` is the row-shaped sibling of `stream_features`: each item
@@ -143,11 +151,13 @@ stick with `"request"`.
 ## Throughput: `max_concurrent_pages`
 
 ```python
-# Unbounded (default). Easy to overwhelm slow services.
+# Unbounded (default: None). Every page in the plan is scheduled up
+# front and each fetched page is buffered — concurrency AND memory grow
+# with the page count. `order` alone does not bound this.
 async for feat in layer.stream_features():
     ...
 
-# Cap concurrent in-flight page fetches.
+# Cap concurrent in-flight page fetches (and peak memory).
 async for feat in layer.stream_features(max_concurrent_pages=4):
     ...
 ```
@@ -156,6 +166,14 @@ async for feat in layer.stream_features(max_concurrent_pages=4):
 `ConcurrencyConfig.max_concurrent_requests` (which caps fan-out at
 the top-level orchestration layer) — the more restrictive of the two
 wins.
+
+:::{note}
+`max_concurrent_pages` bounds only the top-level page-plan fetches. When
+`on_truncation="split"`, each truncated page issues its own serial,
+**uncounted** sub-fetches (one `get_object_ids` plus a `_fetch_page_dict`
+per bisected half), so with a cap of `K` the worst-case in-flight count
+is roughly `K + 1`, not a hard `K`.
+:::
 
 ## What about `iter_pages`?
 

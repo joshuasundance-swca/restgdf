@@ -61,7 +61,8 @@ class ConfigurationError(RestgdfError, ValueError):
 
     Multi-inherits :class:`ValueError` through 3.x so existing
     ``except ValueError`` callers continue to catch misconfiguration. The
-    ``ValueError`` base will be dropped in 3.1+.
+    ``ValueError`` base is a back-compat shim and will only be removed in
+    a future major release (>=4.0), preceded by a ``DeprecationWarning``.
     """
 
 

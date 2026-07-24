@@ -3,8 +3,8 @@
 ## What this is
 
 `restgdf` is a **lightweight async Esri/ArcGIS REST client** for Python ≥ 3.11, published to
-PyPI as a Production/Stable library (currently v3.0.0; a 3.1.0 release carrying the Python
-floor bump and other `## [Unreleased]` CHANGELOG entries is pending). The light core depends only on
+PyPI as a Production/Stable library (currently v3.1.0; a 3.2.0 release carrying the
+`## [Unreleased]` CHANGELOG entries is pending). The light core depends only on
 `aiohttp` + `pydantic` v2; GeoPandas/pandas, retry/rate-limiting, and OpenTelemetry are
 **optional extras** (`geo`, `resilience`, `telemetry`). The two public entry points are
 `FeatureLayer` (one ArcGIS feature layer) and `Directory` (service discovery / crawl).
@@ -125,24 +125,29 @@ on its own (so `git bisect` stays useful).
     `RestgdfResponseError(context='exceededTransferLimit')`. `get_df` always raises (it does not
     expose the knob).
   - *GeoDataFrame path* — `get_gdf` and `stream_gdf_chunks` (via `chunk_generator`→`get_sub_gdf`)
-    perform **no** `exceededTransferLimit` check and can **silently return truncated data**.
+    now inspect each page's parsed JSON and **raise `PaginationError`** on `exceededTransferLimit`
+    (W4-1/PAGINATION-01) instead of silently returning truncated data; this legacy path still
+    exposes no `ignore`/`split` knob.
   - *Legacy feature path* — `row_dict_generator` and `adapters.stream.iter_rows`/
     `iter_feature_batches` (via `_get_sub_features`) **raise `PaginationError`**, with no
     `ignore`/`split` option.
 - **WHERE building does not escape quotes:** `where_var_in_list` (`restgdf/utils/utils.py`)
   wraps string values in single quotes with no escaping; it backs OID-chunk pagination,
   `sample_gdf`/`head_gdf`, and `on_truncation="split"`. Quote-bearing values make malformed SQL.
-- **Per-instance caches are not concurrency-safe:** `FeatureLayer.uniquevalues/valuecounts/`
-  `nestedcount/gdf` are plain dicts with no lock; concurrent awaiters double-fetch, and
-  multi-field results are returned by reference (mutating the result mutates the cache).
+- **Per-instance caches are not concurrency-safe on the *write* side:**
+  `FeatureLayer.uniquevalues/valuecounts/nestedcount/gdf` are plain dicts with no lock, so
+  concurrent awaiters still double-fetch (cache *population* is racy). Cache *reads* are now
+  safe: `get_gdf`/`get_unique_values`/`get_value_counts`/`get_nested_count` return an independent
+  `.copy()` / `list(...)` of the cached frame (W5-1), so mutating a result no longer corrupts
+  the cache.
 - **Token transport (fixed in 3.1, AUTH-01):** a token in the `data` dict on a *plain*
   `aiohttp` session used to be GET-serializable into the URL when the encoded request was
   < 8192 bytes (the credential-leak guard previously only triggered for body/query transport
   on an `ArcGISTokenSession`). `restgdf/utils/_http.py` now forces `POST` whenever the
   outgoing body carries a token, regardless of session type or encoded length. Prefer header
   transport regardless — it never touches this length-based routing at all.
-- **CI surprises:** the PR-gating `pytest.yml` does **not** run coverage (the 97% floor is only
-  checked post-merge in `coverage.yml` — this gap closes once W1-3 lands). `ci-offline` (a
-  `pytest.yml` job) IS now a required GitHub branch-protection status check on `main`, so a PR
-  cannot merge until it is green; `pytest.yml` itself still only triggers on `pull_request`
-  (no separate workflow re-runs it on a direct push). Run the local gate before merging.
+- **CI surprises:** `pytest.yml` now runs the 97% coverage floor as a PR gate (the
+  `coverage (>=97%)` job, W1-3 landed — the floor no longer waits for post-merge `coverage.yml`).
+  `ci-offline` (a `pytest.yml` job) is a required GitHub branch-protection status check on `main`,
+  so a PR cannot merge until it is green; `pytest.yml` triggers on `pull_request` only (no separate
+  workflow re-runs it on a direct push). Run the local gate before merging.

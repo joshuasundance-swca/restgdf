@@ -45,11 +45,15 @@ def rows_to_geodataframe(
     Parameters
     ----------
     rows:
-        Iterable of row-shaped dicts, typically produced by
-        :func:`restgdf.adapters.stream.iter_rows` or
-        :func:`restgdf.adapters.dict.features_to_rows`. Each row's
-        ``geometry_field`` entry must be shapely-compatible (or a
-        ``GeoSeries`` element).
+        Iterable of row-shaped dicts. Each row's ``geometry_field`` entry
+        must already be **shapely-compatible** (a shapely geometry or a
+        ``GeoSeries`` element). Note that ``iter_rows`` /
+        ``features_to_rows`` yield the *raw ArcGIS geometry dict*, which is
+        not shapely-compatible and must be converted first; for a
+        batteries-included ArcGIS-to-GeoDataFrame path use
+        :meth:`restgdf.FeatureLayer.get_gdf` /
+        :meth:`restgdf.FeatureLayer.stream_gdf_chunks` (or
+        ``restgdf.adapters.stream.iter_gdf_chunks``) instead.
     geometry_field:
         Column name holding the geometry values. Defaults to ``"geometry"``.
     crs:
@@ -104,9 +108,13 @@ async def arows_to_geodataframe(
     Parameters
     ----------
     rows:
-        Async iterable of row-shaped dicts — typically
-        :meth:`restgdf.FeatureLayer.stream_rows` or
-        :func:`restgdf.adapters.stream.iter_rows`.
+        Async iterable of row-shaped dicts whose ``geometry_field`` entry
+        is already **shapely-compatible**. Note that
+        :meth:`restgdf.FeatureLayer.stream_rows` /
+        :func:`restgdf.adapters.stream.iter_rows` yield the *raw ArcGIS
+        geometry dict*, which must be converted to shapely first; for the
+        batteries-included path use :meth:`restgdf.FeatureLayer.get_gdf` /
+        :meth:`restgdf.FeatureLayer.stream_gdf_chunks` instead.
     geometry_field:
         Column name for the geometry column. Defaults to ``"geometry"``.
     crs:
@@ -124,8 +132,8 @@ async def arows_to_geodataframe(
     See Also
     --------
     :meth:`restgdf.FeatureLayer.get_gdf`
-        Equivalent to ``await arows_to_geodataframe(layer.stream_rows())``
-        with geometry normalization and CRS propagation handled for you.
+        High-level accessor that returns the full layer as a single
+        ``GeoDataFrame``.
     """
     materialized: list[dict[str, Any]] = [row async for row in rows]
     return rows_to_geodataframe(
