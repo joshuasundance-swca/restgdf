@@ -1,9 +1,10 @@
 """Layered runtime configuration for restgdf (phase-2a BL-18).
 
-Seven frozen pydantic 2.x sub-configs mirror the plan-obs §3 taxonomy:
+Eight frozen pydantic 2.x sub-configs mirror the plan-obs §3 taxonomy:
 :class:`TransportConfig`, :class:`TimeoutConfig`, :class:`RetryConfig`,
 :class:`LimiterConfig`, :class:`ConcurrencyConfig`, :class:`AuthConfig`,
-:class:`TelemetryConfig`. The aggregate :class:`Config` is resolved lazily via
+:class:`TelemetryConfig`, :class:`ResilienceConfig`. The aggregate
+:class:`Config` is resolved lazily via
 :func:`get_config` (LRU-cached size-1; reset with :func:`reset_config_cache`).
 
 Env-var naming

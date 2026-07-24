@@ -2,11 +2,12 @@
 
 ## Supported Versions
 
-Only the latest minor release line of `restgdf` receives security updates.
+The current major release line (currently 3.x) receives security updates.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 2.x     | :white_check_mark: |
+| 3.x     | :white_check_mark: |
+| 2.x     | :x:                |
 | 1.x     | :x:                |
 | < 1.0   | :x:                |
 
