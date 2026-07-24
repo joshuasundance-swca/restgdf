@@ -294,11 +294,23 @@ class FeatureLayer:
         metadata envelope (R-65) when the layer advertises a spatial
         reference via ``extent.spatialReference`` or top-level
         ``spatialReference``.
+
+        Each call returns an independent copy of the cached frame (W5-1)
+        — mutating the returned ``GeoDataFrame`` in place does not affect
+        the cache or any other call's result. This copy-on-return only
+        protects the *read* side: the cache *population* (``if self.gdf
+        is None: ...``) is not itself concurrency-safe — concurrent
+        awaiters via ``asyncio.gather`` can still both observe a cache
+        miss and double-fetch. Do not rely on this fix for task-safety.
         """
         if self.gdf is None:
             _require_featurelayer_geo_support("FeatureLayer.get_gdf()")
             self.gdf = await get_gdf(self.url, self.session, **self.kwargs)
-        return self.gdf
+        # W5-1 (ASYNC-02): return a copy so a caller mutating the frame in
+        # place cannot corrupt the cached instance a later call returns.
+        # ``.copy()`` propagates ``.attrs`` (including R-65's
+        # ``spatial_reference``), so this preserves that contract too.
+        return self.gdf.copy()
 
     # -----------------------------------------------------------------
     # Streaming primitives (BL-24 / Q-A11). ``iter_pages`` is the single
@@ -570,7 +582,9 @@ class FeatureLayer:
         -------
         list or DataFrame
             A plain list when *fields* is a single string, or a DataFrame
-            when *fields* is a tuple.
+            when *fields* is a tuple. Each call returns an independent
+            copy (W5-1) — mutating the returned value does not affect the
+            cache or any other call's result.
 
         Raises
         ------
@@ -594,7 +608,13 @@ class FeatureLayer:
                 sortby,
                 **self.kwargs,
             )
-        return self.uniquevalues[cache_key]
+        # W5-1 (ASYNC-02): copy-on-return so callers cannot mutate the
+        # cached value in place. The cache stores either a plain ``list``
+        # (single-field) or a ``DataFrame`` (multi-field) — branch on that.
+        cached = self.uniquevalues[cache_key]
+        if isinstance(cached, list):
+            return list(cached)
+        return cached.copy()
 
     async def get_value_counts(self, field: str) -> DataFrame:
         """Get value counts for a single field.
@@ -610,7 +630,9 @@ class FeatureLayer:
         -------
         DataFrame
             A pandas DataFrame with one row per distinct value and an
-            associated count column.
+            associated count column. Each call returns an independent
+            copy (W5-1) — mutating the returned frame does not affect
+            the cache or any other call's result.
 
         Raises
         ------
@@ -629,7 +651,8 @@ class FeatureLayer:
                 self.session,
                 **self.kwargs,
             )
-        return self.valuecounts[field]
+        # W5-1 (ASYNC-02): copy-on-return, same rationale as get_gdf above.
+        return self.valuecounts[field].copy()
 
     async def get_nested_count(self, fields: tuple) -> DataFrame:
         """Get nested (cross-tabulated) value counts for multiple fields.
@@ -647,6 +670,9 @@ class FeatureLayer:
         DataFrame
             A pandas DataFrame with one row per unique combination of
             values across the requested fields and an associated count.
+            Each call returns an independent copy (W5-1) — mutating the
+            returned frame does not affect the cache or any other call's
+            result.
 
         Raises
         ------
@@ -665,7 +691,8 @@ class FeatureLayer:
                 self.session,
                 **self.kwargs,
             )
-        return self.nestedcount[fields]
+        # W5-1 (ASYNC-02): copy-on-return, same rationale as get_gdf above.
+        return self.nestedcount[fields].copy()
 
     # -----------------------------------------------------------------
     # Deprecated legacy method names (Phase 6). Emit DeprecationWarning
