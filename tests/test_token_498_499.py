@@ -179,7 +179,10 @@ class TestSingleFlightRefreshUnderConcurrent498:
         ts.update_token = rotating_update_token
 
         results = await asyncio.gather(
-            *(ts.get("https://example.com/query", params={"where": "1=1"}) for _ in range(k))
+            *(
+                ts.get("https://example.com/query", params={"where": "1=1"})
+                for _ in range(k)
+            ),
         )
 
         assert all(r.status == 200 for r in results)
@@ -225,7 +228,7 @@ class TestSingleFlightRefreshUnderConcurrent498:
         ts.update_token = AsyncMock(side_effect=lambda: setattr(ts, "token", "fresh"))
 
         results = await asyncio.gather(
-            *(ts.get("https://example.com/query") for _ in range(k))
+            *(ts.get("https://example.com/query") for _ in range(k)),
         )
 
         assert len(results) == k

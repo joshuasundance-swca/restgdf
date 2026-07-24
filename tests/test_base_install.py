@@ -300,10 +300,7 @@ async def test_row_dict_generator_uses_query_batch_data_without_duplicate_kwargs
     }
     assert post_kwargs["headers"]["Accept"] == "application/json,text/plain,*/*"
     # W2-10: default UA now sourced from get_config().transport.user_agent.
-    assert (
-        post_kwargs["headers"]["User-Agent"]
-        == get_config().transport.user_agent
-    )
+    assert post_kwargs["headers"]["User-Agent"] == get_config().transport.user_agent
 
 
 @pytest.mark.asyncio

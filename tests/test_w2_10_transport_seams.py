@@ -62,9 +62,7 @@ def test_default_headers_default_is_config_default_not_mozilla() -> None:
 
 def test_default_headers_caller_user_agent_still_wins() -> None:
     """An explicit caller ``User-Agent`` still overrides the config default."""
-    assert (
-        default_headers({"User-Agent": "caller/1.0"})["User-Agent"] == "caller/1.0"
-    )
+    assert default_headers({"User-Agent": "caller/1.0"})["User-Agent"] == "caller/1.0"
 
 
 def test_default_headers_config_read_at_call_time_not_import_time(
