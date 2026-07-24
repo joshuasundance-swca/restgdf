@@ -3,11 +3,11 @@ import importlib
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from aiohttp import ClientSession
+from aiohttp import ClientConnectionError, ClientSession
 from pandas import DataFrame
 
 from restgdf import get_config
-from restgdf.errors import FieldDoesNotExistError
+from restgdf.errors import FieldDoesNotExistError, RestgdfResponseError
 from tests.id_schema_fixtures import load_id_schema_fixture
 from restgdf.utils.utils import ends_with_num, where_var_in_list
 from restgdf.utils.getinfo import (
@@ -684,3 +684,137 @@ async def test_service_metadata_sets_feature_count_none_when_count_lookup_fails(
         )
 
     assert result.layers[0].feature_count is None
+
+
+# ---------------------------------------------------------------------------
+# H2-1 — per-layer failure containment in ``service_metadata``
+#
+# Before the fix, a single layer whose ``get_metadata`` raises (a secured /
+# deleted / slow layer returning an ArcGIS ``{"error": ...}`` envelope, a
+# timeout, or a dropped connection) propagates out of ``service_metadata`` via
+# ``bounded_gather(return_exceptions=False)`` and discards EVERY sibling layer
+# of that service. These tests pin the containment contract: siblings survive
+# and the failed layer is annotated with a ``layer_error`` marker rather than
+# silently dropped.  Red-first (``xfail(strict=True)``) then flip green in the
+# fix commit per the repo's red-first rule.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.xfail(strict=True, reason="H2-1: fixed in next commit")
+@pytest.mark.asyncio
+async def test_service_metadata_contains_layer_response_error():
+    metadata_by_url = {
+        "https://example.com/service": {
+            "layers": [{"id": 0}, {"id": 1}, {"id": 2}],
+        },
+        "https://example.com/service/0": {"type": "Feature Layer", "name": "A"},
+        "https://example.com/service/2": {"type": "Feature Layer", "name": "C"},
+    }
+
+    async def fake_get_metadata(url, session, token=None):
+        if url.endswith("/1"):
+            raise RestgdfResponseError(
+                "LayerMetadata received ArcGIS error envelope "
+                "(code=499): Token Required",
+                model_name="LayerMetadata",
+                context=url,
+            )
+        return dict(metadata_by_url[url])
+
+    with patch(
+        "restgdf.utils.getinfo.get_metadata",
+        side_effect=fake_get_metadata,
+    ):
+        result = await service_metadata(
+            object(),
+            "https://example.com/service",
+        )
+
+    # The two sibling layers survived instead of the whole service vanishing.
+    assert len(result.layers) == 3
+    assert result.layers[0].name == "A"
+    assert result.layers[2].name == "C"
+
+    # The failed layer is present and VISIBLY annotated (not a silent drop).
+    failed = result.layers[1]
+    assert failed.id == 1
+    assert failed.url == "https://example.com/service/1"
+    dumped = failed.model_dump(by_alias=True)
+    assert "RestgdfResponseError" in dumped["layer_error"]
+    assert "Token Required" in dumped["layer_error"]
+
+
+@pytest.mark.xfail(strict=True, reason="H2-1: fixed in next commit")
+@pytest.mark.asyncio
+async def test_service_metadata_contains_layer_timeout():
+    async def fake_get_metadata(url, session, token=None):
+        if url.endswith("/service"):
+            return {"layers": [{"id": 0}, {"id": 1}]}
+        if url.endswith("/1"):
+            raise TimeoutError("layer /1 timed out")
+        return {"type": "Raster Layer", "name": "ok"}
+
+    with patch(
+        "restgdf.utils.getinfo.get_metadata",
+        side_effect=fake_get_metadata,
+    ):
+        result = await service_metadata(
+            object(),
+            "https://example.com/service",
+        )
+
+    assert len(result.layers) == 2
+    assert result.layers[0].name == "ok"
+    failed = result.layers[1]
+    assert failed.id == 1
+    assert failed.model_dump(by_alias=True)["layer_error"].startswith("TimeoutError")
+
+
+@pytest.mark.xfail(strict=True, reason="H2-1: fixed in next commit")
+@pytest.mark.asyncio
+async def test_service_metadata_contains_layer_connection_error():
+    async def fake_get_metadata(url, session, token=None):
+        if url.endswith("/service"):
+            return {"layers": [{"id": 0}, {"id": 1}]}
+        if url.endswith("/1"):
+            raise ClientConnectionError("connection reset by peer")
+        return {"type": "Feature Layer", "name": "ok"}
+
+    with patch(
+        "restgdf.utils.getinfo.get_metadata",
+        side_effect=fake_get_metadata,
+    ):
+        result = await service_metadata(
+            object(),
+            "https://example.com/service",
+        )
+
+    assert len(result.layers) == 2
+    assert result.layers[0].name == "ok"
+    failed = result.layers[1]
+    assert failed.id == 1
+    assert "ClientConnectionError" in failed.model_dump(by_alias=True)["layer_error"]
+
+
+@pytest.mark.asyncio
+async def test_service_metadata_still_raises_on_service_level_failure():
+    """Containment is per-layer only: a service-ROOT metadata failure still
+    propagates (the whole-service ``CrawlError`` path in ``safe_crawl`` relies
+    on this)."""
+
+    async def fake_get_metadata(url, session, token=None):
+        raise RestgdfResponseError(
+            "service root unreachable",
+            model_name="LayerMetadata",
+            context=url,
+        )
+
+    with patch(
+        "restgdf.utils.getinfo.get_metadata",
+        side_effect=fake_get_metadata,
+    ):
+        with pytest.raises(RestgdfResponseError):
+            await service_metadata(
+                object(),
+                "https://example.com/service",
+            )
