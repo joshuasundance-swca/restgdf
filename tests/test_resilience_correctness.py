@@ -216,10 +216,14 @@ class TestTransportErrorRetryAndMapping:
         self,
         _fast_sleep: None,
     ) -> None:
-        """Defensive branch: an inner session that raises the payload error from
-        dispatch (a wrapping session, or aiohttp draining a redirect body) is
-        still retried and mapped. This is NOT the common truncated-body shape —
-        see ``TestPayloadErrorIsOutOfRetryScope`` for that.
+        """Defensive branch: an inner session implementation (e.g. a wrapping
+        adapter) that surfaces ``ClientPayloadError`` from dispatch itself is
+        still retried and mapped. Plain aiohttp has no known dispatch-time
+        path that raises it (R2 verified: redirect-body draining converts to
+        ``ClientConnectionError`` internally); this keeps the ``retry_on``
+        entry and its exhaustion mapping covered for non-aiohttp inners. NOT
+        the common truncated-body shape — see
+        ``TestPayloadErrorIsOutOfRetryScope`` for that.
         """
         stub = StubSession([_payload_error()] * 10)
         session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))

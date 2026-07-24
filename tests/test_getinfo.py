@@ -863,6 +863,34 @@ async def test_service_metadata_logs_warning_per_contained_layer(caplog):
 
 
 @pytest.mark.asyncio
+async def test_contained_layer_warning_scrubs_token_urls(caplog):
+    """R2: the WARNING *message* must not leak ``?token=`` values. The
+    structured extras are scrubbed by ``build_log_extra``; the message text
+    interpolates the layer URL and must be scrubbed the same way."""
+
+    secret = "SUPERSECRETTOKEN123"  # noqa: S105 - fake credential for the probe
+    service_url = f"https://example.com/service?token={secret}"
+
+    async def fake_get_metadata(url, session, token=None):
+        if url == service_url:
+            return {"layers": [{"id": 0}]}
+        raise TimeoutError("boom")
+
+    with caplog.at_level(logging.WARNING, logger="restgdf.crawl"):
+        with patch(
+            "restgdf.utils.getinfo.get_metadata",
+            side_effect=fake_get_metadata,
+        ):
+            await service_metadata(object(), service_url)
+
+    records = [r for r in caplog.records if r.name == "restgdf.crawl"]
+    assert len(records) == 1
+    message = records[0].getMessage()
+    assert secret not in message, message
+    assert "token=***" in message
+
+
+@pytest.mark.asyncio
 async def test_service_metadata_healthy_service_logs_nothing(caplog):
     """Behaviour guard: no warning noise when every layer succeeds."""
 

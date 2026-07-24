@@ -120,7 +120,9 @@ All notable changes to restgdf are documented here. This project follows
   so one attempt's cooldown stays bounded by `respect_retry_after_max_s`
   however many requests are in flight on the key — stamina evaluates the retry
   budget only *between* attempts, so an unbounded in-attempt sleep would be
-  uninterruptible.
+  uninterruptible. Trade-off: the waking waiter itself proceeds, so one
+  request per waker may dispatch while a concurrently-set fresher cooldown is
+  still in force; the next attempt on the key waits it out.
 - **A single failing layer no longer discards a whole service's metadata.**
   `service_metadata` (`restgdf.utils.getinfo`) fanned its per-layer
   `get_metadata` calls out through `bounded_gather` with the default
@@ -142,7 +144,9 @@ All notable changes to restgdf are documented here. This project follows
   instead. Each contained failure also emits one `WARNING` on the new
   `restgdf.crawl` logger (`"layer metadata failed, contained: url=… error=…"`,
   with `service_root` / `layer_id` / `exception_type` in the structured extra),
-  so a crawl has an aggregate failure signal without inspecting the data.
+  so a crawl has an aggregate failure signal without inspecting the data. URLs
+  in both the message and the extras are scrubbed of `token=` query values
+  before logging.
   Containment is scoped to transport and response failures
   (`RestgdfResponseError`, `TransportError`, `RestgdfTimeoutError`,
   `aiohttp.ClientConnectionError`, `aiohttp.ClientPayloadError`, `TimeoutError`)

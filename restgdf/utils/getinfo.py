@@ -57,7 +57,7 @@ from restgdf.utils._stats import (
     nested_count,
     nestedcount,
 )
-from restgdf._logging import build_log_extra, get_logger
+from restgdf._logging import _scrub_url, build_log_extra, get_logger
 from restgdf.errors import (
     RestgdfResponseError,
     RestgdfTimeoutError,
@@ -264,9 +264,12 @@ async def service_metadata(
             # ``CrawlReport.errors`` would see a 100%-failed service as healthy.
             # One WARNING per contained layer gives the crawl an aggregate
             # failure signal.
+            # R2: scrub the URL in the *message* too — ``build_log_extra``
+            # scrubs the extras, but a ``?token=`` in the message text would
+            # still reach handlers/aggregators verbatim.
             _crawl_log.warning(
                 "layer metadata failed, contained: url=%s error=%s",
-                layer_url,
+                _scrub_url(layer_url),
                 type(exc).__name__,
                 extra=build_log_extra(
                     service_root=service_url,

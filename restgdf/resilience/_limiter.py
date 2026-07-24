@@ -108,6 +108,12 @@ class CooldownRegistry:
         next attempt/request to honour (H1-N2). Only a deadline this call
         actually waited out — unchanged since entry — is cleared.
 
+        Trade-off (R2): the waking waiter itself *proceeds* — its request may
+        dispatch while that fresher deadline is still in force. One request
+        per waking waiter can slip into a live cooldown window; the next
+        attempt on the key waits it out. This is the accepted cost of keeping
+        a single wait bounded.
+
         Re-waiting here instead would make a single in-attempt wait scale with
         the number of concurrent waiters on the key (measured: 0.52s at
         concurrency 1 rising to 14.8s at 16 against a 0.5s cooldown), which
