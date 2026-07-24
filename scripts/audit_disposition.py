@@ -44,43 +44,41 @@ lie" / "a LANDED claim whose commit doesn't contain the change = REFUTED"):
   file the finding names in ``findings.json``. A subject-line citation with
   no matching file in the diff is downgraded to MESSAGE_ONLY — reported, not
   silently promoted to LANDED.
-* Deferred (owner+trigger recorded) and decision-closed (NO-GO recorded)
-  language is mined from full commit bodies by paragraph, but an item is only
-  ELIGIBLE for either signal if (a) that exact item ID is one this commit
-  declares on its own top subject line, or (b) the item's own
-  semicolon-delimited clause within the paragraph carries an explicit
-  "no-go"/"defer*" marker of its own. Plain co-occurrence anywhere in the
-  same blank-line paragraph is deliberately NOT enough — a real bug: this
-  program's own genesis commit (``e65bf75``) mentions "W2-1" and
-  "owner+trigger"/"NO-GO" in the very same paragraph while narrating three
-  UNRELATED bugfixes, which mislabeled AUTH-01/W2-1 DEFERRED even though it
-  had landed cleanly via #195 (see ``build_prose_signals``'s and
-  ``_item_clauses``'s docstrings for the fix). PROGRAM-LEDGER.md is
-  deliberately NOT scanned for this either — see ``build_prose_signals``'s
-  docstring for the cross-contamination it produces at paragraph
-  granularity.
-* This program's OWN construction commits are excluded from every evidence
-  scan above — see ``is_self_referential_commit``. That is EITHER a subject
-  line using the Conventional-Commits scope ``(dev-tooling)`` (checked by
-  ``is_dev_tooling_commit``), OR a commit whose ENTIRE diff is confined to
-  the oracle's own files (``scripts/audit_disposition.py`` /
-  ``tests/test_audit_disposition.py``) — the file-based check is the one
-  that actually holds: a GitHub squash merge (PR #213) renamed this
-  program's genesis commit's subject to "feat: audit disposition census
-  oracle (M4 exit gate) (#213)", so no "(dev-tooling)" scope survived the
-  squash, and the squashed body still narrates the oracle's own bugfix
-  history in the exact self-contaminating shape — see
-  ``is_self_referential_commit``'s docstring for the two false DEFERREDs
-  (AUTH-01/W2-1, PAGINATION-03/W4-3) the squash commit itself re-triggered.
-  The oracle's own commit messages narrate its bugfix history in prose;
-  they are never themselves evidence about a finding's disposition.
-* A finding's owning item can ALSO resolve DECISION-CLOSED via
-  ``audit-recommendations/plan/99-traceability.md``'s "## Deliberate
-  deferrals" section, for an item explicitly recorded there as
-  *confirm-only* (Path a) — see ``parse_decision_closed_clarifications``.
-  This covers a real terminal disposition with ZERO commits by design
-  (W3-6/DOCS-02 resolved by verifying existing behavior, not by shipping
-  a change), which no commit-based evidence source can ever see.
+* Deferred AND decision-closed evidence come from EXACTLY ONE source: the
+  curated ``## Deliberate deferrals`` section of
+  ``audit-recommendations/plan/99-traceability.md`` — see
+  ``parse_deliberate_deferrals_section``. Free-text commit-body narration
+  is DELIBERATELY NOT scanned for either disposition, after three
+  recurrences of the identical self-contamination shape (a commit's own
+  body, describing THIS script's bugfix history, mentions a real item ID
+  next to deferral-shaped vocabulary — "owner"+"trigger"/"NO-GO"/"deferred"
+  — while narrating an unrelated topic, and gets misread as that item's own
+  deferral record): (1) the genesis commit (``e65bf75``) did this to
+  AUTH-01/W2-1; (2) after a clause-scoping + dev-tooling-commit-exclusion
+  fix, the PR #213 GitHub squash merge (``701ddbf``) reproduced it for
+  AUTH-01/W2-1 AND a NEW PAGINATION-03/W4-3, because the squash rewrote the
+  subject to the PR title and no "(dev-tooling)" scope survived; (3) after
+  a diff-confinement exclusion fix (a commit was excluded if its ENTIRE
+  diff stayed inside this script's own two files), the PR #214 squash merge
+  (``05d3e34``) reproduced it a THIRD time for the same two items, because
+  that squash's diff touched ``findings.json``/``99-traceability.md`` —
+  real repo files that same PR legitimately edited — so the diff-
+  confinement check no longer excluded it either. Each fix bought exactly
+  one more recurrence before the next squash broke it again: free-text
+  commit-body narration can never be made safe against a squash merge that
+  narrates this program's own bug history using the real vocabulary of the
+  thing it is trying not to match. The curated traceability section is
+  different in kind, not just degree — it is maintained BY the program's
+  coordinator as the durable record, not incidentally produced as a
+  byproduct of *some* commit's message — so it is the only deferred/
+  decision-closed evidence source, full stop; commit scanning remains for
+  LANDED evidence only (the two bullets above, unchanged).
+* A finding's owning item can resolve DECISION-CLOSED via that same
+  section, for an item explicitly recorded there as *confirm-only*
+  (Path a) — see ``parse_deliberate_deferrals_section``. This covers a
+  real terminal disposition with ZERO commits by design (W3-6/DOCS-02
+  resolved by verifying existing behavior, not by shipping a change),
+  which no commit-based evidence source can ever see.
 
 Disposition per finding, in this precedence order (this is aggregated across
 every work item the traceability map assigns to the finding — split-ownership
@@ -132,12 +130,18 @@ _LEDGER_REL = Path("audit-recommendations/plan/PROGRAM-LEDGER.md")
 _DELIBERATE_DEFERRALS_HEADING = "## Deliberate deferrals"
 
 # "confirm-only" / "decision-closed" — the traceability doc's own wording
-# for a terminal, non-landing, non-deferred disposition. Deliberately
-# narrower than `_MARKER_RE` (no bare "defer*"/"no-go" match here): this
-# section's DEFERRED items (e.g. ERRTAX-03) are already covered by
-# `build_prose_signals` from the real commit history, and re-matching them
-# here via a looser marker would be redundant at best.
+# for a terminal, non-landing, non-deferred disposition (e.g. the real
+# W3-6 clarification bullet). Deliberately narrower than
+# `_DEFERRED_MARKER_RE` below: a bullet using ONE of these two vocabularies
+# should never also match the other for the same item in this doc.
 _DECISION_CLOSED_MARKER_RE = re.compile(r"confirm-only|decision-closed", re.IGNORECASE)
+
+# "DEFERRED" — the traceability doc's own wording for a recorded deferral
+# (e.g. the real ERRTAX-03/W2-5 bullet: "DEFERRED (NO-GO), M3 ..."). This
+# is now the ONLY place a deferral is ever read from — see
+# `parse_deliberate_deferrals_section`'s docstring for why free-text
+# commit-body narration was removed as a deferral evidence source entirely.
+_DEFERRED_MARKER_RE = re.compile(r"\bdeferred\b", re.IGNORECASE)
 
 # Same-major shorthand ("W3-2/4" == W3-2, W3-4) AND plain IDs ("W2-2"). Cross-
 # major chains ("W4-6/W5-9") fall out naturally: the continuation only grabs
@@ -149,35 +153,6 @@ _BULLET_RE = re.compile(r"^\* (.+)$", re.MULTILINE)
 # A finding ID looks like "AUTH-01": >=2 uppercase letters, so it can never
 # collide with a work-item token like "W2-1" (single letter before the digit).
 _FINDING_ID_RE = re.compile(r"\b[A-Z]{2,}-\d+\b")
-
-# An explicit "this item is not landing" marker: "no-go"/"no go" (space or
-# hyphen), or any "defer*" stem (defer/deferred/deferral). Used to scope the
-# deferred/decision-closed ELIGIBILITY check to an item's own clause rather
-# than trusting a keyword found anywhere in a whole (possibly multi-topic)
-# paragraph — see ``build_prose_signals``'s docstring.
-_MARKER_RE = re.compile(r"no-go|no go|defer", re.IGNORECASE)
-
-# This program's own construction commits: Conventional-Commits scope
-# "(dev-tooling)", e.g. "feat(dev-tooling): add M4 exit oracle
-# audit_disposition.py + tests". These commits narrate the audit oracle's
-# OWN bugfix history in prose — e.g. this module's genesis commit says "an
-# owner+trigger/ NO-GO signal" while describing a DIFFERENT bug (the
-# PROGRAM-LEDGER.md cross-contamination fix), in the very same paragraph
-# that names "W2-1" for a THIRD, unrelated bug (the finding-ID-citation
-# undercount fix). ``git log --all`` picks up this very commit, so without
-# excluding it the oracle can cite its own retrospective prose as evidence
-# about a finding it merely talks about. See ``is_dev_tooling_commit``.
-_DEV_TOOLING_SUBJECT_RE = re.compile(r"^\w+\(dev-tooling\):", re.IGNORECASE)
-
-
-def is_dev_tooling_commit(commit_message: str) -> bool:
-    """True if ``commit_message``'s own subject line is this program's
-    dev-tooling commit-type scope — see ``_DEV_TOOLING_SUBJECT_RE``'s
-    docstring for why these are excluded from every evidence scan.
-    """
-    if not commit_message.strip():
-        return False
-    return bool(_DEV_TOOLING_SUBJECT_RE.match(commit_message.splitlines()[0]))
 
 
 def extract_all_items(text: str) -> set[str]:
@@ -203,11 +178,6 @@ def declaration_lines(commit_message: str) -> list[str]:
     lines = [commit_message.splitlines()[0]] if commit_message.strip() else []
     lines.extend(_BULLET_RE.findall(commit_message))
     return lines
-
-
-def paragraphs(text: str) -> list[str]:
-    """Split on blank lines (kept simple — good enough for prose/commit bodies)."""
-    return [p.strip() for p in re.split(r"\n\s*\n", text) if p.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -324,51 +294,6 @@ def commit_files(repo_root: Path, sha: str) -> set[str]:
     return {line.strip() for line in out.splitlines() if line.strip()}
 
 
-# The oracle's own two files. A commit whose ENTIRE diff is confined to
-# these is ABOUT this program, never about an audited finding.
-_ORACLE_OWN_FILES = frozenset(
-    {
-        "scripts/audit_disposition.py",
-        "tests/test_audit_disposition.py",
-    },
-)
-
-
-def is_self_referential_commit(repo_root: Path, commit: CommitRecord) -> bool:
-    """True if ``commit`` is ABOUT this program itself, not about any
-    audited finding — either its own subject line uses the dev-tooling
-    scope (``is_dev_tooling_commit``), OR its entire diff is confined to
-    the oracle's own files (``_ORACLE_OWN_FILES``).
-
-    The file-diff check is the general-purpose, squash-merge-proof half:
-    PR #213 squash-merged this program's construction work under the
-    subject "feat: audit disposition census oracle (M4 exit gate) (#213)"
-    — no "(dev-tooling)" scope survives a GitHub squash rename — yet the
-    squashed commit body still narrates the oracle's own bugfix history in
-    the exact self-contaminating shape this program fixes. Confirmed: on
-    merged ``main`` the squash commit (``701ddbf``) re-triggered TWO false
-    DEFERREDs by itself — AUTH-01/W2-1 (the squash body's own docstring
-    excerpt quotes "W2-1" next to "owner+trigger"/"NO-GO") and a NEW
-    PAGINATION-03/W4-3 (the same body's regression-test description quotes
-    "W4-3" in a ledger-cross-contamination example, again next to
-    "owner+trigger"/"NO-GO") — both from the same commit's own body
-    describing this very fix. Text-based ``is_dev_tooling_commit`` alone
-    does not catch this, since the squash's subject carries the PR title,
-    not the original commit-type scope.
-
-    Only consulted for commits that mention at least one item at all (skips
-    the ``git diff-tree`` call otherwise — the large majority of this
-    repo's 500+ commit history mentions no work item and can never produce
-    false evidence regardless of file diff).
-    """
-    if is_dev_tooling_commit(commit.message):
-        return True
-    if not extract_all_items(commit.message):
-        return False
-    touched = commit_files(repo_root, commit.sha)
-    return bool(touched) and touched <= _ORACLE_OWN_FILES
-
-
 def _markdown_section(text: str, heading: str) -> str:
     """Lines between a top-level ``heading`` (e.g. ``## Deliberate
     deferrals``, matched by prefix) and the next ``## `` heading, or EOF.
@@ -416,17 +341,17 @@ def _item_clauses(paragraph: str) -> dict[str, str]:
     semicolon-delimited clause it appears in (the whole paragraph if there
     are no semicolons at all).
 
-    A single blank-line-delimited paragraph can legitimately narrate several
-    UNRELATED topics in one breath — semicolons are this repo's commit-body
-    convention for that (e.g. this program's own genesis commit's "Three
-    self-caught bugs..." paragraph uses semicolons to separate three
-    distinct bugfix write-ups). Scoping the "explicit marker adjacent to
-    this item" eligibility check in ``build_prose_signals`` to the item's
-    own clause, rather than the whole paragraph, is what keeps an unrelated
-    co-mentioned item from inheriting a marker that actually describes a
-    DIFFERENT clause's topic. If the same item happens to appear in more
-    than one clause, the first one wins (good enough — no known real case
-    needs the others).
+    A single blank-line-delimited paragraph (or, now, a single traceability
+    bullet — see ``parse_deliberate_deferrals_section``) can legitimately
+    narrate several UNRELATED topics in one breath — semicolons are this
+    repo's prose convention for that. Scoping the "explicit marker adjacent
+    to this item" eligibility check to the item's own clause, rather than
+    the whole paragraph/bullet, is what keeps an unrelated co-mentioned item
+    from inheriting a marker that actually describes a DIFFERENT clause's
+    topic — see ``parse_deliberate_deferrals_section``'s docstring for the
+    real W3-6/W6-7 example this fixes. If the same item happens to appear in
+    more than one clause, the first one wins (good enough — no known real
+    case needs the others).
     """
     clauses: dict[str, str] = {}
     for clause in paragraph.split(";"):
@@ -435,165 +360,87 @@ def _item_clauses(paragraph: str) -> dict[str, str]:
     return clauses
 
 
-def build_prose_signals(
-    commits: list[CommitRecord],
+def parse_deliberate_deferrals_section(
+    repo_root: Path,
 ) -> tuple[dict[str, Evidence], dict[str, Evidence]]:
-    """work item -> Evidence, split into (deferred, decision_closed).
+    """The ONE evidence source for deferred AND decision-closed dispositions:
+    ``99-traceability.md``'s "## Deliberate deferrals" section. Returns
+    (deferred, decision_closed).
 
-    Deferred takes precedence: a paragraph naming BOTH "owner" and "trigger"
-    (case-insensitive) is a deferral-with-owner+trigger record. Otherwise a
-    paragraph naming "no-go" (or "no go") is a decision-close record.
+    Free-text commit-body narration used to also feed this (a paragraph
+    naming BOTH "owner" and "trigger" was a deferral record; "no-go" alone
+    was a decision-close record) — it was removed ENTIRELY after three
+    recurrences of the same self-contamination shape, each surviving the
+    previous fix (see the module docstring for the full blow-by-blow: the
+    genesis commit ``e65bf75``, then the PR #213 squash ``701ddbf``, then
+    the PR #214 squash ``05d3e34`` — every one of this program's own
+    commits that narrates its bugfix history in prose is, definitionally,
+    a commit whose body mentions real item IDs next to deferral-shaped
+    vocabulary while talking about something else, and no exclusion rule
+    keyed off subject text or diff shape survived being squash-merged by
+    a tool that cannot know to preserve it). There is no reliable way to
+    distinguish "this commit is ABOUT a deferral" from "this commit is
+    ABOUT the bug where commits get mistaken for being about a deferral"
+    from the commit's own free text — so commit bodies are no longer read
+    for this at all, structurally, not just more carefully.
 
-    An item is only ELIGIBLE for either signal from a given paragraph if
-    EITHER (a) that exact item ID is one this commit declares on its own top
-    subject line (the first line of ``declaration_lines`` — NOT squash
-    bullets; a bullet's own sub-commit subject describes a different item and
-    should not borrow this paragraph's prose just by being in the same
-    commit), so the whole commit's prose can be trusted to be about the
-    item(s) it names up front; OR (b) the item's own semicolon-delimited
-    clause within the paragraph (``_item_clauses``) carries an explicit
-    "no-go"/"defer*" marker of its own (``_MARKER_RE``). Plain co-occurrence
-    anywhere in the same paragraph is deliberately NOT enough — that was a
-    real bug: this program's own genesis commit (``e65bf75``) mentions
-    "W2-1" and "owner+trigger"/"NO-GO" in the very same paragraph while
-    narrating three UNRELATED bugfixes (a traceability-parser fix, the
-    PROGRAM-LEDGER.md cross-contamination fix this very docstring describes
-    below, and the finding-ID-citation undercount fix that actually mentions
-    W2-1), which mislabeled AUTH-01/W2-1 DEFERRED even though it had landed
-    cleanly via #195. See ``is_dev_tooling_commit`` for the complementary
-    fix (that commit is now excluded outright); this eligibility scoping is
-    the general-purpose fix that also holds for a hypothetical
-    non-dev-tooling commit shaped the same way (regression-pinned by
-    ``test_build_prose_signals_ignores_unrelated_co_mention``).
-
-    Once an item is eligible, the deferred-vs-decision-closed CLASSIFICATION
-    itself still reads the WHOLE paragraph (not just the item's own clause):
-    an item's own clause need not restate "owner"/"trigger" verbatim if a
-    later clause/sentence in the same paragraph does — confirmed against the
-    real W2-5/ERRTAX-03 deferral, whose "NO-GO / deferred" clause and its
-    "owner + trigger" clause are two different sentences in one paragraph.
-
-    Scanned over commit body paragraphs ONLY — deliberately NOT
-    PROGRAM-LEDGER.md. The ledger records milestone-level progress as one
-    dense summary row per milestone (many item IDs per row, e.g. the M3 row
-    lists ~16 items in one cell alongside the words "owner+trigger" and
-    "NO-GO", which describe only W2-5/W5-13 specifically). Scanning it at
-    paragraph OR even row granularity mis-attributes those keywords to every
-    other item co-mentioned in the same row — verified by a first draft of
-    this function false-flagging W4-3 (landed, unrelated to any deferral) as
-    DEFERRED purely because it shares the M3 ledger row with "W2-5 NO-GO"
-    (the clause-scoped eligibility check above independently also fixes this
-    exact shape now, but the ledger is still never fed in — belt and
-    braces). Commit bodies are the primary, per-item-scoped source instead
-    (each deferral/decision-close is its own paragraph naming only the
-    item(s) it actually applies to — confirmed by manual read of the
-    W2-5/ERRTAX-03 commits).
-    """
-    deferred: dict[str, Evidence] = {}
-    decision_closed: dict[str, Evidence] = {}
-
-    for commit in commits:
-        decl_lines = declaration_lines(commit.message)
-        subject_items = extract_all_items(decl_lines[0]) if decl_lines else set()
-
-        for para in paragraphs(commit.message):
-            items = extract_all_items(para)
-            if not items:
-                continue
-            lowered = para.lower()
-            is_deferred = "owner" in lowered and "trigger" in lowered
-            is_decision = "no-go" in lowered or "no go" in lowered
-            snippet = para[:400]
-            item_clauses = _item_clauses(para)
-            for item in items:
-                clause = item_clauses.get(item, para)
-                eligible = item in subject_items or bool(_MARKER_RE.search(clause))
-                if not eligible:
-                    continue
-                if is_deferred and item not in deferred:
-                    deferred[item] = Evidence(
-                        kind="commit",
-                        source=commit.sha,
-                        snippet=snippet,
-                    )
-                elif (
-                    is_decision and item not in deferred and item not in decision_closed
-                ):
-                    decision_closed[item] = Evidence(
-                        kind="commit",
-                        source=commit.sha,
-                        snippet=snippet,
-                    )
-    # A later-scanned deferral should still win over an earlier decision-close
-    # for the same item (deferred is the more complete signal).
-    for item in list(deferred):
-        decision_closed.pop(item, None)
-    return deferred, decision_closed
-
-
-def parse_decision_closed_clarifications(repo_root: Path) -> dict[str, Evidence]:
-    """Parse ``99-traceability.md``'s "## Deliberate deferrals" section for
-    its per-item "confirm-only"/"decision-closed" clarification bullets, and
-    treat each item named THERE as DECISION_CLOSED evidence.
-
-    This is the only evidence source for a real terminal disposition that
-    has ZERO commits by design: W3-6/DOCS-02 resolved as *confirm-only*
-    (Path a) in M2/PR #203 — the finding was addressed by VERIFYING existing
-    behavior (the timeout/concurrency env vars were already wired, the
-    RESTGDF_AUTH_* vars were confirmed absent), not by shipping a change —
-    so no commit anywhere ever cites "W3-6" as closing anything, and neither
-    ``build_declared_landings`` nor ``build_prose_signals`` can ever see it.
-    The traceability doc itself records the clarification in prose instead
-    (see the module docstring's "## Deliberate deferrals" bullet:
-    "``W3-6`` was not dropped — it resolved as *confirm-only* (Path a)...").
+    The curated traceability section doesn't have this problem: it is
+    maintained BY the program's coordinator as the durable record, not
+    incidentally produced as a byproduct of some unrelated commit's
+    message. "DEFERRED" (``_DEFERRED_MARKER_RE``, e.g. the real
+    ERRTAX-03/W2-5 bullet: "DEFERRED (NO-GO), M3 ...") and "confirm-only"/
+    "decision-closed" (``_DECISION_CLOSED_MARKER_RE``, e.g. the real W3-6
+    bullet) are this doc's own two vocabularies for the two dispositions;
+    they don't co-occur for the same item in the current document, but
+    DEFERRED wins if they ever did (mirrors the historical precedence of
+    the now-removed commit-body scanner).
 
     The section legitimately narrates SEVERAL items in one place (the
     ERRTAX-03/W2-5 DEFERRED record, a milestone-label correction for
-    W4-6/W5-9/W5-10/W5-11, and this confirm-only clarification for W3-6),
-    so — exactly like ``build_prose_signals`` — this reuses ``_item_clauses``
-    to scope the "confirm-only"/"decision-closed" marker
-    (``_DECISION_CLOSED_MARKER_RE``) to the SAME semicolon-delimited clause
-    as the item's own mention, not the whole bullet. This matters here too:
-    the real W3-6 bullet's own clause says "...resolved as confirm-only
-    (Path a) in M2/PR #203: the timeout/concurrency env vars were verified
-    wired..."; its NEXT clause (after a semicolon) says "...the
-    documentation rows were corrected under W6-7 (M4)" — W6-7 is a
-    different, genuinely LANDED item that happens to be name-dropped as a
-    cross-reference in the SAME bullet. Without clause-scoping, W6-7 would
-    also be marked DECISION_CLOSED here, silently overriding its real
-    LANDED evidence (``item_status_for_finding`` checks ``decision_closed``
-    before ever consulting commit-based evidence) — for DOCS-02 itself this
-    happens to still net out to the same finding-level disposition (DOCS-02
-    already needs its OTHER owning item, W3-6, to reach DECISION-CLOSED),
-    but W6-7 is ALSO TELEMETRY-01's other owning item, where it would
-    silently flip a truly LANDED finding to DECISION-CLOSED. Regression-
-    pinned by ``test_parse_decision_closed_clarifications_does_not_leak_to_
-    a_co_mentioned_item``.
+    W4-6/W5-9/W5-10/W5-11, and the confirm-only clarification for W3-6), so
+    this reuses ``_item_clauses`` to scope each marker to the SAME
+    semicolon-delimited clause as the item's own mention, not the whole
+    bullet. This matters here too: the real W3-6 bullet's own clause says
+    "...resolved as confirm-only (Path a) in M2/PR #203: the
+    timeout/concurrency env vars were verified wired..."; its NEXT clause
+    (after a semicolon) says "...the documentation rows were corrected
+    under W6-7 (M4)" — W6-7 is a different, genuinely LANDED item that
+    happens to be name-dropped as a cross-reference in the SAME bullet.
+    Without clause-scoping, W6-7 would also be marked DECISION_CLOSED here,
+    silently overriding its real LANDED evidence (``item_status_for_finding``
+    checks ``decision_closed``/``deferred`` before ever consulting
+    commit-based evidence) — for DOCS-02 itself this happens to still net
+    out to the same finding-level disposition (DOCS-02 already needs its
+    OTHER owning item, W3-6, to reach DECISION-CLOSED), but W6-7 is ALSO
+    TELEMETRY-01's other owning item, where it would silently flip a truly
+    LANDED finding to DECISION-CLOSED. Regression-pinned by
+    ``test_parse_deliberate_deferrals_section_does_not_leak_to_a_co_
+    mentioned_item``.
 
-    A bullet naming ERRTAX-03/W2-5 (DEFERRED, not confirm-only) or the
-    W4-6/W5-9/W5-10/W5-11 milestone-label correction (no confirm-only/
-    decision-closed wording at all) never matches the marker and is
-    naturally excluded — this section is not otherwise scanned for
-    ``build_prose_signals``' owner+trigger/no-go language.
+    A bullet naming the W4-6/W5-9/W5-10/W5-11 milestone-label correction
+    (no DEFERRED/confirm-only/decision-closed wording at all) matches
+    neither marker and is naturally excluded from both dicts.
     """
     text = (repo_root / _TRACEABILITY_REL).read_text(encoding="utf-8")
     section = _markdown_section(text, _DELIBERATE_DEFERRALS_HEADING)
+    deferred: dict[str, Evidence] = {}
     decision_closed: dict[str, Evidence] = {}
     for block in re.split(r"\n(?=- )", section):
         block = block.strip()
         if not block.startswith("- "):
             continue
+        snippet = block[:400]
         for item, clause in _item_clauses(block).items():
-            if _DECISION_CLOSED_MARKER_RE.search(clause):
-                decision_closed.setdefault(
-                    item,
-                    Evidence(
-                        kind="traceability",
-                        source=str(_TRACEABILITY_REL),
-                        snippet=block[:400],
-                    ),
-                )
-    return decision_closed
+            ev = Evidence(
+                kind="traceability",
+                source=str(_TRACEABILITY_REL),
+                snippet=snippet,
+            )
+            if _DEFERRED_MARKER_RE.search(clause):
+                deferred.setdefault(item, ev)
+            elif _DECISION_CLOSED_MARKER_RE.search(clause):
+                decision_closed.setdefault(item, ev)
+    return deferred, decision_closed
 
 
 # ---------------------------------------------------------------------------
@@ -699,35 +546,18 @@ def disposition_for_finding(item_statuses: list[ItemStatus]) -> str:
 def build_report(repo_root: Path) -> dict[str, Any]:
     findings = load_findings(repo_root)
     forward_map = load_forward_map(repo_root)
-    all_commits = git_log_records(repo_root)
-    # This program's own construction commits narrate the oracle's OWN
-    # bugfix history in prose and are excluded from every evidence scan
-    # below — see `is_self_referential_commit`'s docstring for the false
-    # positives this prevents (AUTH-01/W2-1 and PAGINATION-03/W4-3, both
-    # self-mislabeled DEFERRED by co-mentioning that item alongside
-    # deferral language while narrating this program's own construction
-    # history — including from the PR #213 squash-merge commit, which no
-    # longer carries the "(dev-tooling)" subject scope but still self-
-    # contaminates by file diff).
-    commits = [c for c in all_commits if not is_self_referential_commit(repo_root, c)]
-    # NOTE: PROGRAM-LEDGER.md exists (`_LEDGER_REL`) but is deliberately NOT
-    # read into the deferred/decision-close prose scan — see
-    # build_prose_signals' docstring for why (its per-milestone rows compress
-    # many item IDs into one dense summary, which mis-attributes keywords
-    # across co-mentioned items at any paragraph/row granularity).
+    commits = git_log_records(repo_root)
 
     finding_ids = {f.id for f in findings}
     declared_landings, declared_findings = build_declared_landings(commits, finding_ids)
-    deferred, decision_closed = build_prose_signals(commits)
-    # A finding's owning item can ALSO reach a terminal DECISION-CLOSED via
-    # the traceability doc's own "## Deliberate deferrals" clarifications
-    # (see parse_decision_closed_clarifications' docstring) -- this is the
-    # ONLY evidence source for W3-6/DOCS-02, which has zero commits by
-    # design. Never overrides an existing commit-derived `deferred` or
-    # `decision_closed` entry for the same item.
-    for item, ev in parse_decision_closed_clarifications(repo_root).items():
-        if item not in deferred and item not in decision_closed:
-            decision_closed[item] = ev
+    # Deferred + decision-closed evidence comes ONLY from the traceability
+    # doc's curated "## Deliberate deferrals" section — see
+    # parse_deliberate_deferrals_section's docstring for why free-text
+    # commit-body narration was removed as a source entirely (three
+    # recurrences of the same self-contamination shape, each surviving the
+    # previous fix). LANDED evidence (above) is unaffected: it still reads
+    # commit subject/bullet citations + file corroboration, unchanged.
+    deferred, decision_closed = parse_deliberate_deferrals_section(repo_root)
     file_cache: dict[str, set[str]] = {}
 
     orphans_no_mapping = sorted(finding_ids - forward_map.keys())
