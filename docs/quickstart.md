@@ -33,7 +33,7 @@ async def main():
         cities = await beaches.get_unique_values("CITY")
 
         first_rows = []
-        async for row in beaches.row_dict_generator(data={"outFields": "CITY,STATE"}):
+        async for row in beaches.stream_rows(data={"outFields": "CITY,STATE"}):
             first_rows.append(row)
             if len(first_rows) == 2:
                 break

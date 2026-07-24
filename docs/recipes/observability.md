@@ -62,8 +62,11 @@ Custom attributes use the `restgdf.*` namespace:
 ## Log correlation
 
 `restgdf` automatically attaches a `_SpanContextFilter` to the root
-`restgdf` logger. When an OTel span is active, every log record gains
-`trace_id` and `span_id` attributes:
+`restgdf` logger. The filter **always** stamps `trace_id` and `span_id`
+on every `restgdf` log record — the active span's IDs when a span is
+current, and empty strings (`""`) otherwise — so a `%(trace_id)s` /
+`%(span_id)s` format string never raises on a record emitted outside a
+span:
 
 ```python
 import logging
