@@ -405,8 +405,15 @@ class FeatureLayer:
             ``"completion"`` yields pages as the underlying fetches
             complete (may reorder relative to the pagination plan).
         max_concurrent_pages
-            Upper bound on concurrent in-flight page fetches.
-            ``None`` (default) leaves concurrency unbounded.
+            Upper bound on concurrent in-flight page fetches. Pass a
+            positive ``int`` to bound both concurrency and peak memory.
+            ``None`` (the default) does **not** bound them: every page in
+            the pagination plan is scheduled up front and each fetched
+            page is buffered, so both grow with the page count. ``order``
+            alone does not bound anything — only ``max_concurrent_pages``
+            does. Note that ``on_truncation="split"`` issues additional
+            uncounted sub-fetches per truncated page, so even with a bound
+            of ``K`` the worst-case in-flight count is roughly ``K + 1``.
         on_truncation
             Behavior when a page reports ``exceededTransferLimit=true``:
 
