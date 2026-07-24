@@ -77,7 +77,11 @@ def _init_git_repo(path: Path) -> None:
         cwd=path,
         check=True,
     )
-    subprocess.run(["git", "config", "user.name", "Test"], cwd=path, check=True)  # nosec B603 B607
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=path,
+        check=True,
+    )  # nosec B603 B607
 
 
 class TestUnreleasedSectionBody:
@@ -100,7 +104,10 @@ class TestUnreleasedSectionBody:
         assert body is not None
         assert body.strip() == ""
 
-    def test_whitespace_only_section_returns_blank_body(self, script: ModuleType) -> None:
+    def test_whitespace_only_section_returns_blank_body(
+        self,
+        script: ModuleType,
+    ) -> None:
         text = "## [Unreleased]\n\n   \n\n## [1.0.0]\n- x\n"
 
         body = script._unreleased_section_body(text)
@@ -114,7 +121,8 @@ class TestUnreleasedSectionBody:
         assert script._unreleased_section_body(text) is None
 
     def test_unreleased_at_end_of_file_returns_full_remainder(
-        self, script: ModuleType,
+        self,
+        script: ModuleType,
     ) -> None:
         text = "## [Unreleased]\n### Added\n\n- Only entry, no version header after.\n"
 
@@ -124,7 +132,8 @@ class TestUnreleasedSectionBody:
         assert "Only entry" in body
 
     def test_does_not_mis_parse_a_triple_hash_subsection_as_a_version_header(
-        self, script: ModuleType,
+        self,
+        script: ModuleType,
     ) -> None:
         """A populated section containing ``### Added``/``### Fixed`` subsections
         must not be truncated early by the next-header search (guards against the
@@ -163,7 +172,9 @@ class TestCheckChangelogUnreleasedPopulated:
         assert "Unreleased" in err
 
     def test_whitespace_only_unreleased_section_fails(
-        self, script: ModuleType, tmp_path: Path,
+        self,
+        script: ModuleType,
+        tmp_path: Path,
     ) -> None:
         _write_changelog(tmp_path, unreleased_body="\n   \n\n")
 
@@ -172,7 +183,9 @@ class TestCheckChangelogUnreleasedPopulated:
         assert status != 0
 
     def test_populated_unreleased_section_passes(
-        self, script: ModuleType, tmp_path: Path,
+        self,
+        script: ModuleType,
+        tmp_path: Path,
     ) -> None:
         _write_changelog(
             tmp_path,
@@ -184,7 +197,9 @@ class TestCheckChangelogUnreleasedPopulated:
         assert status == 0
 
     def test_missing_unreleased_header_fails(
-        self, script: ModuleType, tmp_path: Path,
+        self,
+        script: ModuleType,
+        tmp_path: Path,
     ) -> None:
         path = tmp_path / "CHANGELOG.md"
         path.write_text(
@@ -206,7 +221,9 @@ class TestMainOrdering:
     """``main()`` runs the CHANGELOG guard first and short-circuits on failure."""
 
     def test_main_fails_fast_and_never_touches_citation_cff(
-        self, script: ModuleType, tmp_path: Path,
+        self,
+        script: ModuleType,
+        tmp_path: Path,
     ) -> None:
         _write_changelog(tmp_path, unreleased_body="")
         # Deliberately no CITATION.cff at all: if the guard did not run
@@ -220,7 +237,9 @@ class TestMainOrdering:
         assert not (tmp_path / "CITATION.cff").exists()
 
     def test_main_fails_fast_even_when_citation_cff_would_otherwise_succeed(
-        self, script: ModuleType, tmp_path: Path,
+        self,
+        script: ModuleType,
+        tmp_path: Path,
     ) -> None:
         _write_changelog(tmp_path, unreleased_body="")
         citation = _write_citation_cff(tmp_path)
@@ -238,7 +257,9 @@ class TestCitationCffStampUnaffected:
     """Existing CITATION.cff date-stamp behavior is unchanged by the new guard."""
 
     def test_main_stamps_date_when_changelog_is_populated(
-        self, script: ModuleType, tmp_path: Path,
+        self,
+        script: ModuleType,
+        tmp_path: Path,
     ) -> None:
         _init_git_repo(tmp_path)
         _write_changelog(
@@ -255,7 +276,9 @@ class TestCitationCffStampUnaffected:
         assert "date-released:" in rewritten
 
     def test_main_still_fails_on_malformed_citation_cff_when_changelog_is_populated(
-        self, script: ModuleType, tmp_path: Path,
+        self,
+        script: ModuleType,
+        tmp_path: Path,
     ) -> None:
         _write_changelog(
             tmp_path,
