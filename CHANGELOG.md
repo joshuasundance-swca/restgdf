@@ -36,7 +36,25 @@ All notable changes to restgdf are documented here. This project follows
   exhaustion mapping (the `restgdf.errors` type the final
   underlying failure is mapped to). Set `logging.getLogger("restgdf.retry")`
   to `DEBUG` to trace throttling and retries during a bulk crawl — making the
-  `docs/recipes/tracing.md` promise true (H1-N4).
+  `docs/recipes/tracing.md` promise true (H1-N4). The logged `wait=` is the
+  *scheduled* pre-jitter backoff; the actual sleep adds up to `wait_jitter_s`
+  on top. These records carry a new structured-`extra` key, `limit_key`
+  (added to `restgdf._logging.LOG_EXTRA_KEYS`), holding the rate-limit /
+  cooldown key — deliberately not `service_root`, which would mislabel the
+  value under `limiter_key="host"`.
+
+### Changed
+
+- **Resilient retries now run through `stamina.retry_context` instead of the
+  `@stamina.retry` decorator.** The retry policy, backoff schedule and kwargs
+  are identical (a fresh iterator per call, exactly as the decorator builds);
+  the context form is what makes each attempt's number and scheduled backoff
+  available to the new DEBUG logging. One consumer-visible seam: subscribers to
+  `stamina.instrumentation` now see `RetryDetails.name` reported as
+  `"<context block>"` (stamina hardcodes it for `retry_context`) instead of the
+  decorator-derived function name, so any metric keyed on that label — e.g.
+  stamina's Prometheus integration, which labels its retry counter with it —
+  changes label value on upgrade.
 
 ### Deprecated
 
@@ -71,19 +89,25 @@ All notable changes to restgdf are documented here. This project follows
   (`restgdf.resilience._limiter.LimiterRegistry.get`), so the limiter paces at
   the requested rate. Rates `>= 1` keep their existing burst semantics exactly
   (H1-M1).
-- **Mid-flight transport errors are now retried and mapped.** The resilient
+- **Dispatch-time transport errors are now retried and mapped.** The resilient
   retry path (`restgdf.resilience._retry`) previously retried and typed only
   connect-time (`ClientConnectorError` → `TransportError`) and read-timeout
-  (`ServerTimeoutError` → `RestgdfTimeoutError`) failures. Server disconnects,
-  connection resets (`ServerDisconnectedError`, `ClientOSError`/ECONNRESET,
-  `ClientConnectionResetError`), and truncated response bodies
-  (`ClientPayloadError`) — the most common transient failures when crawling
-  thousands of flaky ArcGIS hosts — leaked out raw and unretried on the first
-  occurrence. They are now retried to exhaustion and surfaced as
-  `restgdf.errors.TransportError` (connection-shaped and payload/truncated-body
-  alike), so a caller catching `TransportError` no longer silently misses half
-  the transport failures. Deterministic 4xx responses still never retry
-  (H1-M2).
+  (`ServerTimeoutError` → `RestgdfTimeoutError`) failures. Server disconnects
+  and connection resets (`ServerDisconnectedError`, `ClientOSError`/ECONNRESET,
+  `ClientConnectionResetError`) raised while the request is dispatched — common
+  transient failures when crawling thousands of flaky ArcGIS hosts — leaked out
+  raw and unretried on the first occurrence. They are now retried to exhaustion
+  and surfaced as `restgdf.errors.TransportError`, so a caller catching
+  `TransportError` no longer misses them. Deterministic 4xx responses still
+  never retry (H1-M2).
+  **Known limitation (scope):** the retry wrapper covers the request only up to
+  *headers received*; callers read the response body afterwards. A failure
+  raised while the **body** is read — the truncated/incomplete-body
+  `aiohttp.ClientPayloadError`, or a mid-body disconnect — is therefore still
+  neither retried nor mapped, and surfaces raw from `response.json(...)`.
+  Callers who need to survive truncated bodies should catch
+  `aiohttp.ClientPayloadError` alongside `restgdf.errors.TransportError`.
+  Extending retry across body consumption is a design item for a later release.
 - **429 cooldowns are no longer erased by a racing waiter.**
   `CooldownRegistry.wait_if_cooling` (`restgdf.resilience._limiter`) popped the
   stored deadline unconditionally after sleeping, so if a fresh 429 installed a

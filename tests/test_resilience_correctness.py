@@ -4,8 +4,12 @@ Covers four defects surfaced by the H1 adversarial health review, all latent
 behind the pre-3.3 all-green suite:
 
 * **H1-M1** — a sub-1.0 rate limit crashed with a raw, unmapped ``ValueError``.
-* **H1-M2** — mid-flight server disconnects / connection resets / truncated
-  bodies were neither retried nor mapped to a :class:`restgdf.errors.RestgdfError`.
+* **H1-M2** — dispatch-time server disconnects / connection resets were neither
+  retried nor mapped to a :class:`restgdf.errors.RestgdfError`. The retry
+  wrapper covers dispatch through *headers received* only, so a failure raised
+  while the response **body** is read stays out of scope — pinned below as a
+  known limitation rather than assumed away by a fixture that raises from
+  ``session.get()`` (which is not where aiohttp raises payload errors).
 * **H1-N2** — ``CooldownRegistry.wait_if_cooling`` could erase a concurrently-set
   *fresher* 429 cooldown deadline.
 * **H1-N4** — the ``restgdf.retry`` logger was dead; no retry/cooldown/mapping
@@ -132,7 +136,7 @@ class TestSubOneRateLimit:
 
 
 # ---------------------------------------------------------------------------
-# H1-M2 — mid-flight transport errors must be retried and mapped
+# H1-M2 — dispatch-time transport errors must be retried and mapped
 # ---------------------------------------------------------------------------
 
 
@@ -152,12 +156,36 @@ def _payload_error() -> aiohttp.ClientPayloadError:
     return aiohttp.ClientPayloadError("response payload was not fully received")
 
 
+# Failures a real aiohttp session raises from the request await itself, i.e.
+# inside the retry wrapper's scope. ``ClientPayloadError`` is deliberately NOT
+# here: aiohttp raises it on the payload stream, so it is covered separately.
 _TRANSPORT_FACTORIES: list[tuple[str, Callable[[], Exception]]] = [
     ("server_disconnected", _server_disconnected),
     ("client_os_error_econnreset", _conn_reset_oserror),
     ("client_connection_reset", _conn_reset),
-    ("client_payload_error", _payload_error),
 ]
+
+
+class _BodyFailingResponse(_FakeResponse):
+    """Response whose headers arrive fine but whose BODY read raises.
+
+    This is the shape aiohttp actually produces for a truncated / malformed
+    chunked / short-content-length body: the request await resolves once
+    headers are in, and ``ClientPayloadError`` is set on the payload stream
+    (``aiohttp/client_proto.py`` ``set_exception(self._payload, ...)``), so it
+    surfaces at ``resp.json()`` / ``resp.read()`` — after the retry wrapper has
+    already returned.
+    """
+
+    def __init__(self, exc: Exception, status: int = 200) -> None:
+        super().__init__(status)
+        self._exc = exc
+
+    async def read(self) -> bytes:
+        raise self._exc
+
+    async def json(self, *args: Any, **kwargs: Any) -> Any:
+        raise self._exc
 
 
 class TestTransportErrorRetryAndMapping:
@@ -178,9 +206,26 @@ class TestTransportErrorRetryAndMapping:
         with pytest.raises(RestgdfError) as exc_info:
             async with session.get(_SVC_URL) as resp:
                 await resp.read()
-        # Connection-shaped and payload/truncated-body failures both surface as
-        # TransportError (isinstance RestgdfError) after retrying to exhaustion.
+        # Connection-shaped dispatch failures surface as TransportError
+        # (isinstance RestgdfError) after retrying to exhaustion.
         assert isinstance(exc_info.value, TransportError)
+        assert stub._call_count == 5
+
+    @pytest.mark.asyncio
+    async def test_payload_error_from_dispatch_is_mapped(
+        self,
+        _fast_sleep: None,
+    ) -> None:
+        """Defensive branch: an inner session that raises the payload error from
+        dispatch (a wrapping session, or aiohttp draining a redirect body) is
+        still retried and mapped. This is NOT the common truncated-body shape —
+        see ``TestPayloadErrorIsOutOfRetryScope`` for that.
+        """
+        stub = StubSession([_payload_error()] * 10)
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
+        with pytest.raises(TransportError):
+            async with session.get(_SVC_URL) as resp:
+                await resp.read()
         assert stub._call_count == 5
 
     @pytest.mark.asyncio
@@ -196,6 +241,55 @@ class TestTransportErrorRetryAndMapping:
         with pytest.raises(RestgdfResponseError):
             async with session.get(_SVC_URL) as resp:
                 await resp.read()
+        assert stub._call_count == 1
+
+
+# ---------------------------------------------------------------------------
+# H1-M2 (scope) — body-read failures are OUTSIDE the retry wrapper
+# ---------------------------------------------------------------------------
+
+_META_URL = "http://host/rest/services/X/FeatureServer/0"
+
+
+class TestPayloadErrorIsOutOfRetryScope:
+    """Pin the TRUE current behaviour of a mid-body transport failure.
+
+    ``_do_retried_request`` wraps ``dispatch(url, **kwargs)`` only, so it
+    returns once headers are received; every restgdf call site then reads the
+    body outside that scope (``restgdf.utils._query.get_metadata`` awaits
+    ``response.json(...)``). A failure raised there is therefore neither
+    retried nor mapped to a :class:`restgdf.errors.RestgdfError` — a known
+    limitation, documented in CHANGELOG and pinned here so it cannot silently
+    change (or silently be claimed fixed).
+    """
+
+    @pytest.mark.asyncio
+    async def test_payload_error_at_body_read_surfaces_raw_and_unretried(
+        self,
+        _fast_sleep: None,
+    ) -> None:
+        from restgdf.utils._query import get_metadata
+
+        stub = StubSession([_BodyFailingResponse(_payload_error())] * 10)
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
+        with pytest.raises(aiohttp.ClientPayloadError) as exc_info:
+            await get_metadata(_META_URL, session)
+        # Raw aiohttp exception: unmapped ...
+        assert not isinstance(exc_info.value, RestgdfError)
+        # ... and unretried (one dispatch, not max_attempts).
+        assert stub._call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_mid_body_disconnect_also_surfaces_raw_and_unretried(
+        self,
+        _fast_sleep: None,
+    ) -> None:
+        from restgdf.utils._query import get_metadata
+
+        stub = StubSession([_BodyFailingResponse(_server_disconnected())] * 10)
+        session = ResilientSession(inner=stub, config=ResilienceConfig(enabled=True))
+        with pytest.raises(aiohttp.ServerDisconnectedError):
+            await get_metadata(_META_URL, session)
         assert stub._call_count == 1
 
 
@@ -318,6 +412,34 @@ class TestRetryLogging:
             await resp.read()
         msgs = _retry_messages(caplog)
         assert any("cooldown set" in m for m in msgs), msgs
+
+    @pytest.mark.asyncio
+    async def test_log_extra_uses_limit_key_not_service_root(
+        self,
+        _fast_sleep: None,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        # Under limiter_key="host" the emitted key is a bare host, so it rides
+        # the dedicated ``limit_key`` extra rather than mislabelling itself as
+        # ``service_root`` (V1-M6).
+        caplog.set_level(logging.DEBUG, logger="restgdf.retry")
+        stub = StubSession(
+            [_FakeResponse(429, {"Retry-After": "0"}), _FakeResponse(200)],
+        )
+        session = ResilientSession(
+            inner=stub,
+            config=ResilienceConfig(enabled=True, limiter_key="host"),
+        )
+        async with session.get(_SVC_URL) as resp:
+            await resp.read()
+        records = [
+            r
+            for r in caplog.records
+            if r.name == "restgdf.retry" and "cooldown set" in r.getMessage()
+        ]
+        assert records, [r.getMessage() for r in caplog.records]
+        assert records[0].limit_key == "http://host"
+        assert not hasattr(records[0], "service_root")
 
     @pytest.mark.asyncio
     async def test_exhaustion_mapping_emits_debug_log(

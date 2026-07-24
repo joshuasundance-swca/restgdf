@@ -171,10 +171,20 @@ async def _do_retried_request(
     # ``ClientConnectionError`` is the common base for every connection-shaped
     # aiohttp failure — ``ClientConnectorError`` (DNS/connect), ``ClientOSError``
     # (incl. ECONNRESET), ``ClientConnectionResetError``, ``ServerDisconnectedError``,
-    # and ``ServerTimeoutError`` — so retrying it covers mid-flight disconnects and
+    # and ``ServerTimeoutError`` — so retrying it covers dispatch-time disconnects and
     # resets that a bulk crawl routinely hits, not just connect-time and read-timeout
-    # failures. ``ClientPayloadError`` (truncated/incomplete body) is a sibling of
-    # ``ClientError`` outside that base, so it is listed separately.
+    # failures.
+    #
+    # SCOPE (verified): this wrapper covers the request only up to *headers
+    # received* — ``_enter_request(dispatch(...))``. Callers read the body after
+    # ``_do_retried_request`` has returned (``restgdf.utils._query`` awaits
+    # ``response.json(...)``), and aiohttp raises ``ClientPayloadError`` on the
+    # payload stream, not from the request await. A truncated/mid-body failure
+    # therefore surfaces raw at the read, outside this retry loop; the
+    # ``ClientPayloadError`` entry below only covers inner sessions that surface
+    # it from dispatch itself (a wrapping session, or aiohttp draining a redirect
+    # body). Extending retry across the body read needs ``_RetriedCtx`` to own
+    # response consumption — a deliberate design item, not done here.
     retry_on = (
         _RetryableHTTPError,
         aiohttp.ClientConnectionError,
@@ -215,7 +225,7 @@ async def _do_retried_request(
                     limit_key,
                     cd,
                     extra=build_log_extra(
-                        service_root=limit_key,
+                        limit_key=limit_key,
                         operation="cooldown",
                         limiter_wait_s=cd,
                     ),
@@ -261,7 +271,7 @@ async def _do_retried_request(
                     prev_wait,
                     last_cause.get("cause", "unknown"),
                     extra=build_log_extra(
-                        service_root=limit_key,
+                        limit_key=limit_key,
                         retry_attempt=attempt.num,
                         retry_delay_s=prev_wait,
                         exception_type=last_cause.get("cause"),
@@ -278,7 +288,7 @@ async def _do_retried_request(
             _log.debug(
                 "retry exhausted: status=429 mapped to RateLimitError",
                 extra=build_log_extra(
-                    service_root=limit_key,
+                    limit_key=limit_key,
                     exception_type="RateLimitError",
                 ),
             )
@@ -293,7 +303,7 @@ async def _do_retried_request(
             "retry exhausted: status=%d mapped to RestgdfResponseError",
             exc.status,
             extra=build_log_extra(
-                service_root=limit_key,
+                limit_key=limit_key,
                 exception_type="RestgdfResponseError",
             ),
         )
@@ -312,7 +322,7 @@ async def _do_retried_request(
             "retry exhausted: %s mapped to RestgdfTimeoutError",
             type(exc).__name__,
             extra=build_log_extra(
-                service_root=limit_key,
+                limit_key=limit_key,
                 exception_type="RestgdfTimeoutError",
             ),
         )
@@ -326,7 +336,7 @@ async def _do_retried_request(
             "retry exhausted: %s mapped to TransportError",
             type(exc).__name__,
             extra=build_log_extra(
-                service_root=limit_key,
+                limit_key=limit_key,
                 exception_type="TransportError",
             ),
         )
@@ -340,7 +350,7 @@ async def _do_retried_request(
             "retry exhausted: %s mapped to TransportError",
             type(exc).__name__,
             extra=build_log_extra(
-                service_root=limit_key,
+                limit_key=limit_key,
                 exception_type="TransportError",
             ),
         )
