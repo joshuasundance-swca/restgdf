@@ -146,10 +146,8 @@ class TestW2_2_FourXXMapsToTaxonomy:
 class TestW2_2_TransientStillRetried:
     @pytest.mark.asyncio
     async def test_timeout_during_refresh_still_hits_retry_ladder(self):
-        import asyncio
-
         async def always_timeout():
-            raise asyncio.TimeoutError("slow")
+            raise TimeoutError("slow")
 
         ctx = AsyncMock()
         ctx.__aenter__ = AsyncMock(side_effect=always_timeout)

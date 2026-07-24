@@ -71,10 +71,10 @@ class TokenSessionConfig(StrictModel):
     ``clock_skew_seconds = min(30, total)`` and
     ``refresh_leeway_seconds = total - clock_skew_seconds``.
 
-    The :class:`~restgdf._config.AuthConfig` refresh knobs
+    The ``AuthConfig`` refresh knobs
     (``refresh_leeway_s``/``clock_skew_s``) are **config holders, never
     auto-applied to a session**. Opt in explicitly via
-    :meth:`from_auth_config` (or :meth:`ArcGISTokenSession.from_config`);
+    ``from_auth_config`` (or :meth:`ArcGISTokenSession.from_config`);
     the library never constructs a token session from the process-global
     config on its own.
     """
@@ -140,7 +140,7 @@ class TokenSessionConfig(StrictModel):
         auth_config: AuthConfig,
         credentials: AGOLUserPass,
     ) -> TokenSessionConfig:
-        """Project an :class:`~restgdf._config.AuthConfig` onto a session config (opt-in).
+        """Project an ``AuthConfig`` onto a session config (opt-in).
 
         W2-11 (AUTH-04/CONFIG-02): ``AuthConfig`` is a validated namespace for
         the ``RESTGDF_AUTH_*`` env vars and is **never** auto-applied to a

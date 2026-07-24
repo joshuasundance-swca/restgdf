@@ -121,10 +121,10 @@ class ArcGISTokenSession:
     the request path.
 
     ``__post_init__`` never reads the process-global
-    :func:`~restgdf._config.get_config`: a plain
+    ``get_config``: a plain
     ``ArcGISTokenSession(session, credentials)`` keeps its dataclass
     defaults (e.g. ``token_refresh_threshold=60``). The
-    :class:`~restgdf._config.AuthConfig` refresh knobs are config
+    ``AuthConfig`` refresh knobs are config
     holders, not auto-applied; opt in explicitly with
     :meth:`from_config` when you want the ``RESTGDF_AUTH_*`` namespace to
     drive a session's refresh timing / transport.
@@ -191,7 +191,7 @@ class ArcGISTokenSession:
         *,
         config: AuthConfig | None = None,
     ) -> ArcGISTokenSession:
-        """Build a token session from an :class:`~restgdf._config.AuthConfig` (opt-in).
+        """Build a token session from an ``AuthConfig`` (opt-in).
 
         W3-3 (CONFIG-02, hybrid decision): this classmethod is the ONLY
         sanctioned path by which an ``AuthConfig`` namespace flows into a
