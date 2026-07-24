@@ -4,6 +4,13 @@ All notable changes to restgdf are documented here. This project follows
 [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Fixed
+
+- `restgdf.utils.token._auth_logger` (the `restgdf.auth` logger backing
+  token-refresh debug logging) is now created through the library's
+  `get_logger("auth")` factory instead of a raw `logging.getLogger(...)`
+  call, so it carries the documented `NullHandler` like every other
+  `restgdf.*` logger (it previously silently lacked one).
 
 ## [3.1.0] - 2026-07-24
 ### Added

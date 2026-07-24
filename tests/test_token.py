@@ -303,9 +303,7 @@ def test_auth_logger_routes_through_get_logger_factory():
     here is load-bearing: ``get_logger`` is idempotent and would silently
     attach the missing handler if called first, masking a raw-getLogger
     regression in ``token.py``."""
-    assert any(
-        isinstance(h, logging.NullHandler) for h in _auth_logger.handlers
-    ), (
+    assert any(isinstance(h, logging.NullHandler) for h in _auth_logger.handlers), (
         "restgdf.utils.token._auth_logger has no NullHandler at import "
         "time; it is not routed through restgdf._logging.get_logger"
     )
@@ -314,7 +312,4 @@ def test_auth_logger_routes_through_get_logger_factory():
     # not stack a second NullHandler nor a duplicate _SpanContextFilter).
     factory_logger = get_logger("auth")
     assert _auth_logger is factory_logger
-    assert (
-        sum(isinstance(h, logging.NullHandler) for h in _auth_logger.handlers)
-        == 1
-    )
+    assert sum(isinstance(h, logging.NullHandler) for h in _auth_logger.handlers) == 1
