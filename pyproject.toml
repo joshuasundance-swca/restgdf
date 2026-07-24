@@ -141,9 +141,11 @@ source = ["restgdf"]
 
 [tool.coverage.report]
 show_missing = true
-# Floor reflects current measured coverage (98.16% as of v3-followup).
-# Targeted tests for resilience/_retry, telemetry, credentials, and
-# getgdf edge paths lifted measured coverage from 96.53% to 98.16%.
+# fail_under is the 97% floor; latest measured coverage is 98.1271%
+# (2026-07-24). Real-shape spatial-filter tests for restgdf/utils/_geometry.py
+# (curve/envelope/Z-M/multipart/error branches) restored the margin after
+# PR #175 dropped measured coverage to 96.9069%; earlier resilience/_retry,
+# telemetry, credentials, and getgdf edge-path tests keep it above the floor.
 fail_under = 97
 # Regexes for lines to exclude from consideration
 exclude_also = [
