@@ -51,7 +51,7 @@ coverage==7.15.2
     # via restgdf (pyproject.toml)
 distlib==0.4.3
     # via virtualenv
-docutils==0.22.4
+docutils==0.23
     # via
     #   myst-parser
     #   sphinx
@@ -68,7 +68,7 @@ furo==2025.12.19
     # via restgdf (pyproject.toml)
 geopandas==1.1.4
     # via restgdf (pyproject.toml)
-hypothesis==6.161.1
+hypothesis==6.163.0
     # via restgdf (pyproject.toml)
 identify==2.6.19
     # via pre-commit
@@ -160,7 +160,7 @@ pydantic==2.13.4
     #   autodoc-pydantic
     #   pydantic-settings
     #   restgdf (pyproject.toml)
-pydantic-core==2.46.4
+pydantic-core==2.47.0
     # via pydantic
 pydantic-settings==2.14.2
     # via autodoc-pydantic
@@ -269,7 +269,7 @@ urllib3==2.7.0
     # via requests
 virtualenv==21.7.0
     # via pre-commit
-wrapt==2.2.2
+wrapt==2.3.0
     # via
     #   opentelemetry-instrumentation
     #   opentelemetry-instrumentation-aiohttp-client

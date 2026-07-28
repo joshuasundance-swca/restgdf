@@ -30,7 +30,7 @@ charset-normalizer==3.4.9
     # via requests
 colorama==0.4.6
     # via sphinx
-docutils==0.22.4
+docutils==0.23
     # via
     #   myst-parser
     #   sphinx
@@ -80,7 +80,7 @@ pydantic==2.13.4
     #   autodoc-pydantic
     #   pydantic-settings
     #   restgdf (pyproject.toml)
-pydantic-core==2.46.4
+pydantic-core==2.47.0
     # via pydantic
 pydantic-settings==2.14.2
     # via autodoc-pydantic
