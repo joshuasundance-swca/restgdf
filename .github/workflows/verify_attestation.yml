@@ -1,46 +1,56 @@
 name: Verify PyPI attestation
 
 # BL-43 (MASTER-PLAN L189-190): post-publish attestation verification.
-# Runs after the "Publish release" workflow completes successfully;
-# downloads the published wheel from PyPI and verifies its PEP 740
-# attestation with `pypi-attestations verify pypi`. Failures do NOT
-# roll back the release — PyPI publishes are immutable — but a red
-# run on this workflow signals attestation drift to the maintainer.
+# Called by the "Publish release" workflow after its PyPI job succeeds;
+# downloads the published wheel and verifies its PEP 740 attestation with
+# `pypi-attestations verify pypi`. Keeping this as a reusable workflow avoids
+# the privileged `workflow_run` trigger while retaining manual recovery.
 
 on:
-  workflow_run:
-    workflows: ["Publish release"]
-    types: [completed]
+  workflow_call:
+    inputs:
+      version:
+        description: Version published by the caller.
+        required: true
+        type: string
+      source_ref:
+        description: Tag or commit whose project metadata should be checked.
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       version:
         description: "Version to verify (e.g. 2.0.0). Leave blank to use latest from PyPI."
         required: false
         default: ""
+        type: string
+      source_ref:
+        description: "Tag or commit to inspect. Leave blank to use the current ref."
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: verify-attestation-${{ github.event.workflow_run.head_sha || github.ref }}
+  group: verify-attestation-${{ inputs.version || github.ref }}
   cancel-in-progress: false
 
 jobs:
   verify:
     name: Verify PEP 740 attestation
-    # Only run when the triggering workflow succeeded; manual dispatches
-    # always run (workflow_run.conclusion is null on workflow_dispatch).
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           # Pin to the exact SHA that triggered the upstream Publish
           # workflow so `pyproject.toml` reflects the shipped version,
           # not default-branch HEAD (which may have moved).
-          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+          ref: ${{ inputs.source_ref || github.ref }}
 
       - name: Set up Python
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
@@ -54,12 +64,14 @@ jobs:
 
       - name: Resolve release version
         id: resolve
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
         shell: bash
         run: |
           set -euo pipefail
-          dispatch_version="${{ github.event.inputs.version }}"
-          if [[ -n "${dispatch_version}" ]]; then
-            version="${dispatch_version}"
+          input_version="${INPUT_VERSION}"
+          if [[ -n "${input_version}" ]]; then
+            version="${input_version}"
           else
             # Read the package version from pyproject.toml at the SHA
             # that triggered the source workflow; falls back to HEAD.
@@ -74,11 +86,24 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          python -m pip download \
-            --no-deps \
-            --dest dist \
-            --only-binary=:all: \
-            "restgdf==${VERSION}"
+          # PyPI's index can lag a successful trusted publish by roughly
+          # 1-3 minutes. Retry the immutable version lookup so the release
+          # pipeline does not require a manual rerun during normal propagation.
+          for attempt in {1..6}; do
+            if python -m pip download \
+              --no-deps \
+              --dest dist \
+              --only-binary=:all: \
+              "restgdf==${VERSION}"; then
+              break
+            fi
+            if [[ "${attempt}" -eq 6 ]]; then
+              echo "::error::restgdf==${VERSION} was not visible on PyPI after 6 attempts."
+              exit 1
+            fi
+            echo "PyPI has not indexed restgdf==${VERSION}; retrying in 30 seconds."
+            sleep 30
+          done
           ls -l dist/
 
       - name: Verify attestation

@@ -26,7 +26,7 @@ from typing import Any, TypeVar
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, ValidationError
 
-from restgdf._logging import get_drift_logger
+from restgdf._logging import _scrub_url, get_drift_logger
 from restgdf._models._errors import RestgdfResponseError
 
 _DriftKey = tuple[str, str, str, str]
@@ -103,10 +103,13 @@ def _log_drift(
     spam the log; semantically-distinct drift (different field or
     different observed type) still logs.
 
-    ``context`` (TELEMETRY-02 / W5-13) is threaded into the emitted record --
-    both in the message and as a ``drift_context`` ``extra`` field -- so the
-    first, non-deduped occurrence is attributable to its originating
-    service/URL. It is deliberately **excluded** from the dedupe key: a
+    ``context`` (TELEMETRY-02 / W5-13) is scrubbed and threaded into the
+    emitted record -- both in the message and as a ``drift_context`` ``extra``
+    field -- so the first, non-deduped occurrence is attributable to its
+    originating service/URL without exposing a query-string token. The sample
+    value itself is never logged; its type retains the schema-drift signal
+    without risking arbitrary payload data. Context is deliberately
+    **excluded** from the dedupe key: a
     drifty server exposing 500 distinct layer URLs must still collapse to
     ONE record per ``(model, field, kind, type)`` tuple, not 500. The
     trade-off is that a second service producing the identical tuple is
@@ -118,17 +121,17 @@ def _log_drift(
     if key in _seen_drift:
         return
     _seen_drift.add(key)
+    scrubbed_context = _scrub_url(context)
     logger = get_drift_logger()
     logger.log(
         level,
-        "schema drift on %s: field=%r kind=%s observed_type=%s context=%r sample=%r",
+        "schema drift on %s: field=%r kind=%s observed_type=%s context=%r",
         model_name,
         path,
         kind,
         sample_type,
-        context,
-        sample,
-        extra={"drift_context": context},
+        scrubbed_context,
+        extra={"drift_context": scrubbed_context},
     )
 
 

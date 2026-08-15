@@ -19,7 +19,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-    - name: Checkout code
+    - name: Checkout code # zizmor: ignore[artipacked] git-auto-commit needs credentials
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         token: ${{ secrets.WORKFLOW_GIT_ACCESS_TOKEN }}

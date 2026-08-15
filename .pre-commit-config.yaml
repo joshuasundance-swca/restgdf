@@ -89,6 +89,11 @@ repos:
         files: ^\.github/workflows/.*\.(yml|yaml)$
         exclude: ^\.github/workflows/.*\.lock\.yml$
 
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.29.0
+    hooks:
+      - id: zizmor
+
   - repo: https://github.com/gitleaks/gitleaks
     rev: v8.30.0
     hooks:

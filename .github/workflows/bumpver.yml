@@ -19,7 +19,7 @@ jobs:
     permissions:
       contents: write
     steps:
-    - name: Checkout code
+    - name: Checkout code # zizmor: ignore[artipacked] authenticated push job
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         token: ${{ secrets.WORKFLOW_GIT_ACCESS_TOKEN }}
@@ -37,7 +37,9 @@ jobs:
         git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
         git config --local user.name "github-actions[bot]"
     - name: Bump version (commit + tag, no push)
-      run: bumpver update --commit --tag-commit --${{ github.event.inputs.bump }} --no-push
+      env:
+        BUMP_KIND: ${{ github.event.inputs.bump }}
+      run: bumpver update --commit --tag-commit --"${BUMP_KIND}" --no-push
     - name: Install project with dev extras
       # BL-42: pre-tag pytest safety — install the just-bumped commit
       # so the test run below executes against the exact source tree

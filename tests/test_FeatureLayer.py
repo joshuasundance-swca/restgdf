@@ -941,27 +941,32 @@ async def test_featurelayer(client_session):
     assert "Status" in daytona.fields
     assert str(beaches) == f"Beach Access Points ({beachurl})"
 
-    zipurl = "https://services.arcgis.com/P3ePLMYs2RVChkJx/ArcGIS/rest/services/USA_ZIP_Codes_2016/FeatureServer/0"
-    ziprest = await FeatureLayer.from_url(
-        zipurl,
-        where="STATE = 'OH'",
+    trailurl = "https://services1.arcgis.com/Mnt8FoJcogKtoVBs/arcgis/rest/services/Trails/FeatureServer/0"
+    trails = await FeatureLayer.from_url(
+        trailurl,
         session=client_session,
     )
-    testkwargs = {k: v for k, v in ziprest.kwargs.items()}
-    assert "Cincinnati" in await ziprest.getuniquevalues("PO_NAME")
-    assert await ziprest.getuniquevalues(
-        "PO_NAME",
-    ) == await ziprest.getuniquevalues(
-        "PO_NAME",
+    testkwargs = {k: v for k, v in trails.kwargs.items()}
+    assert "TRAIL" in await trails.get_unique_values("Type")
+    assert await trails.get_unique_values("Type") == await trails.get_unique_values(
+        "Type",
     )
-    assert (await ziprest.getvaluecounts("PO_NAME")).set_index("PO_NAME").to_dict()[
-        "PO_NAME_count"
-    ]["Cincinnati"] > 40
+    assert (await trails.get_value_counts("Type")).set_index("Type").to_dict()[
+        "Type_count"
+    ]["TRAIL"] > 1000
     with raises(FieldDoesNotExistError):
-        assert "Cincinnati" in await ziprest.getuniquevalues("zzzzzz")
+        await trails.get_unique_values("zzzzzz")
     with raises(FieldDoesNotExistError):
-        assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP"))) > 900
-    assert len(await ziprest.getnestedcount(("PO_NAME", "ZIP_CODE"))) > 900
-    assert ziprest.count > ziprest.metadata.max_record_count
-    assert len(await ziprest.getgdf()) > ziprest.metadata.max_record_count
-    assert ziprest.kwargs == testkwargs  # make sure nothing is altering kwargs
+        await trails.get_nested_count(("Ownership", "zzzzzz"))
+    assert len(await trails.get_nested_count(("Ownership", "Type"))) > 1
+    assert trails.count > trails.metadata.max_record_count
+
+    streamed_count = 0
+    async for row in trails.stream_rows(
+        max_concurrent_pages=2,
+        on_truncation="ignore",
+    ):
+        assert isinstance(row, dict)
+        streamed_count += 1
+    assert streamed_count == trails.count
+    assert trails.kwargs == testkwargs  # make sure nothing is altering kwargs
