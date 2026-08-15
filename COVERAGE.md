@@ -9,7 +9,7 @@
 | restgdf/\_config.py                    |      152 |        1 |       24 |        1 |     99% |       261 |
 | restgdf/\_logging.py                   |       59 |        0 |       18 |        1 |     99% | 111-\>113 |
 | restgdf/\_models/\_\_init\_\_.py       |        7 |        0 |        0 |        0 |    100% |           |
-| restgdf/\_models/\_drift.py            |      146 |        2 |       66 |        3 |     98% |250, 271, 360-\>359 |
+| restgdf/\_models/\_drift.py            |      146 |        2 |       66 |        3 |     98% |252, 273, 362-\>361 |
 | restgdf/\_models/\_errors.py           |        3 |        0 |        0 |        0 |    100% |           |
 | restgdf/\_models/\_settings.py         |      100 |        4 |       12 |        0 |     96% |289-290, 301-302 |
 | restgdf/\_models/crawl.py              |       20 |        0 |        0 |        0 |    100% |           |
