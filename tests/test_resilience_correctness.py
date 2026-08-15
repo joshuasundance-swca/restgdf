@@ -415,7 +415,11 @@ class TestCooldownWaitIsBounded:
         await reg.wait_if_cooling(key)
 
         assert len(sleeps) == 1
-        assert sleeps[0] <= 0.05
+        # Windows' monotonic clock can round ``deadline - now`` a few
+        # picoseconds above the requested duration when both reads land on
+        # the same clock tick. Preserve the boundedness assertion with a
+        # tolerance far below any schedulable interval.
+        assert sleeps[0] <= 0.05 + 1e-9
 
     @pytest.mark.asyncio
     async def test_deferred_fresher_deadline_is_honoured_next_call(
