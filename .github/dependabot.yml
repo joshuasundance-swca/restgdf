@@ -11,6 +11,14 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    # These compiled-lock entries cannot move independently of their parents.
+    # Revisit the docutils cap when myst-parser supports 0.23+, and update
+    # pydantic-core only alongside the Pydantic version that pins it exactly.
+    ignore:
+      - dependency-name: "docutils"
+        versions:
+          - ">=0.23"
+      - dependency-name: "pydantic-core"
     groups:
       app:
         patterns:
