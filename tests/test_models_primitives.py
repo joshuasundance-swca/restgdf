@@ -219,6 +219,44 @@ def test_drift_record_carries_context_for_attribution(
     assert record.drift_context == "https://example.test/MapServer/7"
 
 
+def test_drift_record_scrubs_token_from_context(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A credential in the operator-attribution URL never reaches logs."""
+    caplog.set_level(logging.DEBUG, logger="restgdf.schema_drift")
+    secret = "drift-context-secret"
+    _parse_response(
+        FieldSpec,
+        {"name": "X", "type": "Y", "weirdKey": 1},
+        context=f"https://example.test/MapServer/7?f=json&token={secret}",
+    )
+
+    record = next(r for r in caplog.records if "weirdKey" in r.getMessage())
+    assert secret not in record.getMessage()
+    assert secret not in record.drift_context
+    assert "token=***" in record.getMessage()
+    assert "token=***" in record.drift_context
+
+
+def test_drift_record_does_not_log_unknown_extra_value(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Drift diagnostics describe value types without logging payload values."""
+    caplog.set_level(logging.DEBUG, logger="restgdf.schema_drift")
+    secret = "unknown-extra-secret"
+    _parse_response(
+        FieldSpec,
+        {"name": "X", "type": "Y", "vendorSecret": secret},
+        context="ctx",
+    )
+
+    message = next(
+        r.getMessage() for r in caplog.records if "vendorSecret" in r.getMessage()
+    )
+    assert secret not in message
+    assert "observed_type=str" in message
+
+
 def test_drift_dedup_key_stays_context_free(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
