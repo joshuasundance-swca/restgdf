@@ -130,7 +130,9 @@ def _log_drift(
         path,
         kind,
         sample_type,
+        # codeql[py/clear-text-logging-sensitive-data]
         scrubbed_context,
+        # codeql[py/clear-text-logging-sensitive-data]
         extra={"drift_context": scrubbed_context},
     )
 
