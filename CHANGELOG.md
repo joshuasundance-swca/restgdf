@@ -266,6 +266,11 @@ All notable changes to restgdf are documented here. This project follows
 
 ### Fixed
 
+- Schema-drift diagnostics no longer expose arbitrary ArcGIS payload values,
+  and token-bearing request contexts are scrubbed in both message text and
+  structured log fields. Records retain the model, field, drift kind, and
+  observed type needed for diagnosis without logging response data or URL
+  credentials.
 - **A 4xx from `/generateToken` no longer escapes as a raw
   `aiohttp.ClientResponseError`.** `ArcGISTokenSession.update_token` now maps a
   true-HTTP `400`/`401`/`403` credential rejection to
