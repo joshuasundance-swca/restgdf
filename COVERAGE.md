@@ -9,7 +9,7 @@
 | restgdf/\_config.py                    |      152 |        1 |       24 |        1 |     99% |       261 |
 | restgdf/\_logging.py                   |       59 |        0 |       18 |        1 |     99% | 111-\>113 |
 | restgdf/\_models/\_\_init\_\_.py       |        7 |        0 |        0 |        0 |    100% |           |
-| restgdf/\_models/\_drift.py            |      145 |        2 |       66 |        3 |     98% |247, 268, 357-\>356 |
+| restgdf/\_models/\_drift.py            |      146 |        2 |       66 |        3 |     98% |250, 271, 360-\>359 |
 | restgdf/\_models/\_errors.py           |        3 |        0 |        0 |        0 |    100% |           |
 | restgdf/\_models/\_settings.py         |      100 |        4 |       12 |        0 |     96% |289-290, 301-302 |
 | restgdf/\_models/crawl.py              |       20 |        0 |        0 |        0 |    100% |           |
@@ -51,4 +51,4 @@
 | restgdf/utils/getinfo.py               |       72 |        0 |       12 |        0 |    100% |           |
 | restgdf/utils/token.py                 |      209 |        3 |       56 |        4 |     97% |230, 253, 443, 627-\>exit |
 | restgdf/utils/utils.py                 |        8 |        0 |        0 |        0 |    100% |           |
-| **TOTAL**                              | **2887** |   **29** |  **816** |   **37** | **98%** |           |
+| **TOTAL**                              | **2888** |   **29** |  **816** |   **37** | **98%** |           |
