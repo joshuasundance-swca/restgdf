@@ -51,7 +51,7 @@ coverage==7.15.4
     # via restgdf (pyproject.toml)
 distlib==0.4.3
     # via virtualenv
-docutils==0.22.4
+docutils==0.23
     # via
     #   myst-parser
     #   sphinx
@@ -160,7 +160,7 @@ pydantic==2.13.4
     #   autodoc-pydantic
     #   pydantic-settings
     #   restgdf (pyproject.toml)
-pydantic-core==2.46.4
+pydantic-core==2.48.0
     # via pydantic
 pydantic-settings==2.15.0
     # via autodoc-pydantic
@@ -267,7 +267,7 @@ uc-micro-py==2.0.0
     # via linkify-it-py
 urllib3==2.7.0
     # via requests
-virtualenv==21.7.2
+virtualenv==21.7.3
     # via pre-commit
 wrapt==2.3.0
     # via
