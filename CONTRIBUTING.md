@@ -98,10 +98,13 @@ The gate suite below:
 
 On pull requests, CI (`pytest.yml`) re-runs gates 1–3, 5, and 6 (the offline
 suite, the coverage floor, pre-commit, the base-install smoke, and the compat
-suite). Gate 7's `build` + `twine check` also runs on packaging / `restgdf/**`
-PRs via `publish_on_pypi.yml`, while the PyPI publish and Sigstore attestation
-run only on the tagged release path. The docs build (gate 4) is verified by
-Read the Docs. Running the gates locally still saves round-trips.
+suite). Pre-commit includes zizmor's GitHub Actions security scan. CI also
+installs the compiled `requirements.txt` lock together with every optional
+extra, runs `pip check`, and reviews dependency changes at moderate severity.
+Gate 7's `build` + `twine check` also runs on packaging / `restgdf/**` PRs via
+`publish_on_pypi.yml`, while the PyPI publish and Sigstore attestation run only
+on the tagged release path. The docs build (gate 4) is verified by Read the
+Docs. Running the gates locally still saves round-trips.
 
 ## Extras matrix
 

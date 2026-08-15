@@ -147,6 +147,9 @@ on its own (so `git bisect` stays useful).
   transport regardless — it never touches this length-based routing at all.
 - **CI surprises:** `pytest.yml` now runs the 97% coverage floor as a PR gate (the
   `coverage (>=97%)` job, W1-3 landed — the floor no longer waits for post-merge `coverage.yml`).
+  The same aggregate requires dependency review and a Python 3.11 clean install of the compiled
+  `requirements.txt` lock plus all extras followed by `pip check`; pre-commit also runs zizmor
+  over workflows, Dependabot config, and composite actions.
   `ci-offline` (a `pytest.yml` job) is a required GitHub branch-protection status check on `main`,
   so a PR cannot merge until it is green; `pytest.yml` triggers on `pull_request` only (no separate
   workflow re-runs it on a direct push). Run the local gate before merging.

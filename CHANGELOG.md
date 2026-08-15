@@ -5,6 +5,20 @@ All notable changes to restgdf are documented here. This project follows
 
 ## [Unreleased]
 
+### Changed
+
+- **CI now validates the complete dependency lock and GitHub Actions security.**
+  Pull requests install `requirements.txt` together with every optional extra,
+  run `pip check`, review dependency changes at moderate severity, and run
+  zizmor through pre-commit. Dependabot updates also wait seven days before
+  opening version-update PRs.
+
+### Fixed
+
+- **The advisory live-network suite no longer depends on the degraded 2016 ZIP
+  service.** Its pagination probe now streams all rows from a current public
+  ArcGIS FeatureServer whose record count exceeds the server page limit.
+
 ## [3.3.0] - 2026-07-24
 ### Added
 
