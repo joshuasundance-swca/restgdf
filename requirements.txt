@@ -37,7 +37,7 @@ certifi==2026.7.22
     #   requests
 cfgv==3.5.0
     # via pre-commit
-charset-normalizer==3.4.9
+charset-normalizer==3.5.1
     # via requests
 click==8.4.2
     # via bumpver
@@ -56,7 +56,7 @@ docutils==0.22.4
     #   myst-parser
     #   sphinx
     #   sphinx-markdown-builder
-filelock==3.32.2
+filelock==3.32.4
     # via
     #   python-discovery
     #   virtualenv
@@ -68,15 +68,15 @@ furo==2025.12.19
     # via restgdf (pyproject.toml)
 geopandas==1.1.4
     # via restgdf (pyproject.toml)
-hypothesis==6.165.2
+hypothesis==6.165.10
     # via restgdf (pyproject.toml)
 identify==2.6.19
     # via pre-commit
-idna==3.18
+idna==3.19
     # via
     #   requests
     #   yarl
-imagesize==2.0.0
+imagesize==2.0.1
     # via sphinx
 iniconfig==2.3.0
     # via pytest
@@ -86,7 +86,7 @@ jinja2==3.1.6
     #   sphinx
 lexid==2021.1006
     # via bumpver
-linkify-it-py==2.1.0
+linkify-it-py==2.1.1
     # via myst-parser
 markdown-it-py==4.2.0
     # via
@@ -143,13 +143,13 @@ pandas==3.0.5
     # via
     #   geopandas
     #   restgdf (pyproject.toml)
-platformdirs==4.11.1
+platformdirs==4.11.4
     # via
     #   python-discovery
     #   virtualenv
 pluggy==1.6.0
     # via pytest
-pre-commit==4.6.1
+pre-commit==4.6.2
     # via restgdf (pyproject.toml)
 propcache==0.5.2
     # via
@@ -164,7 +164,7 @@ pydantic-core==2.46.4
     # via pydantic
 pydantic-settings==2.15.0
     # via autodoc-pydantic
-pygments==2.20.0
+pygments==2.21.0
     # via
     #   accessible-pygments
     #   furo
@@ -184,9 +184,9 @@ pytest-asyncio==1.4.0
     # via restgdf (pyproject.toml)
 python-dateutil==2.9.0.post0
     # via pandas
-python-discovery==1.5.1
+python-discovery==1.5.3
     # via virtualenv
-python-dotenv==1.2.2
+python-dotenv==1.2.3
     # via pydantic-settings
 pyyaml==6.0.3
     # via
@@ -225,9 +225,9 @@ sphinx-copybutton==0.5.2
     # via restgdf (pyproject.toml)
 sphinx-design==0.7.0
     # via restgdf (pyproject.toml)
-sphinx-llm==0.4.1
+sphinx-llm==1.0.0
     # via restgdf (pyproject.toml)
-sphinx-markdown-builder==0.6.10
+sphinx-markdown-builder==0.6.11
     # via sphinx-llm
 sphinxcontrib-applehelp==2.0.0
     # via sphinx
@@ -257,7 +257,7 @@ typing-extensions==4.16.0
     #   pydantic-core
     #   pytest-asyncio
     #   typing-inspection
-typing-inspection==0.4.2
+typing-inspection==0.4.4
     # via
     #   pydantic
     #   pydantic-settings
@@ -267,7 +267,7 @@ uc-micro-py==2.0.0
     # via linkify-it-py
 urllib3==2.7.0
     # via requests
-virtualenv==21.7.3
+virtualenv==21.7.5
     # via pre-commit
 wrapt==2.3.0
     # via
