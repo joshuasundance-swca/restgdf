@@ -152,7 +152,7 @@ typing-inspection==0.4.2
     #   pydantic-settings
 uc-micro-py==2.0.0
     # via linkify-it-py
-urllib3==2.7.0
+urllib3==2.8.0
     # via requests
 yarl==1.24.5
     # via aiohttp
