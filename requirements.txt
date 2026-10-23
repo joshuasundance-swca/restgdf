@@ -267,7 +267,7 @@ uc-micro-py==2.0.0
     # via linkify-it-py
 urllib3==2.7.0
     # via requests
-virtualenv==21.7.3
+virtualenv==21.14.9
     # via pre-commit
 wrapt==2.3.0
     # via
