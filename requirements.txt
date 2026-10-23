@@ -30,7 +30,7 @@ beautifulsoup4==4.15.0
     # via furo
 bumpver==2026.1132
     # via restgdf (pyproject.toml)
-certifi==2026.7.22
+certifi==2026.10.19
     # via
     #   pyogrio
     #   pyproj
