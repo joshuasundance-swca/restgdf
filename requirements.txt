@@ -56,7 +56,7 @@ docutils==0.22.4
     #   myst-parser
     #   sphinx
     #   sphinx-markdown-builder
-filelock==3.32.2
+filelock==4.2.1
     # via
     #   python-discovery
     #   virtualenv
